@@ -1,0 +1,58 @@
+# Configuration spécifique au développement
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  php:
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - XDEBUG_ENABLE=true
+      - PHP_OPCACHE_VALIDATE_TIMESTAMPS=1
+      - PHP_OPCACHE_REVALIDATE_FREQ=0
+    volumes:
+      - ./docker/php/conf/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  apache:
+    environment:
+      - APACHE_LOG_LEVEL=debug
+    volumes:
+      - ./docker/apache/logs:/usr/local/apache2/logs
+
+  node:
+    command: npm run dev
+    stdin_open: true
+    tty: true
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - NODE_ENV=development
+
+  # PHPMyAdmin comme alternative à Adminer en dev
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_phpmyadmin
+    ports:
+      - "8081:80"
+    environment:
+      - PMA_HOST=mariadb
+      - PMA_USER=root
+      - PMA_PASSWORD=${DB_ROOT_PASSWORD}
+      - UPLOAD_LIMIT=64M
+    networks:
+      - app-network
+    depends_on:
+      - mariadb
+
+  # Redis Commander pour visualiser Redis
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_redis_commander
+    ports:
+      - "8082:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0:${REDIS_PASSWORD}
+    networks:
+      - app-network
+    depends_on:
+      - redis

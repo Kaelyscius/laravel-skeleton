@@ -1,0 +1,94 @@
+# Configuration spécifique à la production
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+services:
+  apache:
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  php:
+    restart: always
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - PHP_OPCACHE_VALIDATE_TIMESTAMPS=0
+      - PHP_OPCACHE_PRELOAD=/var/www/html/config/opcache-preload.php
+      - PHP_OPCACHE_PRELOAD_USER=www-data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+
+  mariadb:
+    restart: always
+    environment:
+      - MARIADB_AUTO_UPGRADE=1
+      - MARIADB_DISABLE_UPGRADE_BACKUP=1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  redis:
+    restart: always
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Suppression des services non nécessaires en production
+  mailhog:
+    deploy:
+      replicas: 0
+
+  adminer:
+    deploy:
+      replicas: 0
+
+  dozzle:
+    deploy:
+      replicas: 0
+
+  node:
+    deploy:
+      replicas: 0

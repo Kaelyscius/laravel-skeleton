@@ -1,0 +1,171 @@
+services:
+  apache:
+      build:
+        context: .
+        dockerfile: docker/apache/Dockerfile
+        args:
+          UID: 1000
+          GID: 1000
+      container_name: ${COMPOSE_PROJECT_NAME}_apache
+      ports:
+        - "80:80"    # Ajoutez ce port pour les redirections HTTP
+        - "443:443"
+      volumes:
+        - ./src:/var/www/html:delegated
+        - ./docker/apache/conf/sites-enabled:/etc/apache2/sites-enabled:ro
+        - ./docker/apache/conf/ssl:/etc/apache2/ssl:ro
+      networks:
+        - app-network
+      depends_on:
+        php:
+          condition: service_healthy
+      healthcheck:
+        test: ["CMD", "curl", "-k", "-f", "https://localhost/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+        start_period: 60s  # Plus de temps pour le démarrage
+      restart: unless-stopped
+
+  php:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        UID: 1000
+        GID: 1000
+    container_name: ${COMPOSE_PROJECT_NAME}_php
+    volumes:
+      - ./src:/var/www/html:delegated
+      - ./docker/php/conf/php.ini:/usr/local/etc/php/php.ini
+      - ./docker/scripts:/docker/scripts:ro
+      - ./docker/php/conf/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini
+      - ./docker/supervisor/conf.d:/etc/supervisor/conf.d
+    networks:
+      - app-network
+    working_dir: /var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "/usr/local/bin/healthcheck.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    environment:
+      - DB_HOST=mariadb
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - MAIL_HOST=mailhog
+      - MAIL_PORT=1025
+
+  mariadb:
+    image: mariadb:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_mariadb
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./docker/mariadb/conf.d:/etc/mysql/conf.d
+    networks:
+      - app-network
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_DATABASE}
+      - MYSQL_USER=${DB_USERNAME}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    container_name: ${COMPOSE_PROJECT_NAME}_redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  node:
+      build:
+        context: .
+        dockerfile: docker/node/Dockerfile
+        args:
+          UID: 1000
+          GID: 1000
+      container_name: ${COMPOSE_PROJECT_NAME}_node
+      volumes:
+        - ./src:/var/www/html:delegated
+        - .:/var/www/project:delegated  # Montez aussi la racine pour package.json
+      networks:
+        - app-network
+      working_dir: /var/www/html
+      command: tail -f /dev/null
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_mailhog
+    ports:
+      - "8025:8025"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  adminer:
+    image: adminer:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    environment:
+      - ADMINER_DEFAULT_SERVER=mariadb
+    restart: unless-stopped
+
+  it-tools:
+    image: corentinth/it-tools:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_it-tools
+    ports:
+      - "8081:80"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_dozzle
+    ports:
+      - "9999:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - app-network
+    environment:
+      - DOZZLE_LEVEL=info
+      - DOZZLE_TAILSIZE=300
+      - DOZZLE_FILTER=name=${COMPOSE_PROJECT_NAME}*
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mariadb_data:
+  redis_data:

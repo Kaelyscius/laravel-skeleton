@@ -1,0 +1,37 @@
+[mysqld]
+# Encodage
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+
+# Performance
+innodb_buffer_pool_size = 256M
+innodb_log_file_size = 64M
+innodb_flush_log_at_trx_commit = 2
+innodb_flush_method = O_DIRECT
+innodb_file_per_table = 1
+
+# Connexions
+max_connections = 100
+max_connect_errors = 10
+wait_timeout = 600
+interactive_timeout = 600
+
+# Cache
+query_cache_type = 1
+query_cache_size = 32M
+query_cache_limit = 2M
+
+# Logs
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+log_queries_not_using_indexes = 1
+
+# Sécurité
+local_infile = 0
+
+[client]
+default-character-set = utf8mb4
+
+[mysql]
+default-character-set = utf8mb4

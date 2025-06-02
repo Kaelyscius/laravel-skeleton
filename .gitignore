@@ -1,0 +1,78 @@
+# Laravel
+/src/node_modules
+/src/public/build
+/src/public/hot
+/src/public/storage
+/src/storage/*.key
+/src/vendor
+/src/.env
+/src/.env.backup
+/src/.env.production
+/src/.phpunit.result.cache
+/src/Homestead.json
+/src/Homestead.yaml
+/src/auth.json
+/src/npm-debug.log
+/src/yarn-error.log
+/src/.fleet
+/src/.idea
+/src/.vscode
+/src/coverage
+/src/.php-cs-fixer.cache
+/src/.phpactor.json
+/src/.php_cs.cache
+
+# Docker
+.env
+!.env.example
+docker/apache/logs/*
+!docker/apache/logs/.gitkeep
+docker/apache/conf/ssl/*
+!docker/apache/conf/ssl/.gitkeep
+docker/php/logs/*
+!docker/php/logs/.gitkeep
+docker/supervisor/logs/*
+!docker/supervisor/logs/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Tests
+/coverage
+.phpunit.result.cache
+.phpunit.cache
+/phpunit.xml
+/phpstan.cache
+
+# Build
+/build
+/dist
+*.log
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*.tmp
+*.temp
+
+# Monitoring
+/monitoring/data/*
+!/monitoring/data/.gitkeep
