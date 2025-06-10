@@ -26,15 +26,21 @@ Environnement de développement Docker complet et optimisé pour Laravel 12 avec
 - **Adminer** - Interface web pour les bases de données
 - **IT-Tools** - Boîte à outils pour développeurs
 - **Dozzle** - Monitoring des logs en temps réel
+- **🔍 Uptime Kuma** - Monitoring et alertes 24/7
+- **🔄 Watchtower** - Mises à jour automatiques des containers
 
 ### Extensions et packages Laravel
 - **Laravel Horizon** - Gestion avancée des queues
 - **Laravel Telescope** - Débogage et monitoring
 - **Laravel Sanctum** - Authentification API
-- **Livewire** - Composants réactifs
 - **PHPStan/Larastan** - Analyse statique de code
 - **Rector** - Refactoring automatique PHP
 - **ECS** - Code style et formatage
+- **PHP Insights** - Analyse globale de qualité
+- **Laravel IDE Helper** - Autocomplétion IDE
+- **Laravel Query Detector** - Détection requêtes N+1
+- **Enlightn** - Audit sécurité et performance
+- **Pest** - Framework de tests moderne
 - **Xdebug** - Débogage (activable à la demande)
 
 ## 🌐 Accès aux services
@@ -47,23 +53,31 @@ Une fois le projet démarré, voici tous les accès disponibles :
 - **🔭 Laravel Telescope** : https://laravel.local/telescope
 
 ### Outils de développement
-- **🛠️ IT-Tools** : http://localhost:8081 *(Nouveau !)*
-   - Convertisseurs, générateurs, encodeurs
-   - Hash, Base64, JWT, UUID, etc.
-   - Outils réseau et développement
+- **🛠️ IT-Tools** : http://localhost:8081
+  - Convertisseurs, générateurs, encodeurs
+  - Hash, Base64, JWT, UUID, etc.
+  - Outils réseau et développement
 - **💾 Adminer** : http://localhost:8080
-   - Interface graphique pour MariaDB
-   - Serveur : `mariadb`, utilisateur selon votre `.env`
+  - Interface graphique pour MariaDB
+  - Serveur : `mariadb`, utilisateur selon votre `.env`
 - **📧 MailHog** : http://localhost:8025
-   - Capture tous les emails envoyés par Laravel
-   - Interface web pour consulter les emails
+  - Capture tous les emails envoyés par Laravel
+  - Interface web pour consulter les emails
 - **📋 Dozzle** : http://localhost:9999
-   - Logs en temps réel de tous les containers
-   - Interface web moderne et responsive
+  - Logs en temps réel de tous les containers
+  - Interface web moderne et responsive
 
-### Environnement de développement
-- **📁 PHPMyAdmin** (dev uniquement) : http://localhost:8082
-- **🗄️ Redis Commander** (dev uniquement) : http://localhost:8083
+### 📊 Monitoring et maintenance
+- **🔍 Uptime Kuma** : http://localhost:3001
+  - Monitoring 24/7 de tous vos services
+  - Alertes Discord/Slack/Email configurables
+  - Dashboard professionnel avec métriques
+  - Status page publique pour votre équipe
+- **🔄 Watchtower** : Service automatique (pas d'interface)
+  - Mises à jour automatiques des containers
+  - Planifié tous les jours à 3h du matin
+  - Notifications des mises à jour (configurables)
+  - Rollback automatique en cas de problème
 
 ## 🚀 Installation rapide
 
@@ -76,14 +90,17 @@ cd [votre-projet]
 cp .env.example .env
 # Éditer .env selon vos besoins
 
-# Installation complète automatique
+# Installation complète automatique (avec monitoring)
 make install
+
+# Configurer le monitoring (après installation)
+make setup-monitoring
 
 # Ou installation manuelle
 make setup-ssl           # Génère les certificats SSL
 make build              # Construit les images Docker
 make up                 # Démarre les containers
-make laravel-install    # Installe Laravel et ses dépendances
+make install-laravel    # Installe Laravel et ses dépendances
 make migrate            # Lance les migrations
 ```
 
@@ -109,11 +126,10 @@ make up              # Démarrer tous les containers
 make down            # Arrêter tous les containers
 make restart         # Redémarrer tous les containers
 make status          # Voir le statut des containers
-make ps              # Liste des containers actifs
 make logs            # Voir tous les logs
 make logs-php        # Logs PHP uniquement
 make logs-apache     # Logs Apache uniquement
-make logs-follow     # Suivre les logs en temps réel
+make logs-node       # Logs Node uniquement
 ```
 
 ### 🐘 Laravel et PHP
@@ -123,23 +139,20 @@ make artisan cmd="make:model User" # Créer un modèle
 make composer cmd="install"       # Commande composer
 make composer cmd="require package" # Installer un package
 make migrate                     # Lancer les migrations
-make migrate-fresh              # Reset DB + migrations
 make seed                        # Lancer les seeders
 make fresh                       # Reset DB + migrations + seeds
-make tinker                      # Ouvrir Laravel Tinker
 make horizon                     # Démarrer Horizon
 make queue                       # Démarrer les workers
-make cache-clear                # Vider les caches Laravel
-make config-clear               # Vider le cache de config
 ```
 
 ### 🎨 Frontend et Assets
 ```bash
 make npm cmd="install"           # Installer les dépendances npm
-make npm cmd="run dev"          # Build de développement
-make npm cmd="run build"        # Build de production
-make npm cmd="run watch"        # Watch des changements
-make vite                       # Démarrer Vite en mode dev
+make npm-install                # Installer les dépendances NPM
+make npm-build                  # Build de production
+make npm-dev                    # Démarrer le serveur de développement
+make npm-watch                  # Watch des changements
+make pnpm-build                 # Builder avec pnpm (plus rapide)
 ```
 
 ### 🧪 Tests et Qualité de code
@@ -148,14 +161,52 @@ make test            # Lancer tous les tests
 make test-unit       # Tests unitaires uniquement
 make test-feature    # Tests de fonctionnalités
 make test-coverage   # Tests avec rapport de couverture
-make phpstan         # Analyse statique PHPStan
-make larastan        # Analyse Larastan (PHPStan pour Laravel)
+make test-parallel   # Tests en parallèle
+make test-all        # Tous les types de tests
+
+# Outils de qualité
+make phpstan         # Analyse statique PHPStan/Larastan
 make ecs             # Vérifier le code style
 make ecs-fix         # Corriger automatiquement le style
 make rector          # Analyse Rector (dry-run)
 make rector-fix      # Appliquer les suggestions Rector
-make quality         # Lancer toutes les vérifications qualité
-make security-check  # Scanner les vulnérabilités
+make insights        # Analyse PHP Insights
+make insights-fix    # PHP Insights avec corrections
+make enlightn        # Audit sécurité et performance
+make ide-helper      # Générer les fichiers IDE Helper
+
+# Commandes groupées
+make quality         # Vérification de base (ECS + PHPStan)
+make quality-fix     # Corrections automatiques
+make quality-full    # Audit complet (ECS + PHPStan + Insights + Enlightn + Tests)
+make quality-report  # Générer des rapports de qualité
+make security-check  # Vérifier les vulnérabilités
+make security-fix    # Corriger les vulnérabilités
+```
+
+### 📊 Monitoring et maintenance
+```bash
+# Monitoring Uptime Kuma
+make uptime              # Ouvrir Uptime Kuma
+make monitoring          # Ouvrir tous les outils de monitoring
+make setup-monitoring    # Configuration assistée Uptime Kuma
+make monitoring-status   # Vérifier le statut du monitoring
+
+# Watchtower (mises à jour automatiques)
+make watchtower-logs     # Voir les logs des mises à jour
+make watchtower-update-now   # Forcer une mise à jour immédiate
+make watchtower-status   # Statut de Watchtower
+```
+
+### 🚀 Workflows de développement
+```bash
+make dev             # Environnement de développement complet
+make dev-fresh       # Base de données fraîche + assets
+make dev-quality     # Vérifier qualité + builder assets
+make pre-commit      # Vérifications avant commit
+make pre-push        # Vérifications avant push
+make deploy-check    # Vérifications avant déploiement
+make daily-check     # Vérifications quotidiennes
 ```
 
 ### 🔍 Accès aux containers
@@ -165,18 +216,18 @@ make shell-php       # Shell PHP (alias)
 make shell-apache    # Shell dans le container Apache
 make shell-node      # Shell dans le container Node
 make shell-mariadb   # Console MySQL/MariaDB
-make shell-redis     # Console Redis
 ```
 
 ### 🧹 Maintenance et nettoyage
 ```bash
 make clean           # Nettoyer containers et volumes
 make clean-all       # Tout nettoyer (avec images)
-make clean-logs      # Vider les logs Docker
+make clean-reports   # Nettoyer les rapports de qualité
 make prune           # Nettoyer Docker (images inutilisées)
 make healthcheck     # Vérifier la santé des services
 make stats           # Statistiques des containers
-make disk-usage      # Usage disque de Docker
+make diagnose        # Diagnostic complet du projet
+make update-deps     # Mettre à jour les dépendances
 ```
 
 ## ⚙️ Configuration
@@ -218,6 +269,14 @@ MAIL_USERNAME=null
 MAIL_PASSWORD=null
 MAIL_ENCRYPTION=null
 
+# Monitoring - Watchtower Notifications (optionnel)
+WATCHTOWER_NOTIFICATION_URL=
+
+# Exemples de notifications Watchtower :
+# Discord: discord://token@channel_id
+# Slack: slack://hook_url  
+# Email: smtp://username:password@host:port/?from=from@example.com&to=to@example.com
+
 # Xdebug (optionnel)
 XDEBUG_ENABLE=false
 XDEBUG_MODE=debug
@@ -234,8 +293,6 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 - Xdebug activé
 - OPcache désactivé pour le développement
 - Logs verbeux et détaillés
-- PHPMyAdmin (port 8082)
-- Redis Commander (port 8083)
 - Volumes en mode `:delegated` pour de meilleures performances
 
 #### 🚀 Production
@@ -270,6 +327,149 @@ make setup-ssl
   ```
 - **🪟 Windows** : Importer le certificat dans le magasin de certificats de confiance
 
+## 📊 Monitoring et alertes avec Uptime Kuma
+
+### 🔍 Configuration initiale
+
+```bash
+# Démarrer tous les services
+make up
+
+# Lancer la configuration assistée
+make setup-monitoring
+```
+
+### Interface de monitoring
+
+1. **Ouvrez** http://localhost:3001
+2. **Créez** votre compte administrateur (première connexion)
+3. **Configurez** votre profil et préférences
+
+### 📱 Moniteurs recommandés
+
+#### Services critiques (alertes immédiates)
+```
+Laravel Application
+- URL: https://laravel.local
+- Type: HTTP(s)
+- Interval: 60 secondes
+- Tag: critical
+
+Base de données MariaDB
+- Host: localhost
+- Port: 3306  
+- Type: Port
+- Interval: 120 secondes
+- Tag: critical
+
+Redis Cache
+- Host: localhost
+- Port: 6379
+- Type: Port
+- Interval: 120 secondes
+- Tag: critical
+```
+
+#### Services importants (alertes après 3 échecs)
+```
+Laravel Horizon: https://laravel.local/horizon
+Laravel Telescope: https://laravel.local/telescope
+Adminer: http://localhost:8080
+MailHog: http://localhost:8025
+IT-Tools: http://localhost:8081
+Dozzle: http://localhost:9999
+```
+
+#### Sécurité (alerte 30 jours avant expiration)
+```
+Certificat SSL Laravel
+- URL: https://laravel.local
+- Type: SSL Certificate
+- Interval: 1 jour
+- Alerte: 30 jours avant expiration
+```
+
+### 🔔 Configuration des notifications
+
+#### Discord
+1. Créez un webhook dans votre serveur Discord
+2. Settings → Notifications → Add Discord
+3. Collez l'URL du webhook
+
+#### Slack
+1. Créez une app Slack avec webhook
+2. Settings → Notifications → Add Slack
+3. Collez l'URL du webhook
+
+#### Email
+1. Settings → Notifications → Add Email (SMTP)
+2. Configurez votre serveur SMTP
+3. Testez la notification
+
+### 📈 Status Page (optionnel)
+1. Status Pages → Add New Status Page
+2. Sélectionnez les moniteurs à afficher
+3. Personnalisez l'apparence
+4. Partagez l'URL avec votre équipe
+
+## 🔄 Mises à jour automatiques avec Watchtower
+
+### Fonctionnement
+- **Planification** : Tous les jours à 3h du matin
+- **Vérification** : Nouvelles versions des images Docker
+- **Mise à jour** : Automatique avec rollback si échec
+- **Nettoyage** : Suppression des anciennes images
+
+### Containers surveillés
+**✅ Mis à jour automatiquement :**
+- MariaDB
+- Redis
+- MailHog
+- Adminer
+- IT-Tools
+- Dozzle
+- Uptime Kuma
+
+**❌ Exclus (images custom) :**
+- PHP (contient votre code applicatif)
+- Apache (configuration SSL personnalisée)
+- Node (outils de build personnalisés)
+
+### 📧 Configuration des notifications
+
+Ajoutez dans votre `.env` pour recevoir des notifications de mises à jour :
+
+```env
+# Discord
+WATCHTOWER_NOTIFICATION_URL=discord://token@channel_id
+
+# Slack
+WATCHTOWER_NOTIFICATION_URL=slack://hook_url
+
+# Email
+WATCHTOWER_NOTIFICATION_URL=smtp://user:pass@host:port/?from=from@example.com&to=to@example.com
+
+# Microsoft Teams
+WATCHTOWER_NOTIFICATION_URL=teams://token@tenant/altId/groupOwner?host=outlook.office.com
+```
+
+Puis redémarrez Watchtower :
+```bash
+make restart
+```
+
+### Commandes utiles
+```bash
+# Voir les logs des mises à jour
+make watchtower-logs
+
+# Forcer une mise à jour immédiate
+make watchtower-update-now
+
+# Vérifier le statut
+make watchtower-status
+```
+
 ## 🐛 Débogage avec Xdebug
 
 ### Activation
@@ -279,7 +479,7 @@ XDEBUG_ENABLE=true docker-compose up -d php
 
 # Méthode 2 : Modifier .env
 echo "XDEBUG_ENABLE=true" >> .env
-make restart-php
+make restart
 ```
 
 ### Configuration VSCode
@@ -321,16 +521,20 @@ Créer `.vscode/launch.json` :
 make healthcheck    # Vérifier tous les services
 make status        # État des containers
 make stats         # Statistiques de performance
+make diagnose      # Diagnostic complet avec monitoring
+make monitoring-status  # État du monitoring spécifiquement
 ```
 
 ### 📈 Métriques
 - **Docker stats** : `make stats`
-- **Disk usage** : `make disk-usage`
 - **Horizon dashboard** : https://laravel.local/horizon
+- **Uptime Kuma** : http://localhost:3001 - Métriques détaillées
 
 ### 💾 Bases de données
-- **Adminer** : http://localhost:8080 (production-ready)
-- **PHPMyAdmin** : http://localhost:8082 (développement uniquement)
+- **Adminer** : http://localhost:8080
+  - Interface moderne et complète
+  - Support MySQL/MariaDB, PostgreSQL, SQLite
+  - Import/export, éditeur SQL avancé
 
 ### 📧 Gestion des emails
 - **MailHog** : http://localhost:8025
@@ -339,8 +543,8 @@ make stats         # Statistiques de performance
 - API REST disponible
 
 ### 🗄️ Cache et queues
-- **Redis Commander** : http://localhost:8083 (développement)
 - **Horizon** : https://laravel.local/horizon (queues Laravel)
+- **Redis** : Accessible via CLI avec `make shell` puis `redis-cli`
 
 ## 🔧 Outils de développement
 
@@ -355,10 +559,11 @@ Boîte à outils complète pour développeurs :
 
 ### 🔍 Analyseurs de code
 ```bash
-make phpstan      # Analyse statique
-make larastan     # Spécifique à Laravel
-make ecs          # Style de code
-make rector       # Modernisation du code
+make phpstan      # Analyse statique PHPStan/Larastan
+make ecs          # Style de code (ECS)
+make rector       # Modernisation du code (Rector)
+make insights     # Analyse globale (PHP Insights)
+make enlightn     # Audit sécurité et performance
 ```
 
 ### 🧪 Tests
@@ -367,6 +572,7 @@ make test                    # Tous les tests
 make test-coverage          # Avec couverture
 make test-unit             # Tests unitaires
 make test-feature          # Tests d'intégration
+make test-parallel         # Tests en parallèle
 ```
 
 ## 🔐 Sécurité
@@ -379,11 +585,14 @@ make test-feature          # Tests d'intégration
 - ✅ Healthchecks sur tous les services
 - ✅ Certificats SSL avec chiffrement fort
 - ✅ Isolation réseau entre containers
+- ✅ Monitoring 24/7 avec alertes
+- ✅ Mises à jour automatiques de sécurité
 
 ### Scan de sécurité
 ```bash
 make security-check    # Scanner les vulnérabilités
-make audit            # Audit des dépendances
+make enlightn         # Audit sécurité Laravel
+make security-fix     # Corriger automatiquement
 ```
 
 ## 🚢 CI/CD avec GitHub Actions
@@ -398,12 +607,13 @@ Le projet inclut un workflow complet :
 ### Analyse de code
 - ✅ PHPStan/Larastan
 - ✅ ECS (code style)
+- ✅ PHP Insights (qualité globale)
 - ✅ Rector (suggestions)
 
 ### Sécurité
-- ✅ Snyk (vulnérabilités)
-- ✅ Trivy (images Docker)
+- ✅ Enlightn (audit Laravel)
 - ✅ Audit des dépendances
+- ✅ Scan des vulnérabilités
 
 ### Déploiement
 - ✅ Build et push des images
@@ -422,6 +632,7 @@ project/
 │   ├── supervisor/              # Configuration Supervisor
 │   └── scripts/                 # Scripts d'installation
 ├── 🔧 scripts/                   # Scripts utilitaires
+│   └── setup-monitoring.sh     # Configuration Uptime Kuma
 ├── 🎯 src/                       # Code source Laravel
 ├── ⚙️ .github/workflows/         # GitHub Actions
 ├── 📊 docker-compose.yml         # Configuration principale
@@ -440,7 +651,22 @@ project/
 ```bash
 make logs           # Voir les erreurs
 make healthcheck    # Vérifier l'état
+make diagnose       # Diagnostic complet
 make rebuild        # Reconstruire si nécessaire
+```
+
+#### Uptime Kuma ne démarre pas
+```bash
+make logs uptime-kuma           # Voir les erreurs
+docker-compose restart uptime-kuma   # Redémarrer
+make monitoring-status          # Vérifier le statut
+```
+
+#### Watchtower ne fonctionne pas
+```bash
+make watchtower-logs            # Voir les logs
+make watchtower-status          # Vérifier le statut
+docker-compose restart watchtower   # Redémarrer
 ```
 
 #### Certificats SSL invalides
@@ -478,8 +704,9 @@ docker-compose exec mariadb mysql -u root -p${DB_ROOT_PASSWORD}
 ### Commandes de diagnostic
 ```bash
 make healthcheck      # État de tous les services
+make diagnose         # Diagnostic complet avec vérifications
+make monitoring-status # État du monitoring
 make stats           # Utilisation des ressources
-make disk-usage      # Espace disque utilisé
 docker system df     # Espace Docker détaillé
 docker system prune  # Nettoyer Docker
 ```
@@ -497,6 +724,12 @@ docker system prune  # Nettoyer Docker
 - Redis pour cache et sessions
 - Compression Gzip/Brotli
 
+### Monitoring
+- Surveillance proactive 24/7 avec Uptime Kuma
+- Alertes intelligentes pour intervention rapide
+- Mises à jour automatiques pour la sécurité
+- Métriques de performance en temps réel
+
 ## 🤝 Contribution
 
 1. **Fork** le projet
@@ -509,7 +742,7 @@ docker system prune  # Nettoyer Docker
 - Suivre PSR-12
 - Tests obligatoires pour les nouvelles fonctionnalités
 - Documentation à jour
-- Passage des vérifications qualité (`make quality`)
+- Passage des vérifications qualité (`make quality-full`)
 
 ## 📄 Licence
 
@@ -521,6 +754,8 @@ docker system prune  # Nettoyer Docker
 - **Laravel** : https://laravel.com/docs
 - **Docker** : https://docs.docker.com
 - **Docker Compose** : https://docs.docker.com/compose
+- **Uptime Kuma** : https://github.com/louislam/uptime-kuma
+- **Watchtower** : https://containrrr.dev/watchtower/
 
 ### Communauté
 - Ouvrir une [issue](issues) pour les bugs
@@ -533,6 +768,7 @@ Ce projet est activement maintenu. Les mises à jour incluent :
 - Mises à jour de sécurité Docker
 - Optimisations de performance
 - Nouveaux outils de développement
+- Amélioration du monitoring et des alertes
 
 ---
 
