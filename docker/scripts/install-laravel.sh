@@ -6,28 +6,96 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
 NC='\033[0m'
+
+# Variables de debug
+DEBUG=${DEBUG:-false}
+LOG_FILE="/tmp/laravel-install-$(date +%Y%m%d-%H%M%S).log"
+
+# Fonction de logging avec debug
+log() {
+    local level=$1
+    shift
+    local message="$*"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+    case $level in
+        "DEBUG")
+            if [ "$DEBUG" = "true" ]; then
+                echo -e "${PURPLE}[DEBUG $timestamp]${NC} $message" | tee -a "$LOG_FILE"
+            fi
+            ;;
+        "INFO")
+            echo -e "${BLUE}[INFO $timestamp]${NC} $message" | tee -a "$LOG_FILE"
+            ;;
+        "WARN")
+            echo -e "${YELLOW}[WARN $timestamp]${NC} $message" | tee -a "$LOG_FILE"
+            ;;
+        "ERROR")
+            echo -e "${RED}[ERROR $timestamp]${NC} $message" | tee -a "$LOG_FILE"
+            ;;
+        "SUCCESS")
+            echo -e "${GREEN}[SUCCESS $timestamp]${NC} $message" | tee -a "$LOG_FILE"
+            ;;
+    esac
+}
+
+# Fonction pour vérifier les prérequis
+check_prerequisites() {
+    log "INFO" "🔍 Vérification des prérequis..."
+
+    local missing_tools=()
+
+    # Vérifier les outils nécessaires
+    for tool in composer php python3 grep sed; do
+        if ! command -v $tool &> /dev/null; then
+            missing_tools+=($tool)
+        fi
+    done
+
+    if [ ${#missing_tools[@]} -ne 0 ]; then
+        log "ERROR" "Outils manquants: ${missing_tools[*]}"
+        log "ERROR" "Installez les outils manquants avant de continuer"
+        exit 1
+    fi
+
+    # Vérifier la version de Composer
+    local composer_version=$(composer --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1)
+    log "DEBUG" "Version de Composer détectée: $composer_version"
+
+    # Vérifier la version de PHP
+    local php_version=$(php -v | head -1 | grep -oP '\d+\.\d+\.\d+')
+    log "DEBUG" "Version de PHP détectée: $php_version"
+
+    log "SUCCESS" "Tous les prérequis sont satisfaits"
+}
 
 # Fonction pour détecter le répertoire de travail correct
 detect_working_directory() {
+    log "DEBUG" "Détection du répertoire de travail..."
+
     # Si on est dans un container Docker avec /var/www/html (monté depuis ./src)
     if [ -d "/var/www/html" ] && [ -w "/var/www/html" ]; then
+        log "DEBUG" "Répertoire Docker détecté: /var/www/html"
         echo "/var/www/html"
         return
     fi
 
     # Sinon, utiliser le répertoire courant
-    echo "$(pwd)"
+    local current_dir=$(pwd)
+    log "DEBUG" "Utilisation du répertoire courant: $current_dir"
+    echo "$current_dir"
 }
 
-# Fonction pour réparer la configuration Composer
+# FONCTION CORRIGÉE : Réparer la configuration Composer avec gestion des plugins
 fix_composer_config() {
-    echo -e "${YELLOW}Vérification de la configuration Composer...${NC}"
+    log "INFO" "🔧 Vérification et réparation de la configuration Composer..."
 
     # Vérifier si le fichier config existe et est valide
     if [ -f "/var/composer/config.json" ]; then
         if ! python3 -m json.tool /var/composer/config.json >/dev/null 2>&1; then
-            echo -e "${RED}Configuration Composer corrompue, réparation...${NC}"
+            log "WARN" "Configuration Composer corrompue, réparation..."
             rm -f /var/composer/config.json
         fi
     fi
@@ -37,100 +105,162 @@ fix_composer_config() {
 
     # Initialiser une configuration propre
     composer config --global --no-interaction repos.packagist composer https://packagist.org 2>/dev/null || {
-        echo -e "${YELLOW}Recréation de la configuration Composer...${NC}"
+        log "WARN" "Recréation de la configuration Composer..."
         echo '{"config":{},"repositories":{"packagist.org":{"type":"composer","url":"https://packagist.org"}}}' > /var/composer/config.json
     }
+
+    # NOUVEAUTÉ : Autoriser les plugins nécessaires pour les packages Laravel modernes
+    log "INFO" "Configuration des plugins Composer autorisés..."
+
+    # Liste des plugins couramment utilisés dans les projets Laravel
+    local plugins_to_allow=(
+        "dealerdirect/phpcodesniffer-composer-installer"
+        "pestphp/pest-plugin"
+        "php-http/discovery"
+        "bamarni/composer-bin-plugin"
+        "ergebnis/composer-normalize"
+        "infection/extension-installer"
+        "phpstan/extension-installer"
+        "rector/extension-installer"
+    )
+
+    for plugin in "${plugins_to_allow[@]}"; do
+        log "DEBUG" "Autorisation du plugin: $plugin"
+        if composer config --global allow-plugins.$plugin true 2>/dev/null; then
+            log "DEBUG" "✓ Plugin $plugin autorisé"
+        else
+            log "WARN" "⚠️ Impossible d'autoriser le plugin $plugin"
+        fi
+    done
+
+    # Configurer les optimisations Composer
+    log "DEBUG" "Configuration des optimisations Composer..."
+    composer config --global process-timeout 2000 2>/dev/null || true
+    composer config --global prefer-stable true 2>/dev/null || true
+    composer config --global minimum-stability stable 2>/dev/null || true
+
+    # Afficher la configuration actuelle (en mode debug)
+    if [ "$DEBUG" = "true" ]; then
+        log "DEBUG" "Configuration Composer actuelle:"
+        composer config --global --list | grep -E "(allow-plugins|process-timeout|prefer-stable)" || true
+    fi
+
+    log "SUCCESS" "Configuration Composer mise à jour avec plugins autorisés"
 }
 
 # Fonction pour attendre que la base de données soit prête
 wait_for_database() {
-    echo -e "${YELLOW}Attente de la disponibilité de la base de données...${NC}"
+    log "INFO" "⏳ Attente de la disponibilité de la base de données..."
 
-    max_attempts=30
-    attempt=1
+    local max_attempts=30
+    local attempt=1
 
     while [ $attempt -le $max_attempts ]; do
+        log "DEBUG" "Tentative de connexion $attempt/$max_attempts"
+
         if php artisan tinker --execute="DB::connection()->getPdo(); echo 'DB Connected';" 2>/dev/null | grep -q "DB Connected"; then
-            echo -e "${GREEN}✓ Base de données accessible${NC}"
+            log "SUCCESS" "Base de données accessible"
             return 0
         fi
 
-        echo -e "${YELLOW}⏳ Tentative $attempt/$max_attempts - Base de données non prête...${NC}"
+        log "WARN" "Base de données non prête, attente... ($attempt/$max_attempts)"
         sleep 3
         ((attempt++))
     done
 
-    echo -e "${RED}❌ Impossible de se connecter à la base de données après $max_attempts tentatives${NC}"
-    echo -e "${YELLOW}💡 Vérifiez que MariaDB est démarré: docker-compose ps mariadb${NC}"
+    log "ERROR" "Impossible de se connecter à la base de données après $max_attempts tentatives"
+    log "INFO" "Vérifiez que MariaDB est démarré: docker-compose ps mariadb"
     return 1
 }
 
 # Fonction pour créer un nouveau projet Laravel
 create_laravel_project() {
     local target_dir="$1"
-
-    echo -e "${YELLOW}Création d'un nouveau projet Laravel dans $target_dir${NC}"
+    log "INFO" "🆕 Création d'un nouveau projet Laravel dans $target_dir"
 
     # Vérifier les permissions d'écriture
     if [ ! -w "$target_dir" ]; then
-        echo -e "${RED}Erreur : Pas de permission d'écriture dans $target_dir${NC}"
-        echo -e "${YELLOW}Essayez avec sudo ou vérifiez les permissions${NC}"
+        log "ERROR" "Pas de permission d'écriture dans $target_dir"
+        log "INFO" "Essayez avec sudo ou vérifiez les permissions"
         exit 1
     fi
 
     # Vérifier si le dossier est vide (ignorer les fichiers cachés comme .gitkeep)
-    if [ "$(find "$target_dir" -mindepth 1 -maxdepth 1 ! -name '.*' | wc -l)" -gt 0 ]; then
-        echo -e "${RED}Erreur : Le dossier $target_dir n'est pas vide${NC}"
-        echo -e "${YELLOW}Contenu trouvé :${NC}"
+    local content_count=$(find "$target_dir" -mindepth 1 -maxdepth 1 ! -name '.*' | wc -l)
+    if [ "$content_count" -gt 0 ]; then
+        log "ERROR" "Le dossier $target_dir n'est pas vide"
+        log "INFO" "Contenu trouvé:"
         ls -la "$target_dir"
-        echo -e "${YELLOW}Veuillez vider le dossier ou supprimer son contenu avant l'installation${NC}"
+        log "INFO" "Veuillez vider le dossier ou supprimer son contenu avant l'installation"
         exit 1
     fi
 
     # Aller dans le dossier cible et installer Laravel directement dedans
     cd "$target_dir"
+    log "DEBUG" "Changement de répertoire vers: $target_dir"
 
     # Créer le projet Laravel dans le répertoire courant (.)
+    log "INFO" "Téléchargement et installation de Laravel..."
     if ! COMPOSER_MEMORY_LIMIT=-1 composer create-project laravel/laravel . --no-interaction; then
-        echo -e "${RED}Échec de la création du projet Laravel${NC}"
+        log "ERROR" "Échec de la création du projet Laravel"
         exit 1
     fi
 
-    echo -e "${GREEN}✓ Projet Laravel créé avec succès dans : $target_dir${NC}"
+    log "SUCCESS" "Projet Laravel créé avec succès dans : $target_dir"
 }
 
-# Fonction pour installer un package avec gestion d'erreur
+# FONCTION AMÉLIORÉE : installer un package avec gestion d'erreur et debug
 install_package() {
     local package=$1
     local type=${2:-"require"}  # require ou require-dev
     local max_attempts=3
     local attempt=1
 
+    log "INFO" "📦 Installation de $package (type: $type)"
+
     while [ $attempt -le $max_attempts ]; do
-        echo -e "${YELLOW}Installation de $package (tentative $attempt/$max_attempts)...${NC}"
+        log "DEBUG" "Installation de $package (tentative $attempt/$max_attempts)..."
 
         # Nettoyer le cache avant l'installation
+        log "DEBUG" "Nettoyage du cache Composer..."
         composer clear-cache 2>/dev/null || true
 
-        # Essayer d'installer le package
-        local composer_cmd="COMPOSER_MEMORY_LIMIT=-1 composer $type \"$package\" --no-interaction --no-scripts --no-progress"
+        # Construire la commande Composer
+        local composer_cmd
+        if [ "$type" = "require-dev" ]; then
+            composer_cmd="COMPOSER_MEMORY_LIMIT=-1 composer require --dev \"$package\" --no-interaction --no-scripts --no-progress --with-dependencies"
+        else
+            composer_cmd="COMPOSER_MEMORY_LIMIT=-1 composer require \"$package\" --no-interaction --no-scripts --no-progress --with-dependencies"
+        fi
 
-        if eval $composer_cmd 2>&1; then
-            echo -e "${GREEN}✓ $package installé avec succès${NC}"
+        log "DEBUG" "Commande: $composer_cmd"
+
+        # Exécuter la commande avec capture des erreurs
+        if eval $composer_cmd 2>&1 | tee -a "$LOG_FILE"; then
+            log "SUCCESS" "$package installé avec succès"
 
             # Exécuter les scripts post-installation séparément
-            composer run-script post-autoload-dump --no-interaction 2>&1 || true
+            log "DEBUG" "Exécution des scripts post-installation..."
+            composer run-script post-autoload-dump --no-interaction 2>&1 | tee -a "$LOG_FILE" || true
 
             return 0
         else
-            echo -e "${RED}✗ Échec de l'installation de $package${NC}"
+            local exit_code=$?
+            log "ERROR" "Échec de l'installation de $package (code: $exit_code)"
 
             if [ $attempt -lt $max_attempts ]; then
-                echo -e "${YELLOW}Nouvelle tentative dans 5 secondes...${NC}"
+                log "WARN" "Nouvelle tentative dans 5 secondes..."
                 sleep 5
                 attempt=$((attempt + 1))
             else
-                echo -e "${RED}Impossible d'installer $package après $max_attempts tentatives${NC}"
+                log "ERROR" "Impossible d'installer $package après $max_attempts tentatives"
+
+                # En mode debug, afficher plus d'informations
+                if [ "$DEBUG" = "true" ]; then
+                    log "DEBUG" "Diagnostic de l'échec:"
+                    composer diagnose 2>&1 | tail -20 | tee -a "$LOG_FILE" || true
+                fi
+
                 return 1
             fi
         fi
@@ -139,13 +269,15 @@ install_package() {
 
 # Fonction pour configurer la base de données MariaDB
 configure_database() {
-    echo -e "${BLUE}Configuration de la base de données MariaDB...${NC}"
+    log "INFO" "🗄️ Configuration de la base de données MariaDB..."
 
     if [ -f ".env" ]; then
         # Sauvegarder le .env original
         cp .env .env.backup
+        log "DEBUG" "Sauvegarde de .env vers .env.backup"
 
         # Configurer pour MariaDB - plus robuste
+        log "DEBUG" "Configuration des paramètres de base de données..."
         sed -i 's/DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
         sed -i 's/.*DB_HOST=.*/DB_HOST=mariadb/' .env
         sed -i 's/.*DB_PORT=.*/DB_PORT=3306/' .env
@@ -154,62 +286,55 @@ configure_database() {
         sed -i 's/.*DB_PASSWORD=.*/DB_PASSWORD=secure_password/' .env
 
         # S'assurer que les lignes existent (Laravel 11+ peut les commenter)
-        if ! grep -q "^DB_HOST=" .env; then
-            echo "DB_HOST=mariadb" >> .env
-        fi
-        if ! grep -q "^DB_PORT=" .env; then
-            echo "DB_PORT=3306" >> .env
-        fi
-        if ! grep -q "^DB_DATABASE=" .env; then
-            echo "DB_DATABASE=laravel" >> .env
-        fi
-        if ! grep -q "^DB_USERNAME=" .env; then
-            echo "DB_USERNAME=laravel_user" >> .env
-        fi
-        if ! grep -q "^DB_PASSWORD=" .env; then
-            echo "DB_PASSWORD=secure_password" >> .env
-        fi
+        local db_params=("DB_HOST=mariadb" "DB_PORT=3306" "DB_DATABASE=laravel" "DB_USERNAME=laravel_user" "DB_PASSWORD=secure_password")
+        for param in "${db_params[@]}"; do
+            local key=$(echo $param | cut -d'=' -f1)
+            if ! grep -q "^$key=" .env; then
+                log "DEBUG" "Ajout du paramètre: $param"
+                echo "$param" >> .env
+            fi
+        done
 
         # Supprimer la ligne du fichier SQLite si elle existe
         sed -i '/DB_DATABASE=.*\.sqlite/d' .env
 
-        # Configuration des sessions pour utiliser la base de données
+        # Configuration des sessions et cache
+        log "DEBUG" "Configuration des sessions et cache..."
         sed -i 's/SESSION_DRIVER=.*/SESSION_DRIVER=database/' .env
-
-        # Configuration du cache pour Redis
         sed -i 's/CACHE_STORE=.*/CACHE_STORE=redis/' .env
         sed -i 's/QUEUE_CONNECTION=.*/QUEUE_CONNECTION=redis/' .env
 
         # Configuration Redis
-        if ! grep -q "^REDIS_HOST=" .env; then
-            echo "REDIS_HOST=redis" >> .env
-        else
-            sed -i 's/.*REDIS_HOST=.*/REDIS_HOST=redis/' .env
-        fi
+        local redis_params=("REDIS_HOST=redis" "REDIS_PASSWORD=redis_secret_password" "REDIS_PORT=6379")
+        for param in "${redis_params[@]}"; do
+            local key=$(echo $param | cut -d'=' -f1)
+            if ! grep -q "^$key=" .env; then
+                log "DEBUG" "Ajout du paramètre Redis: $param"
+                echo "$param" >> .env
+            else
+                sed -i "s/.*$key=.*/$param/" .env
+            fi
+        done
 
-        if ! grep -q "^REDIS_PASSWORD=" .env; then
-            echo "REDIS_PASSWORD=redis_secret_password" >> .env
-        else
-            sed -i 's/.*REDIS_PASSWORD=.*/REDIS_PASSWORD=redis_secret_password/' .env
-        fi
+        log "SUCCESS" "Base de données configurée pour MariaDB avec sessions DB"
 
-        if ! grep -q "^REDIS_PORT=" .env; then
-            echo "REDIS_PORT=6379" >> .env
-        else
-            sed -i 's/.*REDIS_PORT=.*/REDIS_PORT=6379/' .env
+        # En mode debug, afficher la configuration
+        if [ "$DEBUG" = "true" ]; then
+            log "DEBUG" "Configuration de base de données actuelle:"
+            grep -E "^DB_|^REDIS_|^SESSION_|^CACHE_|^QUEUE_" .env | tee -a "$LOG_FILE"
         fi
-
-        echo -e "${GREEN}✓ Base de données configurée pour MariaDB avec sessions DB${NC}"
     else
-        echo -e "${RED}⚠️  Fichier .env non trouvé${NC}"
+        log "ERROR" "Fichier .env non trouvé"
+        return 1
     fi
 }
 
 # Fonction pour créer les fichiers de configuration des outils de qualité
 create_quality_tools_config() {
-    echo -e "${BLUE}Création des fichiers de configuration pour les outils de qualité...${NC}"
+    log "INFO" "⚙️ Création des fichiers de configuration pour les outils de qualité..."
 
     # Configuration Easy Coding Standard (ECS)
+    log "DEBUG" "Création de ecs.php..."
     cat > ecs.php << 'EOF'
 <?php
 
@@ -247,6 +372,7 @@ return function (ECSConfig $ecsConfig): void {
 EOF
 
     # Configuration Rector
+    log "DEBUG" "Création de rector.php..."
     cat > rector.php << 'EOF'
 <?php
 
@@ -286,6 +412,7 @@ return static function (RectorConfig $rectorConfig): void {
 EOF
 
     # Configuration PHPStan
+    log "DEBUG" "Création de phpstan.neon..."
     cat > phpstan.neon << 'EOF'
 includes:
     - vendor/larastan/larastan/extension.neon
@@ -315,7 +442,7 @@ EOF
 
     # Configuration Telescope
     if [ -f "config/telescope.php" ]; then
-        echo -e "${YELLOW}Configuration de Laravel Telescope...${NC}"
+        log "DEBUG" "Configuration de Laravel Telescope..."
 
         # Activer Telescope en local et staging uniquement
         sed -i "s/'enabled' => env('TELESCOPE_ENABLED', true),/'enabled' => env('TELESCOPE_ENABLED', env('APP_ENV') !== 'production'),/" config/telescope.php
@@ -325,6 +452,8 @@ EOF
     fi
 
     # Configuration PHP Insights
+    log "DEBUG" "Création de config/insights.php..."
+    mkdir -p config
     cat > config/insights.php << 'EOF'
 <?php
 
@@ -379,24 +508,25 @@ return [
 ];
 EOF
 
-    echo -e "${GREEN}✓ Fichiers de configuration créés :${NC}"
-    echo -e "  • ecs.php (Easy Coding Standard)"
-    echo -e "  • rector.php (Rector)"
-    echo -e "  • phpstan.neon (PHPStan/Larastan)"
-    echo -e "  • config/insights.php (PHP Insights)"
+    log "SUCCESS" "Fichiers de configuration créés:"
+    log "INFO" "  • ecs.php (Easy Coding Standard)"
+    log "INFO" "  • rector.php (Rector)"
+    log "INFO" "  • phpstan.neon (PHPStan/Larastan)"
+    log "INFO" "  • config/insights.php (PHP Insights)"
     if [ -f "config/telescope.php" ]; then
-        echo -e "  • config/telescope.php (Telescope configuré)"
+        log "INFO" "  • config/telescope.php (Telescope configuré)"
     fi
 }
 
 # Fonction pour configurer le package.json avec des scripts utiles
 configure_package_json() {
-    echo -e "${BLUE}Configuration des scripts dans package.json...${NC}"
+    log "INFO" "📝 Configuration des scripts dans package.json..."
 
     if [ -f "package.json" ]; then
         # Ajouter des scripts personnalisés au package.json
         python3 << 'EOF'
 import json
+import sys
 
 try:
     with open('package.json', 'r') as f:
@@ -424,18 +554,27 @@ try:
     print("Scripts ajoutés au package.json")
 except Exception as e:
     print(f"Erreur lors de la modification du package.json: {e}")
+    sys.exit(1)
 EOF
+        if [ $? -eq 0 ]; then
+            log "SUCCESS" "Scripts ajoutés au package.json"
+        else
+            log "ERROR" "Échec de la modification du package.json"
+        fi
+    else
+        log "WARN" "package.json non trouvé"
     fi
 }
 
 # Fonction pour configurer les scripts Composer
 configure_composer_scripts() {
-    echo -e "${BLUE}Configuration des scripts Composer...${NC}"
+    log "INFO" "📝 Configuration des scripts Composer..."
 
     if [ -f "composer.json" ]; then
         # Ajouter des scripts personnalisés au composer.json
         python3 << 'EOF'
 import json
+import sys
 
 try:
     with open('composer.json', 'r') as f:
@@ -489,96 +628,119 @@ try:
     print("Scripts ajoutés au composer.json")
 except Exception as e:
     print(f"Erreur lors de la modification du composer.json: {e}")
+    sys.exit(1)
 EOF
+        if [ $? -eq 0 ]; then
+            log "SUCCESS" "Scripts ajoutés au composer.json"
+        else
+            log "ERROR" "Échec de la modification du composer.json"
+        fi
+    else
+        log "ERROR" "composer.json non trouvé"
+        return 1
     fi
 }
 
-# Fonction pour optimiser Composer
+# FONCTION CORRIGÉE : Optimiser Composer
 optimize_composer() {
-    echo -e "${YELLOW}Optimisation de Composer...${NC}"
+    log "INFO" "⚡ Optimisation de Composer..."
 
     # Réparer la configuration d'abord
     fix_composer_config
 
-    # Désactiver les plugins non essentiels (avec vérification)
-    composer config --global allow-plugins.php-http/discovery false 2>/dev/null || true
+    # CORRECTION : Ne pas désactiver php-http/discovery car il peut être nécessaire
+    # composer config --global allow-plugins.php-http/discovery false 2>/dev/null || true
 
     # Optimiser l'autoloader
+    log "DEBUG" "Optimisation de l'autoloader..."
     composer dump-autoload --optimize --no-interaction 2>/dev/null || true
+
+    log "SUCCESS" "Optimisation Composer terminée"
 }
 
 # Fonction pour exécuter les migrations et seeders
 run_migrations() {
-    echo -e "${BLUE}🔄 Exécution des migrations...${NC}"
+    log "INFO" "🔄 Exécution des migrations..."
 
     # Attendre que la base de données soit prête
     if ! wait_for_database; then
-        echo -e "${RED}❌ Impossible de continuer sans base de données${NC}"
+        log "ERROR" "Impossible de continuer sans base de données"
         return 1
     fi
 
     # Exécuter les migrations avec --force pour éviter la confirmation en production
-    echo -e "${YELLOW}→ Migration des tables Laravel de base...${NC}"
-    if php artisan migrate --force --no-interaction; then
-        echo -e "${GREEN}✓ Migrations de base exécutées${NC}"
+    log "DEBUG" "Migration des tables Laravel de base..."
+    if php artisan migrate --force --no-interaction 2>&1 | tee -a "$LOG_FILE"; then
+        log "SUCCESS" "Migrations de base exécutées"
     else
-        echo -e "${RED}❌ Échec des migrations de base${NC}"
+        log "ERROR" "Échec des migrations de base"
         return 1
     fi
 
     # Migrations spécifiques aux packages installés
-    echo -e "${YELLOW}→ Migration des tables des packages...${NC}"
+    log "DEBUG" "Migration des tables des packages..."
 
     # Créer la table sessions si elle n'existe pas (Laravel 11+)
     if ! php artisan tinker --execute="DB::select('SHOW TABLES LIKE \"sessions\"');" 2>/dev/null | grep -q "sessions"; then
-        echo -e "${YELLOW}→ Création de la table sessions...${NC}"
+        log "DEBUG" "Création de la table sessions..."
         php artisan session:table --force 2>/dev/null || true
         php artisan migrate --force --no-interaction 2>/dev/null || true
     fi
 
     # Créer la table cache si elle n'existe pas
     if ! php artisan tinker --execute="DB::select('SHOW TABLES LIKE \"cache\"');" 2>/dev/null | grep -q "cache"; then
-        echo -e "${YELLOW}→ Création de la table cache...${NC}"
+        log "DEBUG" "Création de la table cache..."
         php artisan cache:table --force 2>/dev/null || true
         php artisan migrate --force --no-interaction 2>/dev/null || true
     fi
 
     # Créer les tables des queues
     if ! php artisan tinker --execute="DB::select('SHOW TABLES LIKE \"jobs\"');" 2>/dev/null | grep -q "jobs"; then
-        echo -e "${YELLOW}→ Création des tables de queues...${NC}"
+        log "DEBUG" "Création des tables de queues..."
         php artisan queue:table --force 2>/dev/null || true
         php artisan queue:failed-table --force 2>/dev/null || true
         php artisan migrate --force --no-interaction 2>/dev/null || true
     fi
 
     # Migration finale pour s'assurer que tout est à jour
-    echo -e "${YELLOW}→ Migration finale...${NC}"
+    log "DEBUG" "Migration finale..."
     php artisan migrate --force --no-interaction 2>/dev/null || true
 
-    echo -e "${GREEN}✅ Toutes les migrations terminées${NC}"
+    log "SUCCESS" "Toutes les migrations terminées"
 
     # Optionnel : exécuter les seeders de base (uniquement si ils existent)
     if [ -f "database/seeders/DatabaseSeeder.php" ]; then
-        echo -e "${YELLOW}→ Vérification des seeders...${NC}"
+        log "DEBUG" "Vérification des seeders..."
         if grep -q "run()" database/seeders/DatabaseSeeder.php; then
-            echo -e "${YELLOW}→ Exécution des seeders...${NC}"
-            php artisan db:seed --force --no-interaction 2>/dev/null || echo -e "${YELLOW}⚠️  Seeders non exécutés (normal pour une nouvelle installation)${NC}"
+            log "DEBUG" "Exécution des seeders..."
+            php artisan db:seed --force --no-interaction 2>/dev/null || log "WARN" "Seeders non exécutés (normal pour une nouvelle installation)"
         fi
     fi
 }
 
 # Installation principale
 main() {
-    echo -e "${YELLOW}🚀 Installation complète de Laravel avec outils de qualité${NC}"
+    # Initialiser le logging
+    log "INFO" "🚀 Installation complète de Laravel avec outils de qualité"
+    log "INFO" "Log file: $LOG_FILE"
+
+    # Activer le mode debug si requis
+    if [ "$1" = "--debug" ]; then
+        DEBUG=true
+        log "INFO" "Mode debug activé"
+    fi
+
+    # Vérifier les prérequis
+    check_prerequisites
 
     # Détecter le répertoire de travail (normalement /var/www/html dans le container)
     WORKING_DIR=$(detect_working_directory)
-    echo -e "${YELLOW}Répertoire de travail détecté : $WORKING_DIR${NC}"
+    log "INFO" "Répertoire de travail détecté : $WORKING_DIR"
 
     # Vérifier la mémoire disponible
     if command -v free &> /dev/null; then
-        echo -e "${YELLOW}Mémoire disponible :${NC}"
-        free -h | grep -E "^Mem|^Swap"
+        log "DEBUG" "Mémoire disponible :"
+        free -h | grep -E "^Mem|^Swap" | tee -a "$LOG_FILE"
     fi
 
     # Optimiser Composer
@@ -586,29 +748,29 @@ main() {
 
     # Vérifier si on a déjà un projet Laravel
     if [ ! -f "$WORKING_DIR/composer.json" ]; then
-        echo -e "${YELLOW}Aucun projet Laravel détecté dans $WORKING_DIR${NC}"
-        echo -e "${YELLOW}Création d'un nouveau projet Laravel...${NC}"
+        log "INFO" "Aucun projet Laravel détecté dans $WORKING_DIR"
         create_laravel_project "$WORKING_DIR"
     else
-        echo -e "${GREEN}Projet Laravel existant détecté dans $WORKING_DIR${NC}"
+        log "INFO" "Projet Laravel existant détecté dans $WORKING_DIR"
 
         # Vérifier si c'est bien un projet Laravel
         if grep -q "laravel/framework" "$WORKING_DIR/composer.json"; then
-            echo -e "${GREEN}✓ Projet Laravel valide trouvé${NC}"
+            log "SUCCESS" "Projet Laravel valide trouvé"
         else
-            echo -e "${YELLOW}⚠️  Le composer.json existe mais ne semble pas être un projet Laravel${NC}"
+            log "WARN" "Le composer.json existe mais ne semble pas être un projet Laravel"
         fi
     fi
 
     # Se déplacer dans le répertoire de travail pour les installations
     cd "$WORKING_DIR"
+    log "DEBUG" "Changement de répertoire vers: $WORKING_DIR"
 
     # Configurer la base de données MariaDB
     configure_database
 
     # Packages de production
-    echo -e "${BLUE}Installation des packages de production...${NC}"
-    production_packages=(
+    log "INFO" "📦 Installation des packages de production..."
+    local production_packages=(
         "laravel/horizon"
         "laravel/telescope"
         "laravel/sanctum"
@@ -616,16 +778,18 @@ main() {
         "spatie/laravel-activitylog"
     )
 
+    local failed_packages=()
     for package in "${production_packages[@]}"; do
         if ! install_package "$package" "require"; then
-            echo -e "${RED}⚠️  Échec de l'installation de $package${NC}"
+            failed_packages+=("$package")
+            log "WARN" "Échec de l'installation de $package (production)"
         fi
         sleep 2
     done
 
     # Packages de développement
-    echo -e "${BLUE}Installation des outils de qualité de code...${NC}"
-    dev_packages=(
+    log "INFO" "🛠️ Installation des outils de qualité de code..."
+    local dev_packages=(
         "symplify/easy-coding-standard"
         "rector/rector"
         "larastan/larastan"
@@ -640,55 +804,59 @@ main() {
 
     for package in "${dev_packages[@]}"; do
         if ! install_package "$package" "require-dev"; then
-            echo -e "${RED}⚠️  Échec de l'installation de $package${NC}"
+            failed_packages+=("$package")
+            log "WARN" "Échec de l'installation de $package (dev)"
         fi
         sleep 2
     done
 
+    # Rapport des packages qui ont échoué
+    if [ ${#failed_packages[@]} -gt 0 ]; then
+        log "WARN" "Packages qui ont échoué à l'installation:"
+        for package in "${failed_packages[@]}"; do
+            log "WARN" "  - $package"
+        done
+    fi
+
     # Installation finale et optimisation
-    echo -e "${YELLOW}Finalisation de l'installation...${NC}"
-    COMPOSER_MEMORY_LIMIT=-1 composer install --no-interaction --optimize-autoloader
+    log "INFO" "🔄 Finalisation de l'installation..."
+    COMPOSER_MEMORY_LIMIT=-1 composer install --no-interaction --optimize-autoloader 2>&1 | tee -a "$LOG_FILE"
 
     # Publier les assets et configurations
     if [ -f "artisan" ]; then
-        echo -e "${YELLOW}Publication des assets et configurations...${NC}"
+        log "INFO" "📋 Publication des assets et configurations..."
 
-        # Horizon
-        php artisan vendor:publish --tag=horizon-config --force 2>/dev/null || true
-        php artisan vendor:publish --tag=horizon-assets --force 2>/dev/null || true
+        # Liste des commandes de publication
+        local publish_commands=(
+            "php artisan vendor:publish --tag=horizon-config --force"
+            "php artisan vendor:publish --tag=horizon-assets --force"
+            "php artisan vendor:publish --tag=telescope-config --force"
+            "php artisan vendor:publish --tag=telescope-migrations --force"
+            "php artisan vendor:publish --provider=\"Laravel\Sanctum\SanctumServiceProvider\" --force"
+            "php artisan vendor:publish --provider=\"Spatie\Permission\PermissionServiceProvider\" --force"
+            "php artisan vendor:publish --provider=\"Spatie\Activitylog\ActivitylogServiceProvider\" --tag=\"activitylog-migrations\" --force"
+            "php artisan vendor:publish --provider=\"Barryvdh\LaravelIdeHelper\IdeHelperServiceProvider\" --tag=config --force"
+            "php artisan vendor:publish --provider=\"BeyondCode\QueryDetector\QueryDetectorServiceProvider\" --force"
+            "php artisan vendor:publish --tag=enlightn --force"
+        )
 
-        # Telescope
-        php artisan vendor:publish --tag=telescope-config --force 2>/dev/null || true
-        php artisan vendor:publish --tag=telescope-migrations --force 2>/dev/null || true
-
-        # Sanctum
-        php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider" --force 2>/dev/null || true
-
-        # Spatie packages
-        php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider" --force 2>/dev/null || true
-        php artisan vendor:publish --provider="Spatie\Activitylog\ActivitylogServiceProvider" --tag="activitylog-migrations" --force 2>/dev/null || true
-
-        # Laravel IDE Helper
-        php artisan vendor:publish --provider="Barryvdh\LaravelIdeHelper\IdeHelperServiceProvider" --tag=config --force 2>/dev/null || true
-
-        # Laravel Query Detector
-        php artisan vendor:publish --provider="BeyondCode\QueryDetector\QueryDetectorServiceProvider" --force 2>/dev/null || true
-
-        # Enlightn
-        php artisan vendor:publish --tag=enlightn --force 2>/dev/null || true
+        for cmd in "${publish_commands[@]}"; do
+            log "DEBUG" "Exécution: $cmd"
+            eval "$cmd" 2>/dev/null || log "DEBUG" "Commande ignorée (package peut-être non installé): $cmd"
+        done
 
         # Générer la clé d'application si nécessaire
         if ! grep -q "APP_KEY=.*" .env || grep -q "APP_KEY=$" .env; then
-            echo -e "${YELLOW}Génération de la clé d'application...${NC}"
+            log "INFO" "Génération de la clé d'application..."
             php artisan key:generate --no-interaction --force
         fi
 
         # IMPORTANT : Exécuter les migrations maintenant
-        echo -e "${BLUE}🗄️  Configuration de la base de données...${NC}"
+        log "INFO" "🗄️ Configuration de la base de données..."
         run_migrations
 
         # Générer les fichiers IDE Helper après les migrations
-        echo -e "${YELLOW}Génération des fichiers IDE Helper...${NC}"
+        log "INFO" "💡 Génération des fichiers IDE Helper..."
         php artisan ide-helper:generate 2>/dev/null || true
         php artisan ide-helper:meta 2>/dev/null || true
         php artisan ide-helper:models --write 2>/dev/null || true
@@ -702,80 +870,93 @@ main() {
     configure_package_json
 
     # Optimiser les caches
-    echo -e "${YELLOW}Optimisation des caches...${NC}"
+    log "INFO" "⚡ Optimisation des caches..."
     php artisan config:cache 2>/dev/null || true
     php artisan route:cache 2>/dev/null || true
     php artisan view:cache 2>/dev/null || true
 
     # Afficher un résumé de l'installation
-    echo -e "${GREEN}✅ Installation terminée avec succès !${NC}"
-    echo -e "${YELLOW}📂 Fichiers Laravel installés dans : $WORKING_DIR${NC}"
-    echo -e "${YELLOW}📊 Structure créée :${NC}"
+    log "SUCCESS" "Installation terminée avec succès !"
+    log "INFO" "📂 Fichiers Laravel installés dans : $WORKING_DIR"
+    log "DEBUG" "📊 Structure créée :"
     ls -la "$WORKING_DIR" | head -15
 
-    echo -e "${BLUE}🛠️  Outils de qualité installés :${NC}"
-    echo -e "  • Easy Coding Standard (ECS) - Vérification du style de code"
-    echo -e "  • Rector - Refactoring automatique"
-    echo -e "  • PHPStan/Larastan - Analyse statique"
-    echo -e "  • PHP Insights - Analyse globale de la qualité"
-    echo -e "  • Laravel IDE Helper - Autocomplétion IDE"
-    echo -e "  • Laravel Query Detector - Détection requêtes N+1"
-    echo -e "  • Enlightn - Audit de sécurité et performance"
-    echo -e "  • Pest - Framework de tests"
+    # Résumé des outils installés
+    log "INFO" "🛠️ Outils de qualité installés :"
+    log "INFO" "  • Easy Coding Standard (ECS) - Vérification du style de code"
+    log "INFO" "  • Rector - Refactoring automatique"
+    log "INFO" "  • PHPStan/Larastan - Analyse statique"
+    log "INFO" "  • PHP Insights - Analyse globale de la qualité"
+    log "INFO" "  • Laravel IDE Helper - Autocomplétion IDE"
+    log "INFO" "  • Laravel Query Detector - Détection requêtes N+1"
+    log "INFO" "  • Enlightn - Audit de sécurité et performance"
+    log "INFO" "  • Pest - Framework de tests"
 
-    echo -e "${BLUE}📦 Packages Laravel installés :${NC}"
-    echo -e "  • Laravel Horizon - Gestion des queues"
-    echo -e "  • Laravel Telescope - Debugging et monitoring"
-    echo -e "  • Laravel Sanctum - Authentification API"
-    echo -e "  • Spatie Permission - Gestion des rôles et permissions"
-    echo -e "  • Spatie Activity Log - Journal d'activité"
+    log "INFO" "📦 Packages Laravel installés :"
+    log "INFO" "  • Laravel Horizon - Gestion des queues"
+    log "INFO" "  • Laravel Telescope - Debugging et monitoring"
+    log "INFO" "  • Laravel Sanctum - Authentification API"
+    log "INFO" "  • Spatie Permission - Gestion des rôles et permissions"
+    log "INFO" "  • Spatie Activity Log - Journal d'activité"
 
-    echo -e "${BLUE}🗄️  Base de données configurée :${NC}"
-    echo -e "  • MariaDB (au lieu de SQLite)"
-    echo -e "  • Host: mariadb, Port: 3306"
-    echo -e "  • Database: laravel, User: laravel_user"
-    echo -e "  • ✅ Toutes les migrations exécutées"
-    echo -e "  • ✅ Tables sessions, cache, jobs créées"
-
-    echo -e "${BLUE}⚡ Scripts disponibles :${NC}"
-    echo -e "  • composer quality - Vérifier la qualité du code (ECS + PHPStan + Insights)"
-    echo -e "  • composer quality:fix - Corriger automatiquement"
-    echo -e "  • composer quality:full - Audit complet (qualité + sécurité + tests)"
-    echo -e "  • composer insights - Analyse PHP Insights"
-    echo -e "  • composer enlightn - Audit sécurité et performance"
-    echo -e "  • composer ide-helper - Générer les fichiers IDE Helper"
-    echo -e "  • composer test:coverage - Tests avec couverture"
+    log "INFO" "⚡ Scripts disponibles :"
+    log "INFO" "  • composer quality - Vérifier la qualité du code (ECS + PHPStan + Insights)"
+    log "INFO" "  • composer quality:fix - Corriger automatiquement"
+    log "INFO" "  • composer quality:full - Audit complet (qualité + sécurité + tests)"
+    log "INFO" "  • composer insights - Analyse PHP Insights"
+    log "INFO" "  • composer enlightn - Audit sécurité et performance"
+    log "INFO" "  • composer ide-helper - Générer les fichiers IDE Helper"
+    log "INFO" "  • composer test:coverage - Tests avec couverture"
 
     # Vérifier les fichiers importants
-    echo -e "${YELLOW}📋 Vérification des fichiers :${NC}"
-    files_to_check=("package.json" ".env" "ecs.php" "rector.php" "phpstan.neon")
+    log "INFO" "📋 Vérification des fichiers :"
+    local files_to_check=("package.json" ".env" "ecs.php" "rector.php" "phpstan.neon")
     for file in "${files_to_check[@]}"; do
         if [ -f "$WORKING_DIR/$file" ]; then
-            echo -e "${GREEN}✓ $file${NC}"
+            log "SUCCESS" "✓ $file"
         else
-            echo -e "${RED}✗ $file manquant${NC}"
+            log "WARN" "✗ $file manquant"
         fi
     done
 
     # Vérifier les tables importantes
-    echo -e "${YELLOW}📋 Vérification des tables importantes :${NC}"
-    important_tables=("users" "sessions" "cache" "jobs" "failed_jobs")
+    log "INFO" "📋 Vérification des tables importantes :"
+    local important_tables=("users" "sessions" "cache" "jobs" "failed_jobs")
     for table in "${important_tables[@]}"; do
         if php artisan tinker --execute="DB::select('SHOW TABLES LIKE \"$table\"');" 2>/dev/null | grep -q "$table"; then
-            echo -e "${GREEN}✓ Table $table${NC}"
+            log "SUCCESS" "✓ Table $table"
         else
-            echo -e "${RED}✗ Table $table manquante${NC}"
+            log "WARN" "✗ Table $table manquante"
         fi
     done
 
-    echo -e "${GREEN}🎉 Installation complète terminée !${NC}"
-    echo -e "${YELLOW}Prochaines étapes :${NC}"
-    echo -e "1. ✅ Base de données configurée et migrée"
-    echo -e "2. Accéder à l'application : https://laravel.local"
-    echo -e "3. Lancer les tests : composer test:coverage"
-    echo -e "4. Vérifier la qualité : composer quality"
-    echo -e "5. Configurer le monitoring : make setup-monitoring"
+    log "SUCCESS" "🎉 Installation complète terminée !"
+    log "INFO" "Prochaines étapes :"
+    log "INFO" "1. ✅ Base de données configurée et migrée"
+    log "INFO" "2. Accéder à l'application : https://laravel.local"
+    log "INFO" "3. Lancer les tests : composer test:coverage"
+    log "INFO" "4. Vérifier la qualité : composer quality"
+    log "INFO" "5. Configurer le monitoring : make setup-monitoring"
+
+    if [ ${#failed_packages[@]} -gt 0 ]; then
+        log "WARN" "⚠️ Certains packages ont échoué. Consultez le log: $LOG_FILE"
+    fi
+
+    log "INFO" "Log complet disponible: $LOG_FILE"
 }
 
+# Afficher l'aide si demandé
+if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+    echo "Usage: $0 [--debug] [--help]"
+    echo ""
+    echo "Options:"
+    echo "  --debug    Activer le mode debug avec logs détaillés"
+    echo "  --help     Afficher cette aide"
+    echo ""
+    echo "Variables d'environnement:"
+    echo "  DEBUG=true    Activer le mode debug (équivalent à --debug)"
+    exit 0
+fi
+
 # Exécuter l'installation
-main
+main "$@"

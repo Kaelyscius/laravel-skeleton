@@ -27,7 +27,7 @@ services:
         start_period: 60s
       restart: unless-stopped
       labels:
-        - "com.centurylinklabs.watchtower.enable=false"  # Image custom
+        - "com.centurylinklabs.watchtower.enable=false"  # Image custom - pas de mise à jour auto
 
   php:
     build:
@@ -68,7 +68,7 @@ services:
       - MAIL_HOST=mailhog
       - MAIL_PORT=1025
     labels:
-      - "com.centurylinklabs.watchtower.enable=false"  # Image custom
+      - "com.centurylinklabs.watchtower.enable=false"  # Image custom - pas de mise à jour auto
 
   mariadb:
     image: mariadb:latest
@@ -91,7 +91,7 @@ services:
       start_period: 40s
     restart: unless-stopped
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   redis:
     image: redis:alpine
@@ -108,7 +108,7 @@ services:
       retries: 3
     restart: unless-stopped
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   node:
       build:
@@ -126,7 +126,7 @@ services:
       working_dir: /var/www/html
       command: tail -f /dev/null
       labels:
-        - "com.centurylinklabs.watchtower.enable=false"  # Image custom
+        - "com.centurylinklabs.watchtower.enable=false"  # Image custom - pas de mise à jour auto
 
   mailhog:
     image: mailhog/mailhog:latest
@@ -142,7 +142,7 @@ services:
       timeout: 10s
       retries: 3
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   adminer:
     image: adminer:latest
@@ -160,7 +160,7 @@ services:
       timeout: 10s
       retries: 3
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   it-tools:
     image: corentinth/it-tools:latest
@@ -176,7 +176,7 @@ services:
       timeout: 10s
       retries: 3
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   dozzle:
     image: amir20/dozzle:latest
@@ -198,7 +198,7 @@ services:
       timeout: 10s
       retries: 3
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   # 🔍 UPTIME KUMA - Monitoring et alertes
   uptime-kuma:
@@ -208,8 +208,10 @@ services:
       - "3001:3001"
     volumes:
       - uptime-kuma_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - app-network
+      - monitoring-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001"]
@@ -218,34 +220,70 @@ services:
       retries: 3
       start_period: 90s
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
+      # Labels pour la configuration automatique des monitors
+      - "uptime-kuma.enable=true"
+      - "uptime-kuma.name=Uptime Kuma Self Monitor"
+      - "uptime-kuma.url=http://localhost:3001"
+      - "uptime-kuma.interval=600"
 
   # 🔄 WATCHTOWER - Mises à jour automatiques
   watchtower:
     image: containrrr/watchtower:latest
     container_name: ${COMPOSE_PROJECT_NAME}_watchtower
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - app-network
+      - monitoring-network
     environment:
-      # Mise à jour quotidienne à 3h du matin
-      - WATCHTOWER_SCHEDULE=0 0 3 * * *
+      # Configuration de base
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_INCLUDE_STOPPED=false
-      - WATCHTOWER_LABEL_ENABLE=true
-      - WATCHTOWER_NOTIFICATIONS=shoutrrr
-      - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_NOTIFICATION_URL:-}
+      - WATCHTOWER_LABEL_ENABLE=true           # Mode sélectif basé sur les labels
       - WATCHTOWER_LOG_LEVEL=info
+
+      # Planification - Tous les jours à 3h du matin
+      - WATCHTOWER_SCHEDULE=0 0 3 * * *
+
+      # Surveillance des repositories privés (si nécessaire)
+      # - WATCHTOWER_REPO_USER=${DOCKER_USERNAME}
+      # - WATCHTOWER_REPO_PASS=${DOCKER_PASSWORD}
+
+      # Notifications (configurable via .env)
+      - WATCHTOWER_NOTIFICATIONS=${WATCHTOWER_NOTIFICATIONS:-}
+      - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_NOTIFICATION_URL:-}
+
+      # Configuration avancée
+      - WATCHTOWER_TIMEOUT=10s
+      - WATCHTOWER_ROLLING_RESTART=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+
+      # Debug (peut être activé en développement)
+      - WATCHTOWER_DEBUG=${WATCHTOWER_DEBUG:-false}
+
     restart: unless-stopped
+    depends_on:
+      - uptime-kuma  # S'assurer qu'Uptime Kuma démarre avant Watchtower
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.enable=true"   # Watchtower peut se mettre à jour lui-même
+      # Labels pour monitoring
+      - "uptime-kuma.enable=true"
+      - "uptime-kuma.name=Watchtower Service"
+      - "uptime-kuma.type=docker"
+      - "uptime-kuma.docker.container=${COMPOSE_PROJECT_NAME}_watchtower"
 
 networks:
   app-network:
     driver: bridge
+    name: ${COMPOSE_PROJECT_NAME}_app_network
+  monitoring-network:
+    driver: bridge
+    name: ${COMPOSE_PROJECT_NAME}_monitoring_network
 
 volumes:
   mariadb_data:
+    name: ${COMPOSE_PROJECT_NAME}_mariadb_data
   redis_data:
+    name: ${COMPOSE_PROJECT_NAME}_redis_data
   uptime-kuma_data:
+    name: ${COMPOSE_PROJECT_NAME}_uptime_kuma_data

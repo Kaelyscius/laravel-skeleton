@@ -35,7 +35,9 @@ help: ## Afficher l'aide
 	@echo ""
 	@echo "$(YELLOW)💡 Commandes courantes :$(NC)"
 	@echo "  $(GREEN)make install$(NC)              - Installation complète"
-	@echo "  $(GREEN)make setup-monitoring-auto$(NC) - Configurer le monitoring automatiquement"
+	@echo "  $(GREEN)make setup-monitoring$(NC)     - Configuration simple Uptime Kuma"
+	@echo "  $(GREEN)make setup-monitoring-auto$(NC) - Configuration automatique avancée"
+	@echo "  $(GREEN)make setup-watchtower$(NC)     - Configuration simple Watchtower"
 	@echo "  $(GREEN)make quality-full$(NC)         - Audit complet de qualité"
 	@echo "  $(GREEN)make dev$(NC)                  - Démarrer le développement"
 	@echo "  $(GREEN)make monitoring$(NC)           - Ouvrir les outils de monitoring"
@@ -43,7 +45,7 @@ help: ## Afficher l'aide
 
 ## 🚀 Installation et Build
 .PHONY: install
-install: build up install-laravel npm-install setup-ssl setup-monitoring-auto ## Installation complète du projet
+install: build up install-laravel npm-install setup-ssl ## Installation complète du projet
 	@echo "$(GREEN)✓ Installation terminée !$(NC)"
 	@echo "$(YELLOW)→ Accédez à l'application : https://laravel.local$(NC)"
 	@echo ""
@@ -57,7 +59,8 @@ install: build up install-laravel npm-install setup-ssl setup-monitoring-auto ##
 	@echo "$(YELLOW)→ Uptime Kuma : http://localhost:3001$(NC)"
 	@echo ""
 	@echo "$(BLUE)⚡ Commandes utiles :$(NC)"
-	@echo "  • $(GREEN)make monitoring$(NC)           - Ouvrir tous les outils de monitoring"
+	@echo "  • $(GREEN)make setup-monitoring$(NC)     - Configuration simple Uptime Kuma"
+	@echo "  • $(GREEN)make setup-watchtower$(NC)     - Configuration simple Watchtower"
 	@echo "  • $(GREEN)make npm-build$(NC)            - Builder les assets"
 	@echo "  • $(GREEN)make npm-dev$(NC)              - Lancer le dev server"
 	@echo "  • $(GREEN)make quality-full$(NC)         - Vérifier la qualité"
@@ -335,7 +338,7 @@ ide-helper: ## Générer les fichiers IDE Helper
 
 ## 🎯 Commandes groupées de qualité
 .PHONY: quality
-Avoiquality: ecs phpstan ## Vérification de base de la qualité
+quality: ecs phpstan ## Vérification de base de la qualité
 	@echo "$(GREEN)✓ Basic quality checks completed$(NC)"
 
 .PHONY: quality-fix
@@ -404,74 +407,69 @@ monitoring: ## Ouvrir tous les outils de monitoring
 		echo "$(BLUE)→ Manually open the URLs above$(NC)"; \
 	fi
 
+## 🔍 Configuration Uptime Kuma
 .PHONY: setup-monitoring
-setup-monitoring: ## Configurer les moniteurs Uptime Kuma (interactif)
-	@echo "$(CYAN)⚙️ Setting up monitoring (interactive)...$(NC)"
-	@if [ -f "./scripts/setup-monitoring.sh" ]; then \
-		chmod +x "./scripts/setup-monitoring.sh" && \
-		./scripts/setup-monitoring.sh; \
+setup-monitoring: ## Configuration simple d'Uptime Kuma (interactif)
+	@echo "$(CYAN)⚙️ Setting up Uptime Kuma (simple)...$(NC)"
+	@if [ -f "./scripts/setup-uptime-kuma-simple.sh" ]; then \
+		chmod +x "./scripts/setup-uptime-kuma-simple.sh" && \
+		./scripts/setup-uptime-kuma-simple.sh; \
 	else \
-		echo "$(RED)❌ Script setup-monitoring.sh non trouvé$(NC)"; \
-		echo "$(YELLOW)💡 Créez le fichier scripts/setup-monitoring.sh$(NC)"; \
+		echo "$(RED)❌ Script setup-uptime-kuma-simple.sh non trouvé$(NC)"; \
+		echo "$(YELLOW)💡 Créez le fichier scripts/setup-uptime-kuma-simple.sh$(NC)"; \
 		echo "$(BLUE)→ Ouvrez manuellement: http://localhost:3001$(NC)"; \
 	fi
 
 .PHONY: setup-monitoring-auto
-setup-monitoring-auto: ## Configurer automatiquement les moniteurs Uptime Kuma
-	@echo "$(CYAN)🤖 Setting up monitoring automatically...$(NC)"
-	@if [ -f "./scripts/uptime-kuma-auto-config.sh" ]; then \
-		chmod +x "./scripts/uptime-kuma-auto-config.sh" && \
-		./scripts/uptime-kuma-auto-config.sh; \
+setup-monitoring-auto: ## Configuration automatique avancée d'Uptime Kuma
+	@echo "$(CYAN)🤖 Setting up Uptime Kuma automatically (advanced)...$(NC)"
+	@if [ -f "./scripts/setup-uptime-kuma-auto.py" ]; then \
+		chmod +x "./scripts/setup-uptime-kuma-auto.py" && \
+		python3 ./scripts/setup-uptime-kuma-auto.py; \
 	else \
-		echo "$(RED)❌ Script uptime-kuma-auto-config.sh non trouvé$(NC)"; \
-		echo "$(YELLOW)💡 Utilisation du script interactif...$(NC)"; \
+		echo "$(RED)❌ Script setup-uptime-kuma-auto.py non trouvé$(NC)"; \
+		echo "$(YELLOW)💡 Utilisation du script simple...$(NC)"; \
 		$(MAKE) setup-monitoring; \
 	fi
 
-.PHONY: import-monitoring-config
-import-monitoring-config: ## Importer la configuration Uptime Kuma via Python
-	@echo "$(PURPLE)📥 Importing Uptime Kuma configuration...$(NC)"
-	@if [ -f "./scripts/import-uptime-kuma-config.py" ]; then \
-		echo "$(YELLOW)→ Using Python script...$(NC)"; \
-		python3 ./scripts/import-uptime-kuma-config.py; \
-	elif [ -f "./scripts/simple-uptime-import.sh" ]; then \
-		echo "$(YELLOW)→ Using simple bash script...$(NC)"; \
-		chmod +x "./scripts/simple-uptime-import.sh" && \
-		./scripts/simple-uptime-import.sh; \
-	else \
-		echo "$(RED)❌ Aucun script d'importation trouvé$(NC)"; \
-		echo "$(YELLOW)💡 Exécutez d'abord: make setup-monitoring-auto$(NC)"; \
-	fi
-
-.PHONY: monitoring-config-status
-monitoring-config-status: ## Vérifier la configuration du monitoring
+.PHONY: monitoring-status
+monitoring-status: ## Vérifier la configuration du monitoring
 	@echo "$(CYAN)📊 Monitoring configuration status...$(NC)"
 	@echo "$(YELLOW)→ Configuration files:$(NC)"
-	@if [ -f "./scripts/uptime-kuma-config.json" ]; then \
-		echo "$(GREEN)  ✓ uptime-kuma-config.json$(NC)"; \
+	@if [ -f "./scripts/uptime-kuma-auto-config.json" ]; then \
+		echo "$(GREEN)  ✓ uptime-kuma-auto-config.json$(NC)"; \
 	else \
-		echo "$(RED)  ✗ uptime-kuma-config.json$(NC)"; \
+		echo "$(RED)  ✗ uptime-kuma-auto-config.json$(NC)"; \
 	fi
-	@if [ -f "./scripts/import-uptime-kuma-config.py" ]; then \
-		echo "$(GREEN)  ✓ import-uptime-kuma-config.py$(NC)"; \
+	@if [ -f "./scripts/setup-uptime-kuma-auto.py" ]; then \
+		echo "$(GREEN)  ✓ setup-uptime-kuma-auto.py$(NC)"; \
 	else \
-		echo "$(RED)  ✗ import-uptime-kuma-config.py$(NC)"; \
+		echo "$(RED)  ✗ setup-uptime-kuma-auto.py$(NC)"; \
 	fi
-	@if [ -f "./scripts/simple-uptime-import.sh" ]; then \
-		echo "$(GREEN)  ✓ simple-uptime-import.sh$(NC)"; \
+	@if [ -f "./scripts/setup-uptime-kuma-simple.sh" ]; then \
+		echo "$(GREEN)  ✓ setup-uptime-kuma-simple.sh$(NC)"; \
 	else \
-		echo "$(RED)  ✗ simple-uptime-import.sh$(NC)"; \
+		echo "$(RED)  ✗ setup-uptime-kuma-simple.sh$(NC)"; \
 	fi
-	@echo "$(YELLOW)→ Setup scripts:$(NC)"
-	@if [ -f "./scripts/setup-monitoring.sh" ]; then \
-		echo "$(GREEN)  ✓ setup-monitoring.sh$(NC)"; \
+	@echo "$(YELLOW)→ Services status:$(NC)"
+	@if docker ps --format "table {{.Names}}\t{{.Status}}" | grep -q "$(COMPOSE_PROJECT_NAME)_uptime-kuma.*healthy"; then \
+		echo "$(GREEN)  ✓ Uptime Kuma: Healthy$(NC)"; \
+	elif docker ps --format "table {{.Names}}" | grep -q "$(COMPOSE_PROJECT_NAME)_uptime-kuma"; then \
+		echo "$(YELLOW)  ⚠ Uptime Kuma: Running$(NC)"; \
 	else \
-		echo "$(RED)  ✗ setup-monitoring.sh$(NC)"; \
+		echo "$(RED)  ✗ Uptime Kuma: Not running$(NC)"; \
 	fi
-	@if [ -f "./scripts/uptime-kuma-auto-config.sh" ]; then \
-		echo "$(GREEN)  ✓ uptime-kuma-auto-config.sh$(NC)"; \
+
+## 🔄 Configuration Watchtower
+.PHONY: setup-watchtower
+setup-watchtower: ## Configuration simple de Watchtower
+	@echo "$(CYAN)🔄 Setting up Watchtower (simple)...$(NC)"
+	@if [ -f "./scripts/setup-watchtower-simple.sh" ]; then \
+		chmod +x "./scripts/setup-watchtower-simple.sh" && \
+		./scripts/setup-watchtower-simple.sh; \
 	else \
-		echo "$(RED)  ✗ uptime-kuma-auto-config.sh$(NC)"; \
+		echo "$(RED)❌ Script setup-watchtower-simple.sh non trouvé$(NC)"; \
+		echo "$(YELLOW)💡 Créez le fichier scripts/setup-watchtower-simple.sh$(NC)"; \
 	fi
 
 .PHONY: watchtower-logs
@@ -495,31 +493,15 @@ watchtower-status: ## Voir le statut de Watchtower
 		echo "$(RED)✗ Watchtower is not running$(NC)"; \
 	fi
 
-.PHONY: monitoring-status
-monitoring-status: ## Vérifier le statut des outils de monitoring
-	@echo "$(CYAN)📊 Monitoring services status...$(NC)"
-	@echo "$(YELLOW)→ Uptime Kuma:$(NC)"
-	@if docker ps --format "{{.Names}}" | grep -q "$(COMPOSE_PROJECT_NAME)_uptime-kuma"; then \
-		echo "$(GREEN)  ✓ Running on http://localhost:3001$(NC)"; \
-		if curl -s -f http://localhost:3001 > /dev/null 2>&1; then \
-			echo "$(GREEN)  ✓ Service accessible$(NC)"; \
-		else \
-			echo "$(YELLOW)  ⚠ Container running but service not ready$(NC)"; \
-		fi \
+.PHONY: watchtower-test
+watchtower-test: ## Tester la configuration de Watchtower
+	@echo "$(BLUE)🧪 Testing Watchtower configuration...$(NC)"
+	@if [ -f "./scripts/test-watchtower.sh" ]; then \
+		chmod +x "./scripts/test-watchtower.sh" && \
+		./scripts/test-watchtower.sh; \
 	else \
-		echo "$(RED)  ✗ Not running$(NC)"; \
-	fi
-	@echo "$(YELLOW)→ Watchtower:$(NC)"
-	@if docker ps --format "{{.Names}}" | grep -q "$(COMPOSE_PROJECT_NAME)_watchtower"; then \
-		echo "$(GREEN)  ✓ Running (auto-updates enabled)$(NC)"; \
-	else \
-		echo "$(RED)  ✗ Not running$(NC)"; \
-	fi
-	@echo "$(YELLOW)→ Dozzle:$(NC)"
-	@if docker ps --format "{{.Names}}" | grep -q "$(COMPOSE_PROJECT_NAME)_dozzle"; then \
-		echo "$(GREEN)  ✓ Running on http://localhost:9999$(NC)"; \
-	else \
-		echo "$(RED)  ✗ Not running$(NC)"; \
+		echo "$(YELLOW)⚠️  Test script not found, checking manually...$(NC)"; \
+		$(MAKE) watchtower-status; \
 	fi
 
 ## 🚀 Développement rapide
@@ -578,9 +560,9 @@ clean-reports: ## Nettoyer les rapports de qualité
 .PHONY: clean-monitoring-config
 clean-monitoring-config: ## Nettoyer les fichiers de configuration monitoring
 	@echo "$(YELLOW)Cleaning monitoring configuration files...$(NC)"
-	@rm -f ./scripts/uptime-kuma-config.json
-	@rm -f ./scripts/import-uptime-kuma-config.py
-	@rm -f ./scripts/simple-uptime-import.sh
+	@rm -f ./scripts/uptime-kuma-auto-config.json
+	@rm -f ./scripts/uptime-kuma-notifications.json
+	@rm -f ./scripts/uptime-kuma-monitors.txt
 	@echo "$(GREEN)✓ Monitoring config files cleaned$(NC)"
 
 .PHONY: prune
@@ -669,7 +651,7 @@ diagnose: ## Diagnostiquer les problèmes de Laravel et npm
 		fi; \
 		echo ""; \
 		echo "$(BLUE)=== Configuration monitoring ===$(NC)"; \
-		$(MAKE) monitoring-config-status; \
+		$(MAKE) monitoring-status; \
 		echo ""; \
 		echo "$(BLUE)=== Recherche globale de package.json ===$(NC)"; \
 		docker exec $(NODE_CONTAINER_NAME) find /var/www -name "package.json" -type f 2>/dev/null || echo "Aucun package.json trouvé"; \
@@ -678,10 +660,11 @@ diagnose: ## Diagnostiquer les problèmes de Laravel et npm
 	fi
 	@echo ""
 	@echo "$(PURPLE)💡 Commandes utiles après diagnostic:$(NC)"
-	@echo "  • $(GREEN)make setup-monitoring-auto$(NC) - Configuration automatique du monitoring"
-	@echo "  • $(GREEN)make install-laravel$(NC)       - Si Laravel manquant"
-	@echo "  • $(GREEN)make npm-install$(NC)           - Si package.json manquant"
-	@echo "  • $(GREEN)make monitoring$(NC)            - Ouvrir les outils de monitoring"
+	@echo "  • $(GREEN)make setup-monitoring$(NC)     - Configuration simple Uptime Kuma"
+	@echo "  • $(GREEN)make setup-watchtower$(NC)     - Configuration simple Watchtower"
+	@echo "  • $(GREEN)make install-laravel$(NC)      - Si Laravel manquant"
+	@echo "  • $(GREEN)make npm-install$(NC)          - Si package.json manquant"
+	@echo "  • $(GREEN)make monitoring$(NC)           - Ouvrir les outils de monitoring"
 
 ## 🔄 Mise à jour et sécurité
 .PHONY: update-deps
@@ -737,3 +720,262 @@ deploy-check: quality-full security-check npm-build ## Vérifications avant dép
 .PHONY: daily-check
 daily-check: update-deps quality-full security-check ## Vérifications quotidiennes
 	@echo "$(GREEN)📅 Daily checks completed!$(NC)"
+
+.PHONY: setup-full
+setup-full: install setup-monitoring setup-watchtower ## Installation et configuration complète
+	@echo "$(GREEN)🎉 Setup complet terminé !$(NC)"
+	@echo ""
+	@echo "$(CYAN)🔗 Accès rapides:$(NC)"
+	@echo "  • Laravel: https://laravel.local"
+	@echo "  • Uptime Kuma: http://localhost:3001"
+	@echo "  • Adminer: http://localhost:8080"
+	@echo "  • MailHog: http://localhost:8025"
+	@echo "  • Dozzle: http://localhost:9999"
+	@echo ""
+	@echo "$(BLUE)⚡ Prochaines étapes:$(NC)"
+	@echo "  1. Configurez vos monitors dans Uptime Kuma"
+	@echo "  2. Configurez les notifications Watchtower"
+	@echo "  3. Lancez les tests: make test-all"
+	@echo "  4. Vérifiez la qualité: make quality-full"
+
+## 🔄 Scripts d'initialisation et maintenance
+.PHONY: init-scripts
+init-scripts: ## Créer la structure des scripts et les placeholders
+	@echo "$(CYAN)📁 Initialisation de la structure des scripts...$(NC)"
+	@if [ -f "./create-scripts-structure.sh" ]; then \
+		chmod +x "./create-scripts-structure.sh" && \
+		./create-scripts-structure.sh; \
+	else \
+		echo "$(RED)❌ Script create-scripts-structure.sh non trouvé$(NC)"; \
+		mkdir -p scripts scripts/monitoring scripts/watchtower scripts/healthcheck; \
+		echo "$(GREEN)✓ Répertoires scripts créés manuellement$(NC)"; \
+	fi
+
+.PHONY: fix-permissions
+fix-permissions: ## Corriger les permissions des scripts
+	@echo "$(YELLOW)🔧 Correction des permissions...$(NC)"
+	@find scripts/ -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+	@find scripts/ -name "*.py" -exec chmod +x {} \; 2>/dev/null || true
+	@find docker/scripts/ -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+	@echo "$(GREEN)✓ Permissions corrigées$(NC)"
+
+.PHONY: backup-config
+backup-config: ## Sauvegarder la configuration actuelle
+	@echo "$(YELLOW)💾 Sauvegarde de la configuration...$(NC)"
+	@mkdir -p backups/$(shell date +%Y%m%d-%H%M%S)
+	@cp .env backups/$(shell date +%Y%m%d-%H%M%S)/.env 2>/dev/null || true
+	@cp docker-compose.yml backups/$(shell date +%Y%m%d-%H%M%S)/docker-compose.yml 2>/dev/null || true
+	@cp Makefile backups/$(shell date +%Y%m%d-%H%M%S)/Makefile 2>/dev/null || true
+	@docker-compose config > backups/$(shell date +%Y%m%d-%H%M%S)/docker-compose.resolved.yml 2>/dev/null || true
+	@echo "$(GREEN)✓ Configuration sauvegardée dans backups/$(NC)"
+
+.PHONY: restore-config
+restore-config: ## Restaurer une configuration (spécifiez BACKUP_DIR=...)
+	@if [ -z "$(BACKUP_DIR)" ]; then \
+		echo "$(RED)❌ Spécifiez le répertoire: make restore-config BACKUP_DIR=backups/20241210-143000$(NC)"; \
+		echo "$(YELLOW)Sauvegardes disponibles:$(NC)"; \
+		ls -la backups/ 2>/dev/null || echo "Aucune sauvegarde trouvée"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)📤 Restauration depuis $(BACKUP_DIR)...$(NC)"
+	@if [ -f "$(BACKUP_DIR)/.env" ]; then cp "$(BACKUP_DIR)/.env" .env; echo "$(GREEN)✓ .env restauré$(NC)"; fi
+	@if [ -f "$(BACKUP_DIR)/docker-compose.yml" ]; then cp "$(BACKUP_DIR)/docker-compose.yml" docker-compose.yml; echo "$(GREEN)✓ docker-compose.yml restauré$(NC)"; fi
+	@if [ -f "$(BACKUP_DIR)/Makefile" ]; then cp "$(BACKUP_DIR)/Makefile" Makefile; echo "$(GREEN)✓ Makefile restauré$(NC)"; fi
+	@echo "$(GREEN)✅ Configuration restaurée$(NC)"
+
+## 📊 Métriques et surveillance avancée
+.PHONY: metrics
+metrics: ## Afficher les métriques détaillées du système
+	@echo "$(CYAN)📊 Métriques système détaillées$(NC)"
+	@echo "$(CYAN)==============================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)🐳 Utilisation Docker:$(NC)"
+	@docker system df 2>/dev/null || echo "Impossible d'obtenir les métriques Docker"
+	@echo ""
+	@echo "$(YELLOW)📈 Statistiques des containers:$(NC)"
+	@docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.NetIO}}\t{{.BlockIO}}" 2>/dev/null || echo "Aucun container actif"
+	@echo ""
+	@echo "$(YELLOW)💾 Volumes Docker:$(NC)"
+	@docker volume ls --format "table {{.Driver}}\t{{.Name}}" | grep $(COMPOSE_PROJECT_NAME) 2>/dev/null || echo "Aucun volume trouvé"
+	@echo ""
+	@echo "$(YELLOW)🌐 Réseaux Docker:$(NC)"
+	@docker network ls --format "table {{.Name}}\t{{.Driver}}\t{{.Scope}}" | grep $(COMPOSE_PROJECT_NAME) 2>/dev/null || echo "Aucun réseau trouvé"
+
+.PHONY: performance-check
+performance-check: ## Vérifier les performances et optimisations
+	@echo "$(CYAN)⚡ Vérification des performances$(NC)"
+	@echo "$(CYAN)==============================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)🔍 Vérification OPcache:$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php -r "if(function_exists('opcache_get_status')) { \$s=opcache_get_status(); echo 'OPcache: ' . (\$s['opcache_enabled'] ? 'Activé' : 'Désactivé') . \"\\n\"; echo 'Mémoire utilisée: ' . round(\$s['memory_usage']['used_memory']/1024/1024,2) . 'MB\\n'; } else { echo 'OPcache non disponible\\n'; }" 2>/dev/null || echo "Container PHP non accessible"
+	@echo ""
+	@echo "$(YELLOW)📦 Taille des volumes:$(NC)"
+	@docker system df -v 2>/dev/null | grep $(COMPOSE_PROJECT_NAME) || echo "Aucune information disponible"
+	@echo ""
+	@echo "$(YELLOW)🔄 Temps de réponse des services:$(NC)"
+	@for url in "https://laravel.local" "http://localhost:3001" "http://localhost:8025" "http://localhost:8080"; do \
+		echo -n "  $url: "; \
+		time_result=$(curl -o /dev/null -s -w "%{time_total}" "$url" 2>/dev/null) && echo "${time_result}s" || echo "Non accessible"; \
+	done
+
+.PHONY: logs-follow
+logs-follow: ## Suivre les logs de tous les containers en temps réel
+	@echo "$(CYAN)📋 Suivi des logs en temps réel$(NC)"
+	@echo "$(YELLOW)Appuyez sur Ctrl+C pour arrêter$(NC)"
+	@$(DOCKER_COMPOSE) logs -f --tail=50
+
+.PHONY: logs-errors
+logs-errors: ## Afficher uniquement les erreurs dans les logs
+	@echo "$(CYAN)🚨 Erreurs dans les logs$(NC)"
+	@echo "$(CYAN)=====================$(NC)"
+	@$(DOCKER_COMPOSE) logs --tail=100 2>&1 | grep -i -E "(error|exception|fatal|fail|warn)" --color=always || echo "$(GREEN)Aucune erreur trouvée$(NC)"
+
+## 🔧 Outils de debugging et développement
+.PHONY: debug-php
+debug-php: ## Activer le mode debug PHP
+	@echo "$(YELLOW)🐛 Activation du mode debug PHP...$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php -r "echo 'PHP Version: ' . PHP_VERSION . \"\\n\";"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php -r "echo 'Xdebug: ' . (extension_loaded('xdebug') ? 'Activé' : 'Désactivé') . \"\\n\";"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php -r "echo 'OPcache: ' . (extension_loaded('Zend OPcache') ? 'Activé' : 'Désactivé') . \"\\n\";"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php -m | grep -E "(xdebug|Zend OPcache|redis)" || echo "Extensions non trouvées"
+
+.PHONY: debug-composer
+debug-composer: ## Debug des problèmes Composer
+	@echo "$(YELLOW)🎼 Debug Composer...$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) composer --version
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) composer config --list --global 2>/dev/null | head -20
+	@echo ""
+	@echo "$(YELLOW)Configuration locale:$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) composer config --list 2>/dev/null | head -10 || echo "Pas de composer.json"
+
+.PHONY: debug-laravel
+debug-laravel: ## Debug Laravel (routes, config, etc.)
+	@echo "$(YELLOW)🚀 Debug Laravel...$(NC)"
+	@if $(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) test -f artisan; then \
+		echo "$(GREEN)✓ Laravel détecté$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Version Laravel:$(NC)"; \
+		$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan --version; \
+		echo ""; \
+		echo "$(YELLOW)Statut de l'application:$(NC)"; \
+		$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan inspire 2>/dev/null && echo "$(GREEN)✓ Application fonctionnelle$(NC)" || echo "$(RED)✗ Application non accessible$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Configuration:$(NC)"; \
+		$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan config:show app.env app.debug app.url 2>/dev/null || echo "Impossible d'afficher la config"; \
+	else \
+		echo "$(RED)✗ Laravel non installé$(NC)"; \
+		echo "$(YELLOW)💡 Lancez: make install-laravel$(NC)"; \
+	fi
+
+.PHONY: debug-network
+debug-network: ## Debug des problèmes réseau Docker
+	@echo "$(YELLOW)🌐 Debug réseau Docker...$(NC)"
+	@echo "$(CYAN)Réseaux actifs:$(NC)"
+	@docker network ls | grep $(COMPOSE_PROJECT_NAME) || echo "Aucun réseau trouvé"
+	@echo ""
+	@echo "$(CYAN)Test de connectivité interne:$(NC)"
+	@$(DOCKER) exec $(PHP_CONTAINER_NAME) ping -c 2 mariadb 2>/dev/null && echo "$(GREEN)✓ PHP -> MariaDB$(NC)" || echo "$(RED)✗ PHP -> MariaDB$(NC)"
+	@$(DOCKER) exec $(PHP_CONTAINER_NAME) ping -c 2 redis 2>/dev/null && echo "$(GREEN)✓ PHP -> Redis$(NC)" || echo "$(RED)✗ PHP -> Redis$(NC)"
+
+## 📋 Aide et documentation
+.PHONY: help-monitoring
+help-monitoring: ## Aide spécifique au monitoring
+	@echo "$(CYAN)🔍 Aide Monitoring$(NC)"
+	@echo "$(CYAN)=================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Configuration Uptime Kuma:$(NC)"
+	@echo "  $(GREEN)make setup-monitoring$(NC)      - Configuration simple (recommandé)"
+	@echo "  $(GREEN)make setup-monitoring-auto$(NC) - Configuration automatique avancée"
+	@echo "  $(GREEN)make uptime$(NC)                - Ouvrir Uptime Kuma"
+	@echo "  $(GREEN)make monitoring$(NC)            - Ouvrir tous les outils"
+	@echo "  $(GREEN)make monitoring-status$(NC)     - Vérifier le statut"
+	@echo ""
+	@echo "$(YELLOW)Configuration Watchtower:$(NC)"
+	@echo "  $(GREEN)make setup-watchtower$(NC)      - Configuration simple"
+	@echo "  $(GREEN)make watchtower-logs$(NC)       - Voir les logs"
+	@echo "  $(GREEN)make watchtower-status$(NC)     - Vérifier le statut"
+	@echo "  $(GREEN)make watchtower-test$(NC)       - Tester la configuration"
+	@echo "  $(GREEN)make watchtower-update-now$(NC) - Forcer une mise à jour"
+	@echo ""
+	@echo "$(BLUE)💡 Conseils:$(NC)"
+	@echo "  • Commencez par: make setup-monitoring"
+	@echo "  • Puis: make setup-watchtower"
+	@echo "  • Testez avec: make monitoring-status"
+	@echo "  • Surveillance: make watchtower-test"
+
+.PHONY: help-quality
+help-quality: ## Aide spécifique à la qualité de code
+	@echo "$(CYAN)🔍 Aide Qualité de Code$(NC)"
+	@echo "$(CYAN)========================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Outils disponibles:$(NC)"
+	@echo "  $(GREEN)make ecs$(NC)           - Easy Coding Standard (style)"
+	@echo "  $(GREEN)make ecs-fix$(NC)       - Corriger le style automatiquement"
+	@echo "  $(GREEN)make phpstan$(NC)       - Analyse statique PHPStan/Larastan"
+	@echo "  $(GREEN)make rector$(NC)        - Suggestions de refactoring"
+	@echo "  $(GREEN)make rector-fix$(NC)    - Appliquer le refactoring"
+	@echo "  $(GREEN)make insights$(NC)      - Analyse globale PHP Insights"
+	@echo "  $(GREEN)make enlightn$(NC)      - Audit sécurité et performance"
+	@echo ""
+	@echo "$(YELLOW)Workflows groupés:$(NC)"
+	@echo "  $(GREEN)make quality$(NC)       - Vérification de base (ECS + PHPStan)"
+	@echo "  $(GREEN)make quality-fix$(NC)   - Corrections automatiques"
+	@echo "  $(GREEN)make quality-full$(NC)  - Audit complet"
+	@echo "  $(GREEN)make quality-report$(NC) - Générer des rapports"
+	@echo ""
+	@echo "$(YELLOW)Tests:$(NC)"
+	@echo "  $(GREEN)make test$(NC)          - Tous les tests"
+	@echo "  $(GREEN)make test-unit$(NC)     - Tests unitaires"
+	@echo "  $(GREEN)make test-coverage$(NC) - Tests avec couverture"
+	@echo ""
+	@echo "$(BLUE)💡 Workflow recommandé:$(NC)"
+	@echo "  1. make quality-fix    (corriger automatiquement)"
+	@echo "  2. make test-unit      (vérifier que ça marche)"
+	@echo "  3. make quality-full   (audit complet)"
+
+.PHONY: help-docker
+help-docker: ## Aide spécifique à Docker
+	@echo "$(CYAN)🐳 Aide Docker$(NC)"
+	@echo "$(CYAN)===============$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Gestion des containers:$(NC)"
+	@echo "  $(GREEN)make up$(NC)            - Démarrer tous les containers"
+	@echo "  $(GREEN)make down$(NC)          - Arrêter tous les containers"
+	@echo "  $(GREEN)make restart$(NC)       - Redémarrer tous les containers"
+	@echo "  $(GREEN)make status$(NC)        - Voir le statut"
+	@echo "  $(GREEN)make logs$(NC)          - Voir tous les logs"
+	@echo "  $(GREEN)make logs-follow$(NC)   - Suivre les logs en temps réel"
+	@echo ""
+	@echo "$(YELLOW)Build et maintenance:$(NC)"
+	@echo "  $(GREEN)make build$(NC)         - Construire les images"
+	@echo "  $(GREEN)make rebuild$(NC)       - Reconstruire et redémarrer"
+	@echo "  $(GREEN)make clean$(NC)         - Nettoyer containers et volumes"
+	@echo "  $(GREEN)make clean-all$(NC)     - Nettoyer tout (images incluses)"
+	@echo "  $(GREEN)make prune$(NC)         - Nettoyer le système Docker"
+	@echo ""
+	@echo "$(YELLOW)Accès aux containers:$(NC)"
+	@echo "  $(GREEN)make shell$(NC)         - Shell dans le container PHP"
+	@echo "  $(GREEN)make shell-apache$(NC)  - Shell dans le container Apache"
+	@echo "  $(GREEN)make shell-node$(NC)    - Shell dans le container Node"
+	@echo "  $(GREEN)make shell-mariadb$(NC) - Console MariaDB"
+	@echo ""
+	@echo "$(YELLOW)Debug et métriques:$(NC)"
+	@echo "  $(GREEN)make diagnose$(NC)      - Diagnostic complet"
+	@echo "  $(GREEN)make healthcheck$(NC)   - Vérifier la santé des services"
+	@echo "  $(GREEN)make metrics$(NC)       - Métriques détaillées"
+	@echo "  $(GREEN)make performance-check$(NC) - Vérifier les performances"
+
+.PHONY: help-all
+help-all: help help-monitoring help-quality help-docker ## Afficher toute l'aide disponible
+	@echo ""
+	@echo "$(PURPLE)🎯 Workflows complets utiles:$(NC)"
+	@echo "  $(GREEN)make setup-full$(NC)      - Installation et configuration complète"
+	@echo "  $(GREEN)make dev$(NC)             - Démarrer l'environnement de développement"
+	@echo "  $(GREEN)make pre-commit$(NC)      - Vérifications avant commit"
+	@echo "  $(GREEN)make daily-check$(NC)     - Vérifications quotidiennes"
+	@echo "  $(GREEN)make deploy-check$(NC)    - Vérifications avant déploiement"
+	@echo ""
+	@echo "$(PURPLE)📚 Documentation:$(NC)"
+	@echo "  • README.md - Guide complet de l'environnement"
+	@echo "  • scripts/README.md - Documentation des scripts"
+	@echo "  • make help-[monitoring|quality|docker] - Aide spécialisée"
