@@ -200,33 +200,6 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
-  # 🔍 UPTIME KUMA - Monitoring et alertes
-  uptime-kuma:
-    image: louislam/uptime-kuma:1
-    container_name: ${COMPOSE_PROJECT_NAME}_uptime-kuma
-    ports:
-      - "3001:3001"
-    volumes:
-      - uptime-kuma_data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - app-network
-      - monitoring-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001"]
-      interval: 60s
-      timeout: 15s
-      retries: 3
-      start_period: 90s
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
-      # Labels pour la configuration automatique des monitors
-      - "uptime-kuma.enable=true"
-      - "uptime-kuma.name=Uptime Kuma Self Monitor"
-      - "uptime-kuma.url=http://localhost:3001"
-      - "uptime-kuma.interval=600"
-
   # 🔄 WATCHTOWER - Mises à jour automatiques
   watchtower:
     image: containrrr/watchtower:latest
@@ -262,15 +235,8 @@ services:
       - WATCHTOWER_DEBUG=${WATCHTOWER_DEBUG:-false}
 
     restart: unless-stopped
-    depends_on:
-      - uptime-kuma  # S'assurer qu'Uptime Kuma démarre avant Watchtower
     labels:
       - "com.centurylinklabs.watchtower.enable=true"   # Watchtower peut se mettre à jour lui-même
-      # Labels pour monitoring
-      - "uptime-kuma.enable=true"
-      - "uptime-kuma.name=Watchtower Service"
-      - "uptime-kuma.type=docker"
-      - "uptime-kuma.docker.container=${COMPOSE_PROJECT_NAME}_watchtower"
 
 networks:
   app-network:
@@ -285,5 +251,3 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME}_mariadb_data
   redis_data:
     name: ${COMPOSE_PROJECT_NAME}_redis_data
-  uptime-kuma_data:
-    name: ${COMPOSE_PROJECT_NAME}_uptime_kuma_data

@@ -26,7 +26,6 @@ Environnement de développement Docker complet et optimisé pour Laravel 12 avec
 - **Adminer** - Interface web pour les bases de données
 - **IT-Tools** - Boîte à outils pour développeurs
 - **Dozzle** - Monitoring des logs en temps réel
-- **🔍 Uptime Kuma** - Monitoring et alertes 24/7
 - **🔄 Watchtower** - Mises à jour automatiques des containers
 
 ### Extensions et packages Laravel
@@ -68,11 +67,6 @@ Une fois le projet démarré, voici tous les accès disponibles :
   - Interface web moderne et responsive
 
 ### 📊 Monitoring et maintenance
-- **🔍 Uptime Kuma** : http://localhost:3001
-  - Monitoring 24/7 de tous vos services
-  - Alertes Discord/Slack/Email configurables
-  - Dashboard professionnel avec métriques
-  - Status page publique pour votre équipe
 - **🔄 Watchtower** : Service automatique (pas d'interface)
   - Mises à jour automatiques des containers
   - Planifié tous les jours à 3h du matin
@@ -186,11 +180,6 @@ make security-fix    # Corriger les vulnérabilités
 
 ### 📊 Monitoring et maintenance
 ```bash
-# Monitoring Uptime Kuma
-make uptime              # Ouvrir Uptime Kuma
-make monitoring          # Ouvrir tous les outils de monitoring
-make setup-monitoring    # Configuration assistée Uptime Kuma
-make monitoring-status   # Vérifier le statut du monitoring
 
 # Watchtower (mises à jour automatiques)
 make watchtower-logs     # Voir les logs des mises à jour
@@ -327,7 +316,6 @@ make setup-ssl
   ```
 - **🪟 Windows** : Importer le certificat dans le magasin de certificats de confiance
 
-## 📊 Monitoring et alertes avec Uptime Kuma
 
 ### 🔍 Configuration initiale
 
@@ -428,7 +416,6 @@ Certificat SSL Laravel
 - Adminer
 - IT-Tools
 - Dozzle
-- Uptime Kuma
 
 **❌ Exclus (images custom) :**
 - PHP (contient votre code applicatif)
@@ -528,7 +515,6 @@ make monitoring-status  # État du monitoring spécifiquement
 ### 📈 Métriques
 - **Docker stats** : `make stats`
 - **Horizon dashboard** : https://laravel.local/horizon
-- **Uptime Kuma** : http://localhost:3001 - Métriques détaillées
 
 ### 💾 Bases de données
 - **Adminer** : http://localhost:8080
@@ -632,7 +618,6 @@ project/
 │   ├── supervisor/              # Configuration Supervisor
 │   └── scripts/                 # Scripts d'installation
 ├── 🔧 scripts/                   # Scripts utilitaires
-│   └── setup-monitoring.sh     # Configuration Uptime Kuma
 ├── 🎯 src/                       # Code source Laravel
 ├── ⚙️ .github/workflows/         # GitHub Actions
 ├── 📊 docker-compose.yml         # Configuration principale
@@ -653,13 +638,6 @@ make logs           # Voir les erreurs
 make healthcheck    # Vérifier l'état
 make diagnose       # Diagnostic complet
 make rebuild        # Reconstruire si nécessaire
-```
-
-#### Uptime Kuma ne démarre pas
-```bash
-make logs uptime-kuma           # Voir les erreurs
-docker-compose restart uptime-kuma   # Redémarrer
-make monitoring-status          # Vérifier le statut
 ```
 
 #### Watchtower ne fonctionne pas
@@ -724,11 +702,6 @@ docker system prune  # Nettoyer Docker
 - Redis pour cache et sessions
 - Compression Gzip/Brotli
 
-### Monitoring
-- Surveillance proactive 24/7 avec Uptime Kuma
-- Alertes intelligentes pour intervention rapide
-- Mises à jour automatiques pour la sécurité
-- Métriques de performance en temps réel
 
 ## 🤝 Contribution
 
@@ -754,7 +727,6 @@ docker system prune  # Nettoyer Docker
 - **Laravel** : https://laravel.com/docs
 - **Docker** : https://docs.docker.com
 - **Docker Compose** : https://docs.docker.com/compose
-- **Uptime Kuma** : https://github.com/louislam/uptime-kuma
 - **Watchtower** : https://containrrr.dev/watchtower/
 
 ### Communauté
