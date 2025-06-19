@@ -394,7 +394,7 @@ table_exists() {
     " 2>/dev/null | grep -q "TABLE_EXISTS"
 }
 
-# Fonction pour localiser le .env racine - NOUVELLE ET SIMPLE
+# Fonction CORRIGÉE SEULEMENT pour localiser le .env racine
 find_root_env() {
     log "INFO" "📋 Localisation du fichier .env racine..."
 
@@ -402,84 +402,189 @@ find_root_env() {
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     log "DEBUG" "Répertoire du script: $script_dir"
 
-    # Pour docker/scripts/install-laravel.sh -> remonter de 2 niveaux pour atteindre la racine
-    local project_root="$(dirname "$(dirname "$script_dir")")"
-    local root_env_file="$project_root/.env"
+    # Liste des chemins à tester dans l'ordre de priorité
+    local search_paths=()
 
-    log "DEBUG" "Tentative: $root_env_file"
+    # 1. Depuis le script docker/scripts/install-laravel.sh -> remonter de 2 niveaux
+    search_paths+=("$(dirname "$(dirname "$script_dir")")/.env")
 
-    if [ -f "$root_env_file" ]; then
-        # Vérifier si c'est bien le .env racine (contient des clés importantes)
-        if grep -q "NIGHTWATCH_TOKEN\|DB_HOST\|APP_NAME\|COMPOSE_PROJECT_NAME" "$root_env_file" 2>/dev/null; then
-            log "SUCCESS" "✅ Fichier .env racine trouvé: $root_env_file"
-            echo "$root_env_file"
-            return 0
-        fi
+    # 2. Dans Docker, le volume racine est souvent monté dans /var/www/project
+    search_paths+=("/var/www/project/.env")
+
+    # 3. Si on est dans /var/www/html, le projet racine est probablement le parent
+    if [[ "$(pwd)" == "/var/www/html" ]]; then
+        search_paths+=("/var/www/html/../.env")
+        search_paths+=("/var/www/.env")
     fi
 
-    # Fallback : chercher en remontant l'arborescence
-    local current_dir="$script_dir"
+    # 4. Chemins relatifs classiques
+    search_paths+=("../.env" "../../.env" "../../../.env")
+
+    # 5. Recherche en remontant l'arborescence depuis le répertoire courant
+    local current_dir="$(pwd)"
     local max_depth=5
     local depth=0
-
-    while [ $depth -lt $max_depth ]; do
-        local potential_env="$current_dir/.env"
-        log "DEBUG" "Vérification: $potential_env"
-
-        if [ -f "$potential_env" ]; then
-            if grep -q "NIGHTWATCH_TOKEN\|DB_HOST\|APP_NAME\|COMPOSE_PROJECT_NAME" "$potential_env" 2>/dev/null; then
-                log "SUCCESS" "✅ Fichier .env racine trouvé: $potential_env"
-                echo "$potential_env"
-                return 0
-            fi
-        fi
-
+    while [ $depth -lt $max_depth ] && [ "$current_dir" != "/" ]; do
+        search_paths+=("$current_dir/.env")
         current_dir="$(dirname "$current_dir")"
         ((depth++))
     done
 
-    log "ERROR" "❌ Aucun fichier .env racine trouvé"
+    # Debug : afficher les informations de diagnostic
+    if [ "$DEBUG" = "true" ]; then
+        log "DEBUG" "Répertoire courant: $(pwd)"
+        log "DEBUG" "Chemins à tester: ${search_paths[*]}"
+        log "DEBUG" "Fichiers .env trouvés dans le système:"
+        find /var/www -name ".env" -type f 2>/dev/null | head -10 | sed 's/^/  /' || true
+    fi
+
+    # Tester chaque chemin
+    for env_file in "${search_paths[@]}"; do
+        # Résoudre le chemin complet
+        local resolved_path
+        if resolved_path=$(readlink -f "$env_file" 2>/dev/null) && [ -f "$resolved_path" ]; then
+            env_file="$resolved_path"
+        fi
+
+        log "DEBUG" "Test du chemin: $env_file"
+
+        if [ -f "$env_file" ]; then
+            log "DEBUG" "Fichier trouvé: $env_file"
+
+            # Vérification robuste : doit contenir des variables spécifiques au projet Docker
+            local score=0
+            local criteria=(
+                "COMPOSE_PROJECT_NAME"
+                "DB_HOST.*mariadb"
+                "REDIS_HOST.*redis"
+                "MAIL_HOST.*mailhog"
+            )
+
+            for criterion in "${criteria[@]}"; do
+                if grep -q "$criterion" "$env_file" 2>/dev/null; then
+                    ((score++))
+                    log "DEBUG" "✓ Critère '$criterion' trouvé"
+                fi
+            done
+
+            # Si au moins 2 critères sont satisfaits, c'est probablement le bon fichier
+            if [ $score -ge 2 ]; then
+                log "SUCCESS" "✅ Fichier .env racine trouvé: $env_file (score: $score/4)"
+                echo "$env_file"
+                return 0
+            else
+                log "DEBUG" "Fichier pas assez spécifique (score: $score/4)"
+                if [ "$DEBUG" = "true" ]; then
+                    log "DEBUG" "Contenu des premières lignes:"
+                    head -5 "$env_file" 2>/dev/null | sed 's/^/  /' || true
+                fi
+            fi
+        else
+            log "DEBUG" "Fichier non trouvé: $env_file"
+        fi
+    done
+
+    log "ERROR" "❌ Aucun fichier .env racine trouvé avec les critères requis"
+    log "INFO" "💡 Le .env racine doit contenir: COMPOSE_PROJECT_NAME, DB_HOST=mariadb, REDIS_HOST=redis"
+
+    # Diagnostic supplémentaire
+    log "DEBUG" "Diagnostic - tous les fichiers .env trouvés:"
+    find /var/www -name ".env" -type f -exec echo "  {}" \; -exec head -3 {} \; -exec echo "" \; 2>/dev/null | head -20 || true
+
     return 1
 }
 
-# Fonction NOUVELLE : Copier complètement le .env racine vers Laravel - SIMPLIFIÉE
+# Fonction CORRIGÉE SEULEMENT pour copier le .env racine vers Laravel
 copy_root_env_to_laravel() {
     log "INFO" "📋 Copie complète du .env racine vers Laravel..."
 
-    # Trouver le .env racine
+    # Diagnostic du répertoire courant
+    log "DEBUG" "Répertoire de travail actuel: $(pwd)"
+    log "DEBUG" "Contenu du répertoire:"
+    ls -la . | head -10 | sed 's/^/  /' || true
+
+    # Trouver le .env racine avec la nouvelle fonction robuste
     local root_env_file
     if ! root_env_file=$(find_root_env); then
         log "ERROR" "Impossible de localiser le .env racine"
+        log "INFO" "💡 Solutions possibles:"
+        log "INFO" "  1. Vérifiez que le .env existe à la racine du projet"
+        log "INFO" "  2. Vérifiez que le .env contient COMPOSE_PROJECT_NAME"
+        log "INFO" "  3. Exécutez avec DEBUG=true pour plus de détails"
         return 1
     fi
 
-    # Sauvegarder le .env Laravel actuel
+    # Afficher des informations sur le fichier source
+    log "INFO" "📁 Source détectée: $root_env_file"
+    log "DEBUG" "Taille du fichier source: $(wc -l < "$root_env_file" 2>/dev/null || echo 'inconnu') lignes"
+
+    # Sauvegarder le .env Laravel existant avec timestamp
     if [ -f ".env" ]; then
-        cp .env .env.laravel.backup
-        log "DEBUG" "Sauvegarde de .env Laravel vers .env.laravel.backup"
+        local backup_file=".env.laravel.backup.$(date +%Y%m%d-%H%M%S)"
+        cp .env "$backup_file"
+        log "DEBUG" "Sauvegarde de .env Laravel vers $backup_file"
+
+        # Comparer avec le fichier source pour voir s'il y a des différences
+        if diff -q "$root_env_file" .env >/dev/null 2>&1; then
+            log "INFO" "✅ Le .env Laravel est déjà identique au .env racine"
+            return 0
+        else
+            log "DEBUG" "Différences détectées entre .env racine et Laravel"
+        fi
     fi
 
-    # Copier complètement le .env racine
+    # Copier avec vérification
+    log "DEBUG" "Copie de '$root_env_file' vers '$(pwd)/.env'"
     if cp "$root_env_file" .env; then
         log "SUCCESS" "✅ .env racine copié avec succès vers Laravel"
         log "INFO" "📁 Source: $root_env_file"
         log "INFO" "📁 Destination: $(pwd)/.env"
+
+        # Vérifier que la copie est identique
+        if diff -q "$root_env_file" .env >/dev/null 2>&1; then
+            log "SUCCESS" "✅ Copie vérifiée - fichiers identiques"
+        else
+            log "WARN" "⚠️ Les fichiers ne sont pas identiques après copie"
+            if [ "$DEBUG" = "true" ]; then
+                log "DEBUG" "Différences détectées:"
+                diff "$root_env_file" .env | head -10 || true
+            fi
+            return 1
+        fi
     else
         log "ERROR" "❌ Échec de la copie du .env racine"
+        log "DEBUG" "Vérifiez les permissions du répertoire $(pwd)"
         return 1
     fi
 
-    # Vérifier que le token Nightwatch est bien présent
+    # Diagnostic des variables importantes
+    log "DEBUG" "Vérification des variables importantes dans le .env copié:"
+
+    local important_vars=("APP_NAME" "DB_HOST" "COMPOSE_PROJECT_NAME" "NIGHTWATCH_TOKEN" "REDIS_HOST")
+    for var in "${important_vars[@]}"; do
+        local value=$(grep "^$var=" .env 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
+        if [ -n "$value" ]; then
+            if [[ "$var" == *"TOKEN"* ]] || [[ "$var" == *"PASSWORD"* ]]; then
+                log "DEBUG" "  $var: ${value:0:10}... (masqué)"
+            else
+                log "DEBUG" "  $var: $value"
+            fi
+        else
+            log "DEBUG" "  $var: (non défini)"
+        fi
+    done
+
+    # Vérification spéciale pour Nightwatch
     local final_token=$(grep "^NIGHTWATCH_TOKEN=" .env 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
-    if [ -n "$final_token" ] && [ "$final_token" != "" ]; then
+    if [ -n "$final_token" ] && [ "$final_token" != "" ] && [ "$final_token" != "\${NIGHTWATCH_TOKEN}" ]; then
         log "SUCCESS" "✅ Token Nightwatch configuré: ${final_token:0:10}..."
         log "SUCCESS" "✅ Toutes les valeurs du .env racine sont maintenant disponibles dans Laravel"
         return 0
     else
-        log "WARN" "⚠️ Token Nightwatch toujours vide après copie"
-        log "DEBUG" "Contenu de NIGHTWATCH_TOKEN dans .env:"
-        grep "NIGHTWATCH_TOKEN" .env || log "DEBUG" "Aucune ligne NIGHTWATCH_TOKEN trouvée"
-        return 1
+        log "WARN" "⚠️ Token Nightwatch non configuré ou vide"
+        log "DEBUG" "Valeur NIGHTWATCH_TOKEN: '$final_token'"
+        log "INFO" "Le service fonctionnera mais Nightwatch ne sera pas actif"
+        return 0  # Ne pas faire échouer pour cette raison
     fi
 }
 
@@ -512,7 +617,7 @@ prevent_migration_conflicts() {
         "telescope_entries:2018_08_08_100000_create_telescope_entries_table"
         "telescope_entries_tags:2018_08_08_100001_create_telescope_entries_tags_table"
         "telescope_monitoring:2018_08_08_100002_create_telescope_monitoring_table"
-        "personal_access_tokens:2025_06_17_*_create_personal_access_tokens_table"
+        "personal_access_tokens:2019_12_14_000001_create_personal_access_tokens_table"
     )
 
     for conflict in "${conflicts[@]}"; do
@@ -558,7 +663,7 @@ publish_package_assets_safely() {
         "php artisan vendor:publish --provider=\"Spatie\Activitylog\ActivitylogServiceProvider\" --tag=config --force"
         "php artisan vendor:publish --provider=\"Barryvdh\LaravelIdeHelper\IdeHelperServiceProvider\" --tag=config --force"
         "php artisan vendor:publish --provider=\"BeyondCode\QueryDetector\QueryDetectorServiceProvider\" --force"
-        "php artisan vendor:publish --provider=\"Laravel\Nightwatch\NightwatchServiceProvider\" --tag=config --force"
+        "php artisan vendor:publish --provider=\"Laravel\\Nightwatch\\NightwatchServiceProvider\" --tag=config --force"
     )
 
     for cmd in "${publish_commands[@]}"; do
@@ -1512,7 +1617,7 @@ optimize_composer() {
 main() {
     # Initialiser le logging
     log "INFO" "🚀 Installation complète de Laravel avec outils de qualité et Nightwatch"
-    log "INFO" "✅ Support complet PHP 8.4 + Laravel 12 + COPIE SIMPLE .env + Nightwatch"
+    log "INFO" "✅ Support complet PHP 8.4 + Laravel 12 + COPIE CORRIGÉE .env + Nightwatch"
     log "INFO" "Log file: $LOG_FILE"
 
     # Activer le mode debug si requis
@@ -1691,12 +1796,12 @@ main() {
     php artisan route:cache 2>/dev/null || true
     php artisan view:cache 2>/dev/null || true
 
-    # ⭐ ÉTAPE CRITIQUE : COPIE SIMPLE du .env racine (juste avant Nightwatch)
+    # ⭐ ÉTAPE CRITIQUE : COPIE CORRIGÉE du .env racine (juste avant Nightwatch)
     if is_package_installed "laravel/nightwatch"; then
         log "INFO" "🌙 Préparation et démarrage de l'agent Nightwatch..."
 
-        # COPIE COMPLÈTE ET SIMPLE du .env racine vers Laravel
-        log "INFO" "📋 🎯 COPIE COMPLÈTE du .env racine vers Laravel pour Nightwatch..."
+        # COPIE COMPLÈTE ET CORRIGÉE du .env racine vers Laravel
+        log "INFO" "📋 🎯 COPIE CORRIGÉE du .env racine vers Laravel pour Nightwatch..."
         if copy_root_env_to_laravel; then
             log "SUCCESS" "✅ Configuration Nightwatch synchronisée avec le .env racine"
         else
@@ -1791,20 +1896,20 @@ main() {
     fi
 
     log "SUCCESS" "🎉 Installation complète terminée avec Nightwatch !"
-    log "INFO" "✅ NOUVELLE APPROCHE SIMPLIFIÉE APPLIQUÉE:"
+    log "INFO" "✅ APPROCHE CORRIGÉE APPLIQUÉE:"
     log "INFO" "  • 🛡️ Migrations SANS conflit: Sanctum + Telescope (résolu définitivement)"
     log "INFO" "  • 🔧 GrumPHP: git_blacklist au lieu de git_conflict (corrigé)"
     log "INFO" "  • 🐘 PHP 8.4: Support complet et optimisations"
     log "INFO" "  • 🎯 Laravel 12: Configurations adaptées"
-    log "INFO" "  • 🌙 Nightwatch: COPIE COMPLÈTE du .env racine (100% fiable)"
+    log "INFO" "  • 🌙 Nightwatch: COPIE CORRIGÉE du .env racine (détection robuste multi-chemins)"
     log "INFO" "  • 📈 Monitoring: Configuration parfaitement synchronisée"
-    log "INFO" "  • ✨ AUCUNE MODIFICATION .env: Copie directe du fichier racine !"
+    log "INFO" "  • ✨ Détection robuste: Multiples stratégies + score de confiance !"
 
     log "INFO" "Prochaines étapes :"
     log "INFO" "1. ✅ Base de données configurée et migrée (SANS aucun conflit)"
-    log "INFO" "2. ✅ .env racine COMPLÈTEMENT copié vers Laravel (100% synchronisé)"
+    log "INFO" "2. ✅ .env racine CORRECTEMENT copié vers Laravel (détection multi-chemins robuste)"
     log "INFO" "3. ✅ Agent Nightwatch démarré automatiquement en arrière-plan"
-    log "INFO" "4. ✅ Configuration identique entre racine et Laravel"
+    log "INFO" "4. ✅ Configuration synchronisée de manière fiable"
     log "INFO" "5. Accéder à l'application : https://laravel.local"
     log "INFO" "6. Lancer les tests : composer test:coverage"
     log "INFO" "7. Vérifier la qualité : composer quality"
@@ -1817,9 +1922,9 @@ main() {
         local current_token=$(grep "^NIGHTWATCH_TOKEN=" .env 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
         log "INFO" ""
         log "INFO" "🌙 Laravel Nightwatch est maintenant configuré et DÉMARRÉ !"
-        log "INFO" "  • ✅ .env racine COMPLÈTEMENT copié vers Laravel/src/"
+        log "INFO" "  • ✅ .env racine CORRECTEMENT copié vers Laravel/src/"
         log "INFO" "  • ✅ Token récupéré depuis .env racine: ${current_token:0:10}..."
-        log "INFO" "  • ✅ TOUTES les configurations sont maintenant identiques"
+        log "INFO" "  • ✅ Détection robuste avec score de confiance pour maximum de fiabilité"
         log "INFO" "  • ✅ Plus de problème de synchronisation entre .env racine et Laravel"
         log "INFO" "  • Configuration publiée dans config/nightwatch.php"
         log "INFO" "  • 🚀 Agent Nightwatch démarré automatiquement en arrière-plan !"
@@ -1828,12 +1933,13 @@ main() {
         log "INFO" "  • Redémarrer l'agent: nohup php artisan nightwatch:agent > nightwatch.log 2>&1 & echo \$! > nightwatch.pid"
         log "INFO" "  • Documentation: https://github.com/laravel/nightwatch"
         log "INFO" ""
-        log "INFO" "📋 NOUVELLE APPROCHE 100% FIABLE:"
-        log "INFO" "  • Le .env racine est maintenant copié COMPLÈTEMENT vers /src/"
-        log "INFO" "  • Plus besoin de configurer individuellement chaque valeur"
-        log "INFO" "  • Garantie de synchronisation parfaite entre racine et Laravel"
-        log "INFO" "  • Backup du .env Laravel original dans .env.laravel.backup"
-        log "INFO" "  • Script docker/scripts/ détecte automatiquement la racine du projet"
+        log "INFO" "📋 DÉTECTION ROBUSTE DU .ENV RACINE:"
+        log "INFO" "  • Détection multi-chemins avec 5+ stratégies de recherche"
+        log "INFO" "  • Score de confiance basé sur 4 critères spécifiques Docker"
+        log "INFO" "  • Support des chemins Docker spécialisés (/var/www/project/, etc.)"
+        log "INFO" "  • Résolution automatique des liens symboliques"
+        log "INFO" "  • Diagnostic complet en cas d'échec"
+        log "INFO" "  • Script docker/scripts/ optimisé pour tous les environnements"
     fi
 }
 

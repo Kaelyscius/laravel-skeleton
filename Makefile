@@ -1,5 +1,5 @@
 # =============================================================================
-# LARAVEL DEV ENVIRONMENT - Makefile Optimisé
+# LARAVEL DEV ENVIRONMENT - Makefile Optimisé et Corrigé
 # =============================================================================
 
 # Variables
@@ -83,9 +83,9 @@ help: ## Afficher l'aide principale
 	@echo ""
 	@echo "$(YELLOW)💡 Commandes essentielles :$(NC)"
 	@echo "  $(GREEN)make install$(NC)           - Installation complète"
+	@echo "  $(GREEN)make setup-full$(NC)        - Installation + monitoring auto"
 	@echo "  $(GREEN)make dev$(NC)               - Environnement de développement"
 	@echo "  $(GREEN)make quality-all$(NC)       - Audit complet qualité"
-	@echo "  $(GREEN)make setup-git-hooks$(NC)   - Configurer GrumPHP"
 	@echo ""
 	@echo "$(BLUE)📚 Aide détaillée :$(NC)"
 	@echo "  $(GREEN)make help-docker$(NC)       - Commandes Docker"
@@ -102,8 +102,20 @@ install: build up install-laravel npm-install setup-ssl ## Installation complèt
 	@$(MAKE) _show_urls
 
 .PHONY: setup-full
-setup-full: install setup-monitoring setup-watchtower setup-git-hooks ## Installation et configuration complète
+setup-full: install setup-monitoring setup-watchtower setup-git-hooks ## Installation et configuration complète automatique
 	@echo "$(GREEN)🚀 Configuration complète terminée !$(NC)"
+	@echo ""
+	@echo "$(CYAN)🎉 Votre environnement Laravel est maintenant complet avec :$(NC)"
+	@echo "  $(GREEN)✓ Laravel installé et configuré$(NC)"
+	@echo "  $(GREEN)✓ Uptime Kuma configuré automatiquement$(NC)"
+	@echo "  $(GREEN)✓ Watchtower configuré pour les mises à jour$(NC)"
+	@echo "  $(GREEN)✓ GrumPHP configuré pour la qualité$(NC)"
+	@echo ""
+	@$(MAKE) _show_urls
+
+.PHONY: setup-quick
+setup-quick: up install-laravel setup-monitoring-simple ## Installation rapide avec monitoring simple
+	@echo "$(GREEN)⚡ Installation rapide terminée !$(NC)"
 
 .PHONY: build
 build: ## Construire tous les containers
@@ -306,33 +318,92 @@ pre-commit: quality-fix grumphp-check ## Vérifications pre-commit
 	@echo "$(GREEN)✅ Pre-commit checks passed$(NC)"
 
 # =============================================================================
-# MONITORING
+# MONITORING MANAGEMENT
 # =============================================================================
 
 .PHONY: setup-monitoring
-setup-monitoring: ## Configuration Uptime Kuma
-	@echo "$(CYAN)⚙️ Setting up monitoring...$(NC)"
+setup-monitoring: ## Configuration Uptime Kuma automatique
+	@echo "$(CYAN)⚙️ Configuration d'Uptime Kuma...$(NC)"
 	@if [ -f "./scripts/setup-uptime-kuma-simple.sh" ]; then \
-		chmod +x "./scripts/setup-uptime-kuma-simple.sh" && ./scripts/setup-uptime-kuma-simple.sh; \
+		chmod +x "./scripts/setup-uptime-kuma-simple.sh"; \
+		./scripts/setup-uptime-kuma-simple.sh; \
 	else \
-		echo "$(BLUE)→ Open manually: http://localhost:3001$(NC)"; \
+		echo "$(BLUE)→ Ouverture manuelle: http://localhost:3001$(NC)"; \
+		$(MAKE) _open_url url="http://localhost:3001"; \
 	fi
 
-.PHONY: setup-watchtower
-setup-watchtower: ## Configuration Watchtower
-	@echo "$(CYAN)🔄 Setting up auto-updates...$(NC)"
-	@if [ -f "./scripts/setup-watchtower-simple.sh" ]; then \
-		chmod +x "./scripts/setup-watchtower-simple.sh" && ./scripts/setup-watchtower-simple.sh; \
+.PHONY: setup-monitoring-simple
+setup-monitoring-simple: ## Configuration Uptime Kuma simple
+	@echo "$(CYAN)⚙️ Configuration simple d'Uptime Kuma...$(NC)"
+	@$(MAKE) _open_url url="http://localhost:3001"
+	@echo "$(YELLOW)→ Configurez manuellement Uptime Kuma$(NC)"
+	@echo "$(BLUE)  • User: admin$(NC)"
+	@echo "$(BLUE)  • Pass: LaravelDev2024!$(NC)"
+	@echo "$(BLUE)  • Email: admin@laravel.local$(NC)"
+
+.PHONY: setup-monitoring-status
+setup-monitoring-status: ## Vérifier le statut du monitoring
+	@echo "$(CYAN)📊 Statut du monitoring$(NC)"
+	@echo "$(CYAN)=====================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)🐳 Container Uptime Kuma:$(NC)"
+	@if docker ps --format "{{.Names}}" | grep -q "$(COMPOSE_PROJECT_NAME)_uptime-kuma"; then \
+		echo "$(GREEN)✓ Container actif$(NC)"; \
+		docker ps --filter name=$(COMPOSE_PROJECT_NAME)_uptime-kuma --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"; \
 	else \
-		echo "$(YELLOW)⚠ Watchtower script not found$(NC)"; \
+		echo "$(RED)✗ Container non actif$(NC)"; \
+	fi
+	@echo ""
+	@echo "$(YELLOW)🌐 Accessibilité:$(NC)"
+	@if command -v curl >/dev/null 2>&1; then \
+		if curl -s -f http://localhost:3001 >/dev/null 2>&1; then \
+			echo "$(GREEN)✓ Uptime Kuma accessible sur http://localhost:3001$(NC)"; \
+		else \
+			echo "$(RED)✗ Uptime Kuma non accessible$(NC)"; \
+		fi; \
+	else \
+		echo "$(YELLOW)⚠ curl non disponible$(NC)"; \
 	fi
 
-.PHONY: monitoring
-monitoring: ## Ouvrir les outils de monitoring
-	@echo "$(CYAN)📊 Opening monitoring tools...$(NC)"
+.PHONY: monitoring-open
+monitoring-open: ## Ouvrir tous les outils de monitoring
+	@echo "$(CYAN)🌐 Ouverture des outils de monitoring...$(NC)"
 	@$(MAKE) _open_url url="http://localhost:3001"
 	@$(MAKE) _open_url url="http://localhost:9999"
 	@$(MAKE) _open_url url="https://laravel.local/horizon"
+
+.PHONY: monitoring-logs
+monitoring-logs: ## Voir les logs d'Uptime Kuma
+	@$(DOCKER_COMPOSE) logs -f uptime-kuma
+
+.PHONY: setup-watchtower
+setup-watchtower: ## Configuration Watchtower
+	@echo "$(CYAN)🔄 Configuration de Watchtower...$(NC)"
+	@if [ -f "./scripts/setup-watchtower-simple.sh" ]; then \
+		chmod +x "./scripts/setup-watchtower-simple.sh"; \
+		./scripts/setup-watchtower-simple.sh; \
+	else \
+		echo "$(YELLOW)⚠ Script Watchtower non trouvé - Watchtower fonctionne automatiquement$(NC)"; \
+	fi
+
+.PHONY: watchtower-logs
+watchtower-logs: ## Voir les logs de Watchtower
+	@$(DOCKER_COMPOSE) logs -f watchtower
+
+.PHONY: watchtower-status
+watchtower-status: ## Statut de Watchtower
+	@echo "$(CYAN)🔄 Statut Watchtower$(NC)"
+	@if docker ps --format "{{.Names}}" | grep -q "$(COMPOSE_PROJECT_NAME)_watchtower"; then \
+		echo "$(GREEN)✓ Watchtower actif$(NC)"; \
+		docker ps --filter name=$(COMPOSE_PROJECT_NAME)_watchtower --format "table {{.Names}}\t{{.Status}}"; \
+	else \
+		echo "$(RED)✗ Watchtower non actif$(NC)"; \
+	fi
+
+.PHONY: watchtower-update-now
+watchtower-update-now: ## Forcer une mise à jour Watchtower
+	@echo "$(YELLOW)🔄 Déclenchement manuel des mises à jour...$(NC)"
+	@$(DOCKER) exec $(COMPOSE_PROJECT_NAME)_watchtower /watchtower --run-once --cleanup 2>/dev/null || echo "$(YELLOW)⚠ Commande non disponible, vérifiez les logs$(NC)"
 
 # =============================================================================
 # DEVELOPMENT WORKFLOWS
@@ -341,6 +412,10 @@ monitoring: ## Ouvrir les outils de monitoring
 .PHONY: dev
 dev: up npm-dev ## Environnement de développement
 	@echo "$(GREEN)🚀 Development ready!$(NC)"
+
+.PHONY: dev-full
+dev-full: setup-full npm-dev ## Environnement de développement complet
+	@echo "$(GREEN)🚀 Environnement de développement complet prêt !$(NC)"
 
 .PHONY: dev-fresh
 dev-fresh: fresh npm-build ## DB fraîche + assets
@@ -353,6 +428,13 @@ daily-check: ## Vérifications quotidiennes
 	@$(MAKE) quality-all
 	@$(MAKE) security-check
 	@echo "$(GREEN)✓ Daily checks completed$(NC)"
+
+.PHONY: daily-monitoring
+daily-monitoring: ## Vérification quotidienne du monitoring
+	@echo "$(CYAN)📅 Vérification quotidienne du monitoring$(NC)"
+	@$(MAKE) setup-monitoring-status
+	@$(MAKE) monitoring-logs | tail -20
+	@echo "$(GREEN)✓ Vérification monitoring terminée$(NC)"
 
 # =============================================================================
 # SHELL ACCESS
@@ -422,6 +504,9 @@ diagnose: ## Diagnostic complet
 	@echo "$(YELLOW)🛡️ Quality Tools:$(NC)"
 	@$(MAKE) grumphp-status
 	@echo ""
+	@echo "$(YELLOW)📊 Monitoring:$(NC)"
+	@$(MAKE) setup-monitoring-status
+	@echo ""
 	@echo "$(BLUE)💡 Quick fixes:$(NC)"
 	@echo "  • make install-laravel"
 	@echo "  • make setup-git-hooks"
@@ -442,8 +527,14 @@ metrics: ## Métriques système
 
 .PHONY: setup-ssl
 setup-ssl: ## Générer certificats SSL
-	@./docker/scripts/generate-ssl.sh
-	@echo "$(GREEN)✓ SSL certificates generated$(NC)"
+	@if [ -f "./docker/scripts/generate-ssl.sh" ]; then \
+		chmod +x "./docker/scripts/generate-ssl.sh"; \
+		./docker/scripts/generate-ssl.sh; \
+		echo "$(GREEN)✓ SSL certificates generated$(NC)"; \
+	else \
+		echo "$(RED)❌ Script SSL non trouvé: ./docker/scripts/generate-ssl.sh$(NC)"; \
+		exit 1; \
+	fi
 
 # =============================================================================
 # HELP SECTIONS
@@ -471,11 +562,28 @@ help-quality: ## Aide qualité
 
 .PHONY: help-monitoring
 help-monitoring: ## Aide monitoring
-	@echo "$(CYAN)📊 Monitoring$(NC)"
-	@echo "$(CYAN)============$(NC)"
-	@echo "  $(GREEN)make setup-monitoring$(NC) - Configure Uptime Kuma"
-	@echo "  $(GREEN)make setup-watchtower$(NC) - Configure auto-updates"
-	@echo "  $(GREEN)make monitoring$(NC)       - Open all tools"
+	@echo "$(CYAN)📊 Monitoring & Surveillance$(NC)"
+	@echo "$(CYAN)=============================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)🚀 Installation:$(NC)"
+	@echo "  $(GREEN)make setup-monitoring$(NC)        - Configuration automatique"
+	@echo "  $(GREEN)make setup-monitoring-simple$(NC) - Configuration manuelle"
+	@echo "  $(GREEN)make setup-full$(NC)              - Installation complète"
+	@echo ""
+	@echo "$(YELLOW)📊 Gestion:$(NC)"
+	@echo "  $(GREEN)make monitoring-open$(NC)         - Ouvrir tous les outils"
+	@echo "  $(GREEN)make monitoring-logs$(NC)         - Voir les logs"
+	@echo "  $(GREEN)make setup-monitoring-status$(NC) - Vérifier le statut"
+	@echo ""
+	@echo "$(YELLOW)📱 Accès rapide:$(NC)"
+	@echo "  • Uptime Kuma: http://localhost:3001"
+	@echo "  • Dozzle (logs): http://localhost:9999"
+	@echo "  • Laravel Horizon: https://laravel.local/horizon"
+	@echo ""
+	@echo "$(BLUE)💡 Credentials par défaut:$(NC)"
+	@echo "  • User: admin"
+	@echo "  • Pass: LaravelDev2024!"
+	@echo "  • Email: admin@laravel.local"
 
 # =============================================================================
 # PRIVATE HELPERS
@@ -488,6 +596,8 @@ _show_urls:
 	@echo "  • Adminer: http://localhost:8080"
 	@echo "  • MailHog: http://localhost:8025"
 	@echo "  • Uptime Kuma: http://localhost:3001"
+	@echo "  • IT-Tools: http://localhost:8081"
+	@echo "  • Dozzle: http://localhost:9999"
 
 .PHONY: _open_url
 _open_url:

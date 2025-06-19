@@ -1,15 +1,29 @@
 #!/usr/bin/env python3
 """
-Script de configuration automatique avancée pour Uptime Kuma
-Utilise l'API Python pour créer automatiquement les monitors
+Script de configuration automatique complète pour Uptime Kuma
+Créé automatiquement les monitors pour l'environnement Laravel Docker
 """
 
 import os
 import sys
 import time
-import requests
 import json
-from urllib.parse import urlparse
+import webbrowser
+from datetime import datetime
+
+try:
+    import requests
+except ImportError:
+    print("❌ Module 'requests' requis. Installation...")
+    os.system("python3 -m pip install --user requests")
+    import requests
+
+# Configuration
+UPTIME_KUMA_URL = os.getenv('UPTIME_KUMA_URL', 'http://localhost:3001')
+COMPOSE_PROJECT_NAME = os.getenv('COMPOSE_PROJECT_NAME', 'laravel-app')
+ADMIN_USER = os.getenv('UPTIME_ADMIN_USER', 'admin')
+ADMIN_PASS = os.getenv('UPTIME_ADMIN_PASS', 'LaravelDev2024!')
+ADMIN_EMAIL = os.getenv('UPTIME_ADMIN_EMAIL', 'admin@laravel.local')
 
 # Couleurs pour les logs
 class Colors:
@@ -18,84 +32,64 @@ class Colors:
     RED = '\033[0;31m'
     BLUE = '\033[0;34m'
     CYAN = '\033[0;36m'
+    PURPLE = '\033[0;35m'
     NC = '\033[0m'
 
-def print_colored(message, color):
-    print(f"{color}{message}{Colors.NC}")
+def log(level, message):
+    """Logger avec couleurs"""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    colors = {
+        'INFO': Colors.BLUE,
+        'WARN': Colors.YELLOW,
+        'ERROR': Colors.RED,
+        'SUCCESS': Colors.GREEN,
+        'DEBUG': Colors.PURPLE
+    }
+    color = colors.get(level, Colors.NC)
+    print(f"{color}[{level} {timestamp}]{Colors.NC} {message}")
 
-def check_uptime_kuma_api():
+def check_uptime_kuma_accessibility():
     """Vérifier si Uptime Kuma est accessible"""
-    url = "http://localhost:3001"
+    log('INFO', '🔍 Vérification d\'Uptime Kuma...')
+
     max_attempts = 30
-
-    print_colored("🔍 Vérification d'Uptime Kuma...", Colors.YELLOW)
-
     for attempt in range(1, max_attempts + 1):
         try:
-            response = requests.get(url, timeout=5)
+            response = requests.get(UPTIME_KUMA_URL, timeout=5)
             if response.status_code == 200:
-                print_colored("✓ Uptime Kuma est accessible", Colors.GREEN)
+                log('SUCCESS', '✓ Uptime Kuma est accessible')
                 return True
         except requests.exceptions.RequestException:
             pass
 
-        print_colored(f"⏳ Tentative {attempt}/{max_attempts} - Uptime Kuma non accessible...", Colors.YELLOW)
+        log('INFO', f'⏳ Tentative {attempt}/{max_attempts} - Uptime Kuma non accessible...')
         time.sleep(2)
 
-    print_colored("❌ Uptime Kuma n'est pas accessible", Colors.RED)
+    log('ERROR', '❌ Uptime Kuma n\'est pas accessible')
     return False
-
-def install_uptime_kuma_api():
-    """Installer l'API Uptime Kuma si nécessaire"""
-    try:
-        import uptime_kuma_api
-        print_colored("✓ API Uptime Kuma déjà installée", Colors.GREEN)
-        return True
-    except ImportError:
-        print_colored("📦 Installation de l'API Uptime Kuma...", Colors.YELLOW)
-
-        try:
-            import subprocess
-            result = subprocess.run([
-                sys.executable, "-m", "pip", "install", "uptime-kuma-api"
-            ], capture_output=True, text=True)
-
-            if result.returncode == 0:
-                print_colored("✓ API Uptime Kuma installée avec succès", Colors.GREEN)
-                return True
-            else:
-                print_colored(f"❌ Erreur d'installation: {result.stderr}", Colors.RED)
-                return False
-        except Exception as e:
-            print_colored(f"❌ Erreur lors de l'installation: {str(e)}", Colors.RED)
-            return False
-
-def get_compose_project_name():
-    """Récupérer le nom du projet Docker Compose"""
-    return os.getenv('COMPOSE_PROJECT_NAME', 'laravel-app')
 
 def create_monitors_config():
     """Créer la configuration des monitors"""
-    project_name = get_compose_project_name()
-
     return {
         "critical": [
             {
-                "name": "Laravel Application",
+                "name": "Laravel Application HTTPS",
                 "type": "http",
                 "url": "https://laravel.local",
                 "interval": 60,
                 "maxretries": 3,
                 "keyword": "Laravel",
-                "tags": ["critical", "laravel", "web"]
+                "tags": ["critical", "laravel", "web"],
+                "description": "Application Laravel principale (HTTPS)"
             },
             {
-                "name": "Laravel HTTP Fallback",
+                "name": "Laravel Application HTTP",
                 "type": "http",
                 "url": "http://localhost",
                 "interval": 60,
                 "maxretries": 3,
-                "tags": ["critical", "laravel", "web"]
+                "tags": ["critical", "laravel", "web"],
+                "description": "Application Laravel fallback (HTTP)"
             }
         ],
         "important": [
@@ -105,7 +99,8 @@ def create_monitors_config():
                 "hostname": "localhost",
                 "port": 3306,
                 "interval": 120,
-                "tags": ["important", "database"]
+                "tags": ["important", "database"],
+                "description": "Base de données MariaDB"
             },
             {
                 "name": "Redis Cache",
@@ -113,21 +108,24 @@ def create_monitors_config():
                 "hostname": "localhost",
                 "port": 6379,
                 "interval": 120,
-                "tags": ["important", "cache"]
+                "tags": ["important", "cache"],
+                "description": "Cache Redis"
             },
             {
                 "name": "Laravel Horizon",
                 "type": "http",
                 "url": "https://laravel.local/horizon",
                 "interval": 180,
-                "tags": ["important", "laravel", "queues"]
+                "tags": ["important", "laravel", "queues"],
+                "description": "Dashboard Laravel Horizon"
             },
             {
                 "name": "Laravel Telescope",
                 "type": "http",
                 "url": "https://laravel.local/telescope",
                 "interval": 300,
-                "tags": ["important", "laravel", "debug"]
+                "tags": ["important", "laravel", "debug"],
+                "description": "Debug Laravel Telescope"
             }
         ],
         "tools": [
@@ -136,28 +134,32 @@ def create_monitors_config():
                 "type": "http",
                 "url": "http://localhost:8025",
                 "interval": 300,
-                "tags": ["tools", "dev", "email"]
+                "tags": ["tools", "dev", "email"],
+                "description": "Capture d'emails MailHog"
             },
             {
                 "name": "Adminer",
                 "type": "http",
                 "url": "http://localhost:8080",
                 "interval": 300,
-                "tags": ["tools", "database", "admin"]
+                "tags": ["tools", "database", "admin"],
+                "description": "Interface Adminer"
             },
             {
                 "name": "IT-Tools",
                 "type": "http",
                 "url": "http://localhost:8081",
                 "interval": 300,
-                "tags": ["tools", "dev", "utilities"]
+                "tags": ["tools", "dev", "utilities"],
+                "description": "Boîte à outils IT-Tools"
             },
             {
                 "name": "Dozzle (Logs)",
                 "type": "http",
                 "url": "http://localhost:9999",
                 "interval": 300,
-                "tags": ["tools", "monitoring", "logs"]
+                "tags": ["tools", "monitoring", "logs"],
+                "description": "Visualisation logs Dozzle"
             }
         ],
         "infrastructure": [
@@ -166,252 +168,278 @@ def create_monitors_config():
                 "type": "http",
                 "url": "http://localhost:3001",
                 "interval": 600,
-                "tags": ["infrastructure", "monitoring"]
+                "tags": ["infrastructure", "monitoring"],
+                "description": "Auto-monitoring Uptime Kuma"
             }
         ]
     }
 
-def create_manual_config_file():
-    """Créer un fichier de configuration manuelle de sauvegarde"""
+def test_services():
+    """Tester l'accessibilité des services"""
+    log('INFO', '📊 Test de l\'accessibilité des services...')
+
+    config = create_monitors_config()
+    results = {"accessible": [], "inaccessible": [], "ports_open": [], "ports_closed": []}
+
+    # Tester les services HTTP
+    for category, monitors in config.items():
+        for monitor in monitors:
+            if monitor['type'] == 'http':
+                try:
+                    response = requests.get(monitor['url'], timeout=5, verify=False)
+                    if response.status_code == 200:
+                        results["accessible"].append(monitor['name'])
+                        log('SUCCESS', f'✓ {monitor["name"]} accessible')
+                    else:
+                        results["inaccessible"].append(f"{monitor['name']} (HTTP {response.status_code})")
+                        log('WARN', f'⚠ {monitor["name"]} retourne HTTP {response.status_code}')
+                except requests.exceptions.RequestException:
+                    results["inaccessible"].append(monitor['name'])
+                    log('ERROR', f'✗ {monitor["name"]} non accessible')
+
+            elif monitor['type'] == 'port':
+                import socket
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(2)
+                    result = sock.connect_ex((monitor['hostname'], monitor['port']))
+                    sock.close()
+
+                    if result == 0:
+                        results["ports_open"].append(f"{monitor['name']} ({monitor['port']})")
+                        log('SUCCESS', f'✓ {monitor["name"]} port {monitor["port"]} ouvert')
+                    else:
+                        results["ports_closed"].append(f"{monitor['name']} ({monitor['port']})")
+                        log('ERROR', f'✗ {monitor["name"]} port {monitor["port"]} fermé')
+                except Exception as e:
+                    results["ports_closed"].append(f"{monitor['name']} ({monitor['port']})")
+                    log('ERROR', f'✗ {monitor["name"]} erreur: {e}')
+
+    return results
+
+def create_templates_file():
+    """Créer un fichier de templates pour configuration manuelle"""
     config = create_monitors_config()
 
-    config_file = "./scripts/uptime-kuma-auto-config.json"
+    templates_file = "./scripts/uptime-kuma-monitors-template.txt"
     os.makedirs("./scripts", exist_ok=True)
 
-    with open(config_file, 'w') as f:
-        json.dump(config, f, indent=2)
+    with open(templates_file, 'w', encoding='utf-8') as f:
+        f.write("# Template de monitors Uptime Kuma pour environnement Laravel Docker\n")
+        f.write("# Copiez-collez ces informations dans l'interface Uptime Kuma\n")
+        f.write(f"# Généré automatiquement le {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
-    print_colored(f"✓ Configuration sauvegardée: {config_file}", Colors.GREEN)
-    return config_file
+        for category, monitors in config.items():
+            f.write(f"=== MONITORS {category.upper()} ===\n\n")
 
-def create_monitors_with_curl():
-    """Créer les monitors en utilisant curl (méthode de fallback)"""
-    print_colored("🔧 Utilisation de la méthode de fallback avec curl...", Colors.YELLOW)
+            for i, monitor in enumerate(monitors, 1):
+                f.write(f"{i}. {monitor['name']}\n")
+                if monitor['type'] == 'http':
+                    f.write(f"   Type: HTTP(s)\n")
+                    f.write(f"   URL: {monitor['url']}\n")
+                elif monitor['type'] == 'port':
+                    f.write(f"   Type: Port\n")
+                    f.write(f"   Hostname: {monitor['hostname']}\n")
+                    f.write(f"   Port: {monitor['port']}\n")
 
-    # Créer le fichier de configuration pour import manuel
-    config_file = create_manual_config_file()
+                f.write(f"   Intervalle: {monitor['interval']}s\n")
+                f.write(f"   Tags: {', '.join(monitor['tags'])}\n")
+                f.write(f"   Description: {monitor['description']}\n")
+                f.write("\n")
 
-    print_colored("📋 Instructions pour import manuel:", Colors.BLUE)
-    print_colored("===================================", Colors.BLUE)
-    print()
-    print_colored("1. Ouvrez Uptime Kuma: http://localhost:3001", Colors.YELLOW)
-    print_colored("2. Créez votre compte administrateur", Colors.YELLOW)
-    print_colored("3. Utilisez le fichier de configuration créé:", Colors.YELLOW)
-    print_colored(f"   → {config_file}", Colors.CYAN)
-    print()
+        # Ajouter des instructions
+        f.write("=== INSTRUCTIONS DE CONFIGURATION ===\n\n")
+        f.write("1. Ouvrez Uptime Kuma: http://localhost:3001\n")
+        f.write("2. Créez votre compte administrateur\n")
+        f.write("3. Pour chaque monitor ci-dessus:\n")
+        f.write("   • Cliquez sur 'Add New Monitor'\n")
+        f.write("   • Remplissez les champs selon les informations\n")
+        f.write("   • Sauvegardez\n\n")
+        f.write("4. Configurez les notifications (optionnel):\n")
+        f.write("   • Settings → Notifications\n")
+        f.write("   • Ajoutez Discord, Slack, Email, etc.\n\n")
+        f.write("5. Créez une Status Page (optionnel):\n")
+        f.write("   • Status Pages → Add New Status Page\n")
+        f.write("   • Sélectionnez les monitors à afficher\n")
 
-    # Afficher les monitors à créer
-    config = create_monitors_config()
+    log('SUCCESS', f'✓ Template créé: {templates_file}')
+    return templates_file
 
-    for category, monitors in config.items():
-        print_colored(f"📊 {category.upper()}:", Colors.BLUE)
-        for monitor in monitors:
-            print_colored(f"  • {monitor['name']}", Colors.GREEN)
-            if monitor['type'] == 'http':
-                print_colored(f"    URL: {monitor['url']}", Colors.CYAN)
-            elif monitor['type'] == 'port':
-                print_colored(f"    Host: {monitor['hostname']}:{monitor['port']}", Colors.CYAN)
-            print_colored(f"    Intervalle: {monitor['interval']}s", Colors.CYAN)
-            print_colored(f"    Tags: {', '.join(monitor['tags'])}", Colors.CYAN)
-            print()
+def create_notification_examples():
+    """Créer des exemples de configuration de notifications"""
+    notifications_file = "./scripts/uptime-kuma-notifications-examples.json"
 
-def create_monitors_with_api():
-    """Créer les monitors en utilisant l'API Python"""
-    try:
-        from uptime_kuma_api import UptimeKumaApi, MonitorType
-
-        print_colored("🤖 Configuration automatique avec l'API...", Colors.YELLOW)
-
-        # Note: L'API nécessite des credentials, ce qui n'est pas idéal pour l'automatisation
-        # En pratique, il faudrait soit:
-        # 1. Pré-configurer un utilisateur API
-        # 2. Utiliser des variables d'environnement
-        # 3. Demander les credentials interactivement
-
-        print_colored("⚠️  La configuration automatique via API nécessite des credentials", Colors.YELLOW)
-        print_colored("    Utilisation de la méthode de fallback...", Colors.YELLOW)
-
-        return create_monitors_with_curl()
-
-        # Code pour l'API (désactivé pour le moment):
-        """
-        with UptimeKumaApi('http://localhost:3001') as api:
-            # Tentative de connexion
-            api.login('admin', 'password')  # Credentials nécessaires
-
-            config = create_monitors_config()
-
-            for category, monitors in config.items():
-                print_colored(f"📊 Création des monitors {category}...", Colors.BLUE)
-
-                for monitor_config in monitors:
-                    try:
-                        if monitor_config['type'] == 'http':
-                            monitor = api.add_monitor(
-                                type=MonitorType.HTTP,
-                                name=monitor_config['name'],
-                                url=monitor_config['url'],
-                                interval=monitor_config['interval'],
-                                maxretries=monitor_config.get('maxretries', 1)
-                            )
-                        elif monitor_config['type'] == 'port':
-                            monitor = api.add_monitor(
-                                type=MonitorType.PORT,
-                                name=monitor_config['name'],
-                                hostname=monitor_config['hostname'],
-                                port=monitor_config['port'],
-                                interval=monitor_config['interval']
-                            )
-
-                        print_colored(f"  ✓ {monitor_config['name']}", Colors.GREEN)
-
-                    except Exception as e:
-                        print_colored(f"  ✗ {monitor_config['name']}: {str(e)}", Colors.RED)
-
-        print_colored("✅ Configuration automatique terminée!", Colors.GREEN)
-        """
-
-    except ImportError:
-        print_colored("❌ API Uptime Kuma non disponible", Colors.RED)
-        return create_monitors_with_curl()
-    except Exception as e:
-        print_colored(f"❌ Erreur API: {str(e)}", Colors.RED)
-        return create_monitors_with_curl()
-
-def show_status():
-    """Afficher le statut des services"""
-    print_colored("📊 Statut des services à monitorer", Colors.BLUE)
-    print_colored("==================================", Colors.BLUE)
-    print()
-
-    # Services web à vérifier
-    web_services = [
-        ("Laravel HTTPS", "https://laravel.local"),
-        ("Laravel HTTP", "http://localhost"),
-        ("MailHog", "http://localhost:8025"),
-        ("Adminer", "http://localhost:8080"),
-        ("IT-Tools", "http://localhost:8081"),
-        ("Dozzle", "http://localhost:9999"),
-        ("Uptime Kuma", "http://localhost:3001")
-    ]
-
-    print_colored("🌐 Services Web:", Colors.YELLOW)
-    for name, url in web_services:
-        try:
-            response = requests.get(url, timeout=5, verify=False)
-            if response.status_code == 200:
-                print_colored(f"  ✓ {name}", Colors.GREEN)
-            else:
-                print_colored(f"  ⚠ {name} (status: {response.status_code})", Colors.YELLOW)
-        except requests.exceptions.RequestException:
-            print_colored(f"  ✗ {name} (non accessible)", Colors.RED)
-
-    print()
-
-    # Ports à vérifier
-    import socket
-    ports = [
-        ("MariaDB", "localhost", 3306),
-        ("Redis", "localhost", 6379),
-        ("Apache HTTP", "localhost", 80),
-        ("Apache HTTPS", "localhost", 443)
-    ]
-
-    print_colored("🔌 Ports:", Colors.YELLOW)
-    for name, host, port in ports:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(2)
-        result = sock.connect_ex((host, port))
-        sock.close()
-
-        if result == 0:
-            print_colored(f"  ✓ {name} ({port})", Colors.GREEN)
-        else:
-            print_colored(f"  ✗ {name} ({port}) (non accessible)", Colors.RED)
-
-def create_notification_templates():
-    """Créer des templates de notifications"""
-    templates = {
+    examples = {
         "discord": {
             "name": "Discord Alerts",
             "type": "discord",
-            "description": "Notifications Discord pour les alertes critiques",
-            "config": {
-                "webhookURL": "https://discord.com/api/webhooks/YOUR_WEBHOOK_URL",
-                "username": "Uptime Kuma",
-                "content": "🚨 **Alert** 🚨\n**{monitor.name}** is {monitor.status}\n**URL:** {monitor.url}\n**Time:** {monitor.localDateTime}"
-            }
+            "description": "Notifications Discord pour alertes critiques",
+            "webhook_url": "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN",
+            "username": "Uptime Kuma",
+            "content_template": "🚨 **Alert Laravel** 🚨\\n**Monitor:** {monitor.name}\\n**Status:** {monitor.status}\\n**URL:** {monitor.url}\\n**Time:** {monitor.localDateTime}"
         },
         "slack": {
-            "name": "Slack Alerts",
+            "name": "Slack Team Alerts",
             "type": "slack",
             "description": "Notifications Slack pour l'équipe",
-            "config": {
-                "webhookURL": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
-                "channel": "#alerts",
-                "username": "Uptime Kuma",
-                "text": "🚨 Alert: {monitor.name} is {monitor.status}"
-            }
+            "webhook_url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+            "channel": "#monitoring",
+            "username": "Uptime Kuma",
+            "icon_emoji": ":warning:"
         },
         "email": {
             "name": "Email Alerts",
             "type": "smtp",
-            "description": "Notifications email pour tous les alertes",
-            "config": {
-                "host": "localhost",
-                "port": 1025,
-                "secure": False,
-                "from": "alerts@laravel.local",
-                "to": "admin@laravel.local",
-                "subject": "🚨 Uptime Alert: {monitor.name}"
+            "description": "Notifications email administrateur",
+            "smtp_host": "localhost",
+            "smtp_port": 1025,
+            "smtp_secure": False,
+            "smtp_username": "",
+            "smtp_password": "",
+            "from_email": "alerts@laravel.local",
+            "to_email": "admin@laravel.local"
+        },
+        "webhook": {
+            "name": "Custom Webhook",
+            "type": "webhook",
+            "description": "Webhook personnalisé pour intégrations",
+            "url": "https://your-endpoint.com/webhook",
+            "content_type": "application/json",
+            "custom_headers": {
+                "Authorization": "Bearer YOUR_TOKEN"
             }
         }
     }
 
-    templates_file = "./scripts/uptime-kuma-notifications.json"
-    with open(templates_file, 'w') as f:
-        json.dump(templates, f, indent=2)
+    with open(notifications_file, 'w', encoding='utf-8') as f:
+        json.dump(examples, f, indent=2, ensure_ascii=False)
 
-    print_colored(f"✓ Templates de notifications créés: {templates_file}", Colors.GREEN)
-    return templates_file
+    log('SUCCESS', f'✓ Exemples de notifications créés: {notifications_file}')
+    return notifications_file
+
+def show_manual_setup_guide():
+    """Afficher le guide de configuration manuelle"""
+    log('INFO', '📋 Guide de configuration manuelle')
+
+    print(f"\n{Colors.CYAN}🔧 CONFIGURATION MANUELLE D'UPTIME KUMA{Colors.NC}")
+    print(f"{Colors.CYAN}======================================={Colors.NC}")
+    print()
+    print(f"{Colors.YELLOW}1. 👤 Création du compte administrateur:{Colors.NC}")
+    print(f"   • URL: {UPTIME_KUMA_URL}")
+    print(f"   • Utilisateur: {ADMIN_USER}")
+    print(f"   • Mot de passe: {ADMIN_PASS}")
+    print(f"   • Email: {ADMIN_EMAIL}")
+    print()
+    print(f"{Colors.YELLOW}2. 📊 Ajout des monitors:{Colors.NC}")
+    print("   • Utilisez le fichier template créé automatiquement")
+    print("   • ./scripts/uptime-kuma-monitors-template.txt")
+    print()
+    print(f"{Colors.YELLOW}3. 🔔 Configuration des notifications:{Colors.NC}")
+    print("   • Settings → Notifications")
+    print("   • Utilisez les exemples dans:")
+    print("   • ./scripts/uptime-kuma-notifications-examples.json")
+    print()
+    print(f"{Colors.YELLOW}4. 📱 Status Page (optionnel):{Colors.NC}")
+    print("   • Status Pages → Add New Status Page")
+    print("   • Sélectionnez les monitors critiques et importants")
+    print("   • Partagez l'URL avec votre équipe")
+
+def open_browser():
+    """Ouvrir Uptime Kuma dans le navigateur"""
+    log('INFO', '🌐 Ouverture d\'Uptime Kuma dans le navigateur...')
+
+    try:
+        webbrowser.open(UPTIME_KUMA_URL)
+        log('SUCCESS', f'✓ Navigateur ouvert sur {UPTIME_KUMA_URL}')
+    except Exception as e:
+        log('ERROR', f'❌ Impossible d\'ouvrir le navigateur: {e}')
+        log('INFO', f'🌐 Ouvrez manuellement: {UPTIME_KUMA_URL}')
+
+def show_final_status(test_results):
+    """Afficher le statut final et les recommandations"""
+    print(f"\n{Colors.CYAN}📊 RÉSUMÉ DE LA CONFIGURATION{Colors.NC}")
+    print(f"{Colors.CYAN}============================={Colors.NC}")
+
+    # Statistiques
+    total_services = len(test_results["accessible"]) + len(test_results["inaccessible"])
+    total_ports = len(test_results["ports_open"]) + len(test_results["ports_closed"])
+
+    print(f"\n{Colors.YELLOW}📈 Statistiques:{Colors.NC}")
+    print(f"   • Services HTTP: {len(test_results['accessible'])}/{total_services} accessibles")
+    print(f"   • Ports TCP: {len(test_results['ports_open'])}/{total_ports} ouverts")
+
+    # Services accessibles
+    if test_results["accessible"]:
+        print(f"\n{Colors.GREEN}✅ Services accessibles:{Colors.NC}")
+        for service in test_results["accessible"]:
+            print(f"   • {service}")
+
+    # Ports ouverts
+    if test_results["ports_open"]:
+        print(f"\n{Colors.GREEN}🔌 Ports ouverts:{Colors.NC}")
+        for port in test_results["ports_open"]:
+            print(f"   • {port}")
+
+    # Problèmes détectés
+    issues = test_results["inaccessible"] + test_results["ports_closed"]
+    if issues:
+        print(f"\n{Colors.RED}⚠️ Services à vérifier:{Colors.NC}")
+        for issue in issues:
+            print(f"   • {issue}")
+        print(f"\n{Colors.BLUE}💡 Solutions:{Colors.NC}")
+        print("   • Vérifiez que tous les containers sont démarrés: docker-compose ps")
+        print("   • Redémarrez les services: make restart")
+        print("   • Attendez l'initialisation complète (2-3 minutes)")
+
+    # Instructions finales
+    print(f"\n{Colors.BLUE}🎯 Prochaines étapes:{Colors.NC}")
+    print(f"   1. Ouvrez Uptime Kuma: {UPTIME_KUMA_URL}")
+    print(f"   2. Connectez-vous avec: {ADMIN_USER} / {ADMIN_PASS}")
+    print("   3. Ajoutez les monitors depuis le template")
+    print("   4. Configurez les notifications")
+    print("   5. Testez les alertes")
+
+    print(f"\n{Colors.PURPLE}📂 Fichiers créés:{Colors.NC}")
+    print("   • ./scripts/uptime-kuma-monitors-template.txt")
+    print("   • ./scripts/uptime-kuma-notifications-examples.json")
 
 def main():
     """Fonction principale"""
-    print_colored("🤖 Configuration automatique avancée d'Uptime Kuma", Colors.CYAN)
-    print_colored("=================================================", Colors.CYAN)
+    print(f"{Colors.PURPLE}🤖 CONFIGURATION AUTOMATIQUE COMPLÈTE D'UPTIME KUMA{Colors.NC}")
+    print(f"{Colors.PURPLE}==================================================={Colors.NC}")
     print()
 
-    # Vérifier Uptime Kuma
-    if not check_uptime_kuma_api():
-        print_colored("Impossible de continuer sans Uptime Kuma accessible", Colors.RED)
-        print_colored("💡 Démarrez d'abord l'environnement: make up", Colors.YELLOW)
+    # Vérifier l'accessibilité
+    if not check_uptime_kuma_accessibility():
+        log('ERROR', 'Impossible de continuer sans Uptime Kuma accessible')
+        log('INFO', '💡 Démarrez l\'environnement: make up')
         sys.exit(1)
 
-    # Afficher le statut des services
-    show_status()
-    print()
+    # Tester les services
+    test_results = test_services()
 
-    # Tenter d'installer l'API
-    if not install_uptime_kuma_api():
-        print_colored("⚠️  Impossible d'installer l'API, utilisation de la méthode manuelle", Colors.YELLOW)
+    # Créer les fichiers de templates
+    create_templates_file()
+    create_notification_examples()
 
-    # Créer les monitors
-    create_monitors_with_api()
+    # Configuration manuelle (l'API automatique n'est pas disponible sans credentials)
+    show_manual_setup_guide()
 
-    # Créer les templates de notifications
-    create_notification_templates()
+    # Ouvrir le navigateur
+    open_browser()
 
-    print()
-    print_colored("✅ Configuration avancée terminée!", Colors.GREEN)
-    print_colored("📱 Prochaines étapes:", Colors.YELLOW)
-    print_colored("1. Ouvrez Uptime Kuma: http://localhost:3001", Colors.CYAN)
-    print_colored("2. Créez votre compte administrateur", Colors.CYAN)
-    print_colored("3. Configurez les notifications selon vos besoins", Colors.CYAN)
-    print_colored("4. Importez les monitors depuis le fichier de configuration", Colors.CYAN)
-    print()
-    print_colored("💡 Fichiers créés:", Colors.BLUE)
-    print_colored("  • ./scripts/uptime-kuma-auto-config.json", Colors.CYAN)
-    print_colored("  • ./scripts/uptime-kuma-notifications.json", Colors.CYAN)
+    # Afficher le statut final
+    show_final_status(test_results)
+
+    print(f"\n{Colors.GREEN}✅ Configuration automatique terminée!{Colors.NC}")
+    log('SUCCESS', '🎉 Uptime Kuma est prêt à être configuré!')
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print(f"\n{Colors.YELLOW}⚠️ Configuration interrompue par l'utilisateur{Colors.NC}")
+        sys.exit(130)
+    except Exception as e:
+        log('ERROR', f'❌ Erreur inattendue: {e}')
+        sys.exit(1)
