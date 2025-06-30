@@ -107,7 +107,6 @@ setup-full: install setup-watchtower setup-git-hooks ## Installation et configur
 	@echo "$(CYAN)🎉 Votre environnement Laravel est maintenant complet avec :$(NC)"
 	@echo "  $(GREEN)✓ Laravel installé et configuré$(NC)"
 	@echo "  $(GREEN)✓ Watchtower configuré pour les mises à jour$(NC)"
-	@echo "  $(GREEN)✓ GrumPHP configuré pour la qualité$(NC)"
 	@echo ""
 
 .PHONY: setup-quick
@@ -255,36 +254,17 @@ enlightn: ## Audit sécurité
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan enlightn
 
 # =============================================================================
-# GRUMPHP & GIT HOOKS
+# GIT HOOKS
 # =============================================================================
 
 .PHONY: setup-git-hooks
-setup-git-hooks: ## Installer les hooks Git GrumPHP
+setup-git-hooks: ## Installer les hooks Git custom
 	@echo "$(BLUE)🔗 Setting up Git hooks...$(NC)"
-	@if $(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) test -f vendor/bin/grumphp; then \
-		$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) vendor/bin/grumphp git:init; \
-		echo "$(GREEN)✓ Git hooks installed$(NC)"; \
+	@if [ -f "./scripts/setup-git-hooks.sh" ]; then \
+		chmod +x "./scripts/setup-git-hooks.sh"; \
+		./scripts/setup-git-hooks.sh; \
 	else \
-		echo "$(RED)✗ GrumPHP not found$(NC)"; \
-		echo "$(BLUE)→ Install with: composer require --dev phpro/grumphp$(NC)"; \
-	fi
-
-.PHONY: grumphp-check
-grumphp-check: ## Vérifier avec GrumPHP
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) vendor/bin/grumphp run --no-interaction
-
-.PHONY: grumphp-status
-grumphp-status: ## Statut GrumPHP
-	@echo "$(BLUE)📊 GrumPHP Status$(NC)"
-	@if $(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) test -f vendor/bin/grumphp; then \
-		echo "$(GREEN)✓ GrumPHP installed$(NC)"; \
-		if $(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) test -f .git/hooks/pre-commit; then \
-			echo "$(GREEN)✓ Git hooks active$(NC)"; \
-		else \
-			echo "$(YELLOW)⚠ Git hooks not installed$(NC)"; \
-		fi; \
-	else \
-		echo "$(RED)✗ GrumPHP not found$(NC)"; \
+		echo "$(RED)✗ Hook script not found$(NC)"; \
 	fi
 
 # =============================================================================
@@ -302,16 +282,15 @@ quality-fix: ecs-fix rector-fix ## Corrections automatiques
 .PHONY: quality-all
 quality-all: ## Audit complet de qualité
 	@echo "$(CYAN)🔍 Full quality audit$(NC)"
-	$(call quality_step,1,6,Code style,ecs)
-	$(call quality_step,2,6,Static analysis,phpstan)
-	$(call quality_step,3,6,Security audit,enlightn)
-	$(call quality_step,4,6,Quality insights,insights)
-	$(call quality_step,5,6,Unit tests,test-unit)
-	$(call quality_step,6,6,GrumPHP check,grumphp-check)
+	$(call quality_step,1,5,Code style,ecs)
+	$(call quality_step,2,5,Static analysis,phpstan)
+	$(call quality_step,3,5,Security audit,enlightn)
+	$(call quality_step,4,5,Quality insights,insights)
+	$(call quality_step,5,5,Unit tests,test-unit)
 	@echo "$(GREEN)✅ Quality audit completed$(NC)"
 
 .PHONY: pre-commit
-pre-commit: quality-fix grumphp-check ## Vérifications pre-commit
+pre-commit: quality-fix ## Vérifications pre-commit
 	@echo "$(GREEN)✅ Pre-commit checks passed$(NC)"
 
 # =============================================================================
@@ -443,7 +422,6 @@ diagnose: ## Diagnostic complet
 	fi
 	@echo ""
 	@echo "$(YELLOW)🛡️ Quality Tools:$(NC)"
-	@$(MAKE) grumphp-status
 	@echo ""
 	@echo "$(YELLOW)🔄 Watchtower:$(NC)"
 	@$(MAKE) watchtower-status
@@ -498,7 +476,6 @@ help-quality: ## Aide qualité
 	@echo "  $(GREEN)make quality-quick$(NC)    - Fast check (ECS + PHPStan)"
 	@echo "  $(GREEN)make quality-all$(NC)      - Complete audit"
 	@echo "  $(GREEN)make quality-fix$(NC)      - Auto-fix issues"
-	@echo "  $(GREEN)make setup-git-hooks$(NC)  - Install GrumPHP"
 	@echo "  $(GREEN)make pre-commit$(NC)       - Pre-commit checks"
 
 .PHONY: help-watchtower
@@ -549,3 +526,109 @@ _open_url:
 	else \
 		echo "$(BLUE)→ Open: $(url)$(NC)"; \
 	fi
+
+# =============================================================================
+# NIGHTWATCH MANAGEMENT
+# =============================================================================
+
+.PHONY: nightwatch-start
+nightwatch-start: ## Démarrer l'agent Nightwatch
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	@echo "$(YELLOW)🌙 Démarrage de l'agent Nightwatch...$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "\
+		if [ -f nightwatch.pid ] && kill -0 \$$(cat nightwatch.pid) 2>/dev/null; then \
+			echo '⚠️ Agent déjà en cours (PID: '\$$(cat nightwatch.pid)')'; \
+			exit 0; \
+		fi; \
+		if ! grep -q 'NIGHTWATCH_TOKEN=' .env || grep -q 'NIGHTWATCH_TOKEN=\$$' .env; then \
+			echo '❌ Token Nightwatch non configuré dans .env'; \
+			exit 1; \
+		fi; \
+		echo 'Démarrage de l agent Nightwatch...'; \
+		nohup php artisan nightwatch:agent > nightwatch.log 2>&1 & \
+		echo \$$! > nightwatch.pid; \
+		sleep 2; \
+		if kill -0 \$$(cat nightwatch.pid) 2>/dev/null; then \
+			echo \"✅ Agent démarré avec succès (PID: \$$(cat nightwatch.pid))\"; \
+			echo 'Logs en temps réel: make nightwatch-logs'; \
+		else \
+			echo '❌ Échec du démarrage, consultez les logs'; \
+			cat nightwatch.log 2>/dev/null || true; \
+		fi"
+
+.PHONY: nightwatch-stop
+nightwatch-stop: ## Arrêter l'agent Nightwatch
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	@echo "$(YELLOW)🌙 Arrêt de l'agent Nightwatch...$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "\
+		if [ -f nightwatch.pid ]; then \
+			pid=\$$(cat nightwatch.pid); \
+			if kill -0 \$$pid 2>/dev/null; then \
+				kill \$$pid && echo \"✅ Agent arrêté (PID: \$$pid)\"; \
+			else \
+				echo '⚠️ Agent déjà arrêté'; \
+			fi; \
+			rm -f nightwatch.pid; \
+		else \
+			echo '○ Aucun agent en cours'; \
+		fi"
+
+.PHONY: nightwatch-restart
+nightwatch-restart: nightwatch-stop nightwatch-start ## Redémarrer l'agent Nightwatch
+
+.PHONY: nightwatch-status
+nightwatch-status: ## Statut de l'agent Nightwatch
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	@echo "$(CYAN)🌙 Statut Nightwatch$(NC)"
+	@$(DOCKER) exec $(PHP_CONTAINER) bash -c "\
+		echo '📦 Package:'; \
+		if [ -d vendor/laravel/nightwatch ]; then \
+			echo '  ✓ laravel/nightwatch installé'; \
+		else \
+			echo '  ✗ laravel/nightwatch non installé'; \
+			exit 1; \
+		fi; \
+		echo '🔑 Token:'; \
+		if token=\$$(grep '^NIGHTWATCH_TOKEN=' .env 2>/dev/null | cut -d'=' -f2- | xargs); then \
+			if [ -n \"\$$token\" ] && [ \"\$$token\" != '\${NIGHTWATCH_TOKEN}' ]; then \
+				echo \"  ✓ Configuré: \$${token:0:10}...\"; \
+			else \
+				echo '  ✗ Non configuré ou invalide'; \
+			fi; \
+		else \
+			echo '  ✗ Variable non trouvée'; \
+		fi; \
+		echo '🤖 Agent:'; \
+		if [ -f nightwatch.pid ]; then \
+			pid=\$$(cat nightwatch.pid); \
+			if kill -0 \$$pid 2>/dev/null; then \
+				echo \"  ✓ En cours (PID: \$$pid)\"; \
+			else \
+				echo '  ✗ Arrêté (PID obsolète)'; \
+			fi; \
+		else \
+			echo '  ○ Non démarré'; \
+		fi"
+
+.PHONY: nightwatch-logs
+nightwatch-logs: ## Voir les logs Nightwatch en temps réel
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	@echo "$(CYAN)📋 Logs Nightwatch (Ctrl+C pour arrêter)$(NC)"
+	@$(DOCKER) exec $(PHP_CONTAINER) bash -c "\
+		if [ -f nightwatch.log ]; then \
+			tail -f nightwatch.log; \
+		else \
+			echo 'Aucun log Nightwatch trouvé'; \
+			echo 'Démarrez l agent avec: make nightwatch-start'; \
+		fi"
+
+.PHONY: nightwatch-logs-tail
+nightwatch-logs-tail: ## Voir les dernières lignes des logs
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	@$(DOCKER) exec $(PHP_CONTAINER) bash -c "\
+		if [ -f nightwatch.log ]; then \
+			echo '📋 Dernières 20 lignes:'; \
+			tail -20 nightwatch.log; \
+		else \
+			echo 'Aucun log disponible'; \
+		fi"

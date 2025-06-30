@@ -39,6 +39,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_php
     volumes:
       - ./src:/var/www/html:delegated
+      - .:/var/www/project:ro
       - ./docker/php/conf/php.ini:/usr/local/etc/php/php.ini
       - ./docker/scripts:/docker/scripts:ro
       - ./docker/php/conf/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini

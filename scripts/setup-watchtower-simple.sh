@@ -197,7 +197,6 @@ configure_container_exclusions() {
     echo -e "  • ${COMPOSE_PROJECT_NAME}_adminer"
     echo -e "  • ${COMPOSE_PROJECT_NAME}_it-tools"
     echo -e "  • ${COMPOSE_PROJECT_NAME}_dozzle"
-    echo -e "  • ${COMPOSE_PROJECT_NAME}_uptime-kuma"
     echo ""
 
     echo -e "${GREEN}✓ Configuration par défaut appropriée pour un environnement Laravel${NC}"
@@ -287,7 +286,6 @@ show_monitored_containers() {
         "${COMPOSE_PROJECT_NAME}_adminer"
         "${COMPOSE_PROJECT_NAME}_it-tools"
         "${COMPOSE_PROJECT_NAME}_dozzle"
-        "${COMPOSE_PROJECT_NAME}_uptime-kuma"
         "${COMPOSE_PROJECT_NAME}_watchtower"
     )
 

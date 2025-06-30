@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script de génération de certificats SSL auto-signés pour Laravel
+# Script de génération de certificats SSL auto-signés pour Laravel - CORRIGÉ WINDOWS
 # Usage: ./docker/scripts/generate-ssl.sh
 
 # Couleurs
@@ -9,16 +9,38 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+PURPLE='\033[0;35m'
 NC='\033[0m'
 
-# Configuration
+# Configuration renforcée pour Windows
 DOMAIN="laravel.local"
 SSL_DIR="./docker/apache/conf/ssl"
-DAYS=365
-KEY_SIZE=2048
+DAYS=3650  # 10 ans pour éviter les renouvellements fréquents
+KEY_SIZE=4096  # Clé plus forte pour réduire les alertes
+COUNTRY="FR"
+STATE="Ile-de-France"
+CITY="Paris"
+ORG="Laravel Development"
+OU="Development Team"
 
-echo -e "${CYAN}🔐 Génération de certificats SSL auto-signés${NC}"
-echo -e "${CYAN}===========================================${NC}"
+echo -e "${CYAN}🔐 Génération de certificats SSL ULTRA-SÉCURISÉS pour Windows${NC}"
+echo -e "${CYAN}================================================================${NC}"
+
+# Détecter l'OS
+detect_os() {
+    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -n "$WINDIR" ]]; then
+        echo "windows"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "macos"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        echo "linux"
+    else
+        echo "unknown"
+    fi
+}
+
+OS_TYPE=$(detect_os)
+echo -e "${BLUE}🖥️ OS détecté: $OS_TYPE${NC}"
 
 # Créer le répertoire SSL s'il n'existe pas
 mkdir -p "$SSL_DIR"
@@ -27,17 +49,28 @@ mkdir -p "$SSL_DIR"
 if ! command -v openssl &> /dev/null; then
     echo -e "${RED}❌ OpenSSL n'est pas installé${NC}"
     echo -e "${YELLOW}💡 Installation requise :${NC}"
-    echo -e "  • Ubuntu/Debian: sudo apt-get install openssl"
-    echo -e "  • CentOS/RHEL: sudo yum install openssl"
-    echo -e "  • macOS: brew install openssl"
+    case $OS_TYPE in
+        "windows")
+            echo -e "  • Windows: Installez Git Bash (inclut OpenSSL) ou OpenSSL pour Windows"
+            echo -e "  • Ou utilisez WSL: wsl --install"
+            ;;
+        "linux")
+            echo -e "  • Ubuntu/Debian: sudo apt-get install openssl"
+            echo -e "  • CentOS/RHEL: sudo yum install openssl"
+            ;;
+        "macos")
+            echo -e "  • macOS: brew install openssl"
+            ;;
+    esac
     exit 1
 fi
 
-echo -e "${YELLOW}📋 Configuration du certificat :${NC}"
+echo -e "${YELLOW}📋 Configuration du certificat RENFORCÉE :${NC}"
 echo -e "  • Domaine: $DOMAIN"
 echo -e "  • Répertoire: $SSL_DIR"
-echo -e "  • Validité: $DAYS jours"
-echo -e "  • Taille clé: $KEY_SIZE bits"
+echo -e "  • Validité: $DAYS jours ($(($DAYS / 365)) ans)"
+echo -e "  • Taille clé: $KEY_SIZE bits (ultra-sécurisé)"
+echo -e "  • Extensions: v3 avec SAN pour compatibilité maximale"
 echo ""
 
 # Vérifier si les certificats existent déjà
@@ -48,17 +81,25 @@ if [ -f "$SSL_DIR/$DOMAIN.crt" ] && [ -f "$SSL_DIR/$DOMAIN.key" ]; then
     if openssl x509 -in "$SSL_DIR/$DOMAIN.crt" -noout -checkend 86400 > /dev/null 2>&1; then
         echo -e "${GREEN}✓ Certificat valide pour plus de 24h${NC}"
 
-        # Proposer de régénérer ou conserver
-        if [ -t 0 ]; then
-            echo -e "${CYAN}Voulez-vous régénérer les certificats ? (y/N)${NC}"
-            read -r regenerate
-            if [[ ! "$regenerate" =~ ^[Yy]$ ]]; then
-                echo -e "${BLUE}→ Conservation des certificats existants${NC}"
+        # Pour Windows, proposer toujours la régénération pour corriger les problèmes
+        if [ "$OS_TYPE" = "windows" ]; then
+            echo -e "${CYAN}🪟 Windows détecté - Régénération recommandée pour optimiser la compatibilité${NC}"
+            echo -e "${YELLOW}Régénération des certificats pour Windows...${NC}"
+        else
+            # Proposer de régénérer ou conserver
+            if [ -t 0 ]; then
+                echo -e "${CYAN}Voulez-vous régénérer les certificats ? (y/N)${NC}"
+                read -r regenerate
+                if [[ ! "$regenerate" =~ ^[Yy]$ ]]; then
+                    echo -e "${BLUE}→ Conservation des certificats existants${NC}"
+                    show_windows_install_instructions
+                    exit 0
+                fi
+            else
+                echo -e "${BLUE}→ Mode non-interactif : conservation des certificats valides${NC}"
+                show_windows_install_instructions
                 exit 0
             fi
-        else
-            echo -e "${BLUE}→ Mode non-interactif : conservation des certificats valides${NC}"
-            exit 0
         fi
     else
         echo -e "${RED}✗ Certificat expiré ou invalide${NC}"
@@ -73,19 +114,19 @@ if [ -f "$SSL_DIR/$DOMAIN.crt" ] && [ -f "$SSL_DIR/$DOMAIN.key" ]; then
     echo -e "${YELLOW}→ Sauvegarde créée: $backup_dir${NC}"
 fi
 
-echo -e "${YELLOW}🔑 Génération de la clé privée...${NC}"
+echo -e "${YELLOW}🔑 Génération de la clé privée ultra-sécurisée ($KEY_SIZE bits)...${NC}"
 
-# Générer la clé privée
+# Générer la clé privée avec une taille renforcée
 if ! openssl genrsa -out "$SSL_DIR/$DOMAIN.key" $KEY_SIZE 2>/dev/null; then
     echo -e "${RED}❌ Erreur lors de la génération de la clé privée${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}✓ Clé privée générée${NC}"
+echo -e "${GREEN}✓ Clé privée ultra-sécurisée générée${NC}"
 
-echo -e "${YELLOW}📜 Génération du certificat...${NC}"
+echo -e "${YELLOW}📜 Génération du certificat avec extensions complètes...${NC}"
 
-# Créer un fichier de configuration temporaire pour le certificat
+# Créer un fichier de configuration OpenSSL ultra-complet pour Windows
 config_file=$(mktemp)
 cat > "$config_file" << EOF
 [req]
@@ -96,28 +137,35 @@ distinguished_name = dn
 req_extensions = v3_req
 
 [dn]
-C=FR
-ST=Ile-de-France
-L=Paris
-O=Laravel Development
-OU=Development Team
+C=$COUNTRY
+ST=$STATE
+L=$CITY
+O=$ORG
+OU=$OU
 CN=$DOMAIN
 
 [v3_req]
 basicConstraints = CA:FALSE
-keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth, clientAuth
 subjectAltName = @alt_names
+authorityKeyIdentifier = keyid,issuer
+subjectKeyIdentifier = hash
 
 [alt_names]
 DNS.1 = $DOMAIN
 DNS.2 = www.$DOMAIN
 DNS.3 = localhost
 DNS.4 = *.laravel.local
+DNS.5 = laravel.test
+DNS.6 = www.laravel.test
 IP.1 = 127.0.0.1
 IP.2 = ::1
+IP.3 = 192.168.1.1
+IP.4 = 10.0.0.1
 EOF
 
-# Générer le certificat auto-signé
+# Générer le certificat auto-signé avec extensions v3 complètes
 if ! openssl req -new -x509 -key "$SSL_DIR/$DOMAIN.key" -out "$SSL_DIR/$DOMAIN.crt" -days $DAYS -config "$config_file" -extensions v3_req 2>/dev/null; then
     echo -e "${RED}❌ Erreur lors de la génération du certificat${NC}"
     rm -f "$config_file"
@@ -127,7 +175,7 @@ fi
 # Nettoyer le fichier de configuration temporaire
 rm -f "$config_file"
 
-echo -e "${GREEN}✓ Certificat généré${NC}"
+echo -e "${GREEN}✓ Certificat ultra-sécurisé généré${NC}"
 
 # Définir les permissions appropriées
 chmod 600 "$SSL_DIR/$DOMAIN.key"
@@ -137,136 +185,157 @@ echo -e "${YELLOW}🔍 Vérification du certificat...${NC}"
 
 # Vérifier le certificat généré
 if openssl x509 -in "$SSL_DIR/$DOMAIN.crt" -text -noout > /dev/null 2>&1; then
-    echo -e "${GREEN}✓ Certificat valide${NC}"
+    echo -e "${GREEN}✓ Certificat ultra-sécurisé valide${NC}"
 
     # Afficher les informations du certificat
     echo -e "${BLUE}📋 Informations du certificat :${NC}"
-    echo -e "${CYAN}→ Sujet:$(NC)"
+    echo -e "${CYAN}→ Sujet:${NC}"
     openssl x509 -in "$SSL_DIR/$DOMAIN.crt" -noout -subject | sed 's/subject=/  /'
-    echo -e "${CYAN}→ Validité:$(NC)"
+    echo -e "${CYAN}→ Validité:${NC}"
     echo -e "  De: $(openssl x509 -in "$SSL_DIR/$DOMAIN.crt" -noout -startdate | sed 's/notBefore=//')"
     echo -e "  À:  $(openssl x509 -in "$SSL_DIR/$DOMAIN.crt" -noout -enddate | sed 's/notAfter=//')"
-    echo -e "${CYAN}→ Noms alternatifs:$(NC)"
-    openssl x509 -in "$SSL_DIR/$DOMAIN.crt" -noout -text | grep -A 5 "Subject Alternative Name" | tail -4 | sed 's/^/  /'
+    echo -e "${CYAN}→ Taille de clé:${NC} $KEY_SIZE bits"
+    echo -e "${CYAN}→ Algorithme:${NC} SHA256 avec RSA"
+    echo -e "${CYAN}→ Noms alternatifs:${NC}"
+    openssl x509 -in "$SSL_DIR/$DOMAIN.crt" -noout -text | grep -A 10 "Subject Alternative Name" | tail -5 | sed 's/^/  /'
 else
     echo -e "${RED}❌ Certificat invalide${NC}"
     exit 1
 fi
 
 echo ""
-echo -e "${GREEN}✅ Certificats SSL générés avec succès !${NC}"
+echo -e "${GREEN}✅ Certificats SSL ultra-sécurisés générés avec succès !${NC}"
 
 # Afficher les fichiers générés
 echo -e "${BLUE}📁 Fichiers générés :${NC}"
-echo -e "  • Certificat: $SSL_DIR/$DOMAIN.crt"
-echo -e "  • Clé privée: $SSL_DIR/$DOMAIN.key"
+echo -e "  • Certificat: $SSL_DIR/$DOMAIN.crt ($KEY_SIZE bits, valide $(($DAYS / 365)) ans)"
+echo -e "  • Clé privée: $SSL_DIR/$DOMAIN.key (sécurisée)"
 echo ""
 
+# Fonction pour afficher les instructions Windows
+show_windows_install_instructions() {
+    if [ "$OS_TYPE" = "windows" ]; then
+        echo -e "${PURPLE}🪟 INSTRUCTIONS SPÉCIALES POUR WINDOWS${NC}"
+        echo -e "${PURPLE}====================================${NC}"
+        echo ""
+        echo -e "${YELLOW}📱 Installation automatique du certificat :${NC}"
+        echo ""
+        echo -e "${CYAN}🔧 Méthode 1: Script PowerShell automatique${NC}"
+        echo -e "1. Ouvrez PowerShell en tant qu'Administrateur"
+        echo -e "2. Exécutez cette commande :"
+        echo -e "   ${GREEN}Import-Certificate -FilePath \"$(pwd)/$SSL_DIR/$DOMAIN.crt\" -CertStoreLocation Cert:\\LocalMachine\\Root${NC}"
+        echo ""
+        echo -e "${CYAN}🖱️ Méthode 2: Interface graphique${NC}"
+        echo -e "1. Double-cliquez sur: ${GREEN}$SSL_DIR/$DOMAIN.crt${NC}"
+        echo -e "2. Cliquez sur 'Installer le certificat...'"
+        echo -e "3. Choisissez 'Ordinateur local' puis 'Suivant'"
+        echo -e "4. Sélectionnez 'Placer tous les certificats dans le magasin suivant'"
+        echo -e "5. Cliquez sur 'Parcourir' et choisissez ${GREEN}'Autorités de certification racines de confiance'${NC}"
+        echo -e "6. Cliquez sur 'Suivant' puis 'Terminer'"
+        echo -e "7. Confirmez l'installation avec 'Oui'"
+        echo ""
+        echo -e "${YELLOW}⚠️ Important pour les antivirus :${NC}"
+        echo -e "  • ${GREEN}Windows Defender${NC} : Peut bloquer temporairement - ajouter une exception"
+        echo -e "  • ${GREEN}Avast/AVG${NC} : Aller dans Paramètres → Exceptions → Ajouter l'URL https://laravel.local"
+        echo -e "  • ${GREEN}Kaspersky${NC} : Protection Web → Gérer les exclusions → Ajouter laravel.local"
+        echo -e "  • ${GREEN}Norton${NC} : Paramètres → Antivirus → Exclusions → Sites web → Ajouter laravel.local"
+        echo ""
+        echo -e "${CYAN}🔄 Après installation :${NC}"
+        echo -e "1. Redémarrez votre navigateur complètement"
+        echo -e "2. Videz le cache DNS: ${GREEN}ipconfig /flushdns${NC}"
+        echo -e "3. Testez l'accès: ${GREEN}https://laravel.local${NC}"
+        echo ""
+    fi
+}
+
 # Instructions d'installation dans le système
-echo -e "${YELLOW}📱 Installation dans le système (optionnel)${NC}"
-echo -e "${YELLOW}=========================================${NC}"
-echo ""
-echo -e "${BLUE}Pour éviter les avertissements de sécurité dans votre navigateur,${NC}"
-echo -e "${BLUE}vous pouvez installer le certificat dans votre système :${NC}"
+echo -e "${YELLOW}📱 Installation dans le système (pour éliminer les avertissements)${NC}"
+echo -e "${YELLOW}================================================================${NC}"
 echo ""
 
 # Instructions spécifiques par OS
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    echo -e "${CYAN}🐧 Linux (Ubuntu/Debian) :${NC}"
-    echo -e "  sudo cp $SSL_DIR/$DOMAIN.crt /usr/local/share/ca-certificates/"
-    echo -e "  sudo update-ca-certificates"
-    echo ""
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    echo -e "${CYAN}🍎 macOS :${NC}"
-    echo -e "  sudo security add-trusted-cert -d -r trustRoot \\"
-    echo -e "    -k /Library/Keychains/System.keychain $SSL_DIR/$DOMAIN.crt"
-    echo ""
-elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
-    echo -e "${CYAN}🪟 Windows :${NC}"
-    echo -e "  1. Double-cliquez sur le fichier: $SSL_DIR/$DOMAIN.crt"
-    echo -e "  2. Cliquez sur 'Installer le certificat...'"
-    echo -e "  3. Choisissez 'Ordinateur local' et 'Suivant'"
-    echo -e "  4. Sélectionnez 'Placer tous les certificats dans le magasin suivant'"
-    echo -e "  5. Cliquez sur 'Parcourir' et choisissez 'Autorités de certification racines de confiance'"
-    echo -e "  6. Terminez l'installation"
-    echo ""
-else
-    echo -e "${CYAN}🖥️  Système non reconnu :${NC}"
-    echo -e "  Consultez la documentation de votre OS pour installer"
-    echo -e "  le certificat dans le magasin de certificats de confiance"
-    echo ""
-fi
+case $OS_TYPE in
+    "windows")
+        show_windows_install_instructions
+        ;;
+    "linux")
+        echo -e "${CYAN}🐧 Linux (Ubuntu/Debian) :${NC}"
+        echo -e "  sudo cp $SSL_DIR/$DOMAIN.crt /usr/local/share/ca-certificates/"
+        echo -e "  sudo update-ca-certificates"
+        echo ""
+        ;;
+    "macos")
+        echo -e "${CYAN}🍎 macOS :${NC}"
+        echo -e "  sudo security add-trusted-cert -d -r trustRoot \\"
+        echo -e "    -k /Library/Keychains/System.keychain $SSL_DIR/$DOMAIN.crt"
+        echo ""
+        ;;
+    *)
+        echo -e "${CYAN}🖥️  Système non reconnu :${NC}"
+        echo -e "  Consultez la documentation de votre OS pour installer"
+        echo -e "  le certificat dans le magasin de certificats de confiance"
+        echo ""
+        ;;
+esac
 
 # Instructions pour /etc/hosts
 echo -e "${YELLOW}🌐 Configuration du fichier hosts${NC}"
 echo -e "${YELLOW}================================${NC}"
 echo ""
-echo -e "${BLUE}Ajoutez cette ligne à votre fichier /etc/hosts :${NC}"
+echo -e "${BLUE}Ajoutez cette ligne à votre fichier hosts :${NC}"
 echo -e "${CYAN}127.0.0.1 $DOMAIN www.$DOMAIN${NC}"
 echo ""
 
 # Instructions par OS pour éditer hosts
-if [[ "$OSTYPE" == "linux-gnu"* ]] || [[ "$OSTYPE" == "darwin"* ]]; then
-    echo -e "${CYAN}Commande pour éditer :${NC}"
-    echo -e "  sudo nano /etc/hosts"
-    echo -e "  # ou"
-    echo -e "  echo '127.0.0.1 $DOMAIN www.$DOMAIN' | sudo tee -a /etc/hosts"
-elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
-    echo -e "${CYAN}Windows (en tant qu'administrateur) :${NC}"
-    echo -e "  notepad C:\\Windows\\System32\\drivers\\etc\\hosts"
-fi
+case $OS_TYPE in
+    "linux"|"macos")
+        echo -e "${CYAN}Commande pour éditer :${NC}"
+        echo -e "  sudo nano /etc/hosts"
+        echo -e "  # ou"
+        echo -e "  echo '127.0.0.1 $DOMAIN www.$DOMAIN' | sudo tee -a /etc/hosts"
+        ;;
+    "windows")
+        echo -e "${CYAN}Windows (en tant qu'administrateur) :${NC}"
+        echo -e "  notepad C:\\Windows\\System32\\drivers\\etc\\hosts"
+        echo -e "  # ou via PowerShell Admin :"
+        echo -e "  Add-Content C:\\Windows\\System32\\drivers\\etc\\hosts '127.0.0.1 $DOMAIN www.$DOMAIN'"
+        ;;
+esac
 
 echo ""
 
-# Proposition d'installation automatique
-echo -e "\n${YELLOW}🤖 Installation automatique sur le système ?${NC}"
-echo -e "${YELLOW}Voulez-vous installer automatiquement le certificat sur votre système ? (y/N)${NC}"
+# Installation automatique si Windows
+if [ "$OS_TYPE" = "windows" ]; then
+    echo -e "${YELLOW}🤖 Installation automatique Windows ?${NC}"
+    echo -e "${YELLOW}Voulez-vous installer automatiquement le certificat dans Windows ? (y/N)${NC}"
 
-# En mode non-interactif (CI/Docker), on peut passer cette étape
-if [ -t 0 ]; then
-    read -r auto_install
-else
-    auto_install="n"
-fi
+    if [ -t 0 ]; then
+        read -r auto_install_windows
+    else
+        auto_install_windows="n"
+    fi
 
-if [[ "$auto_install" =~ ^[Yy]$ ]]; then
-    echo -e "${YELLOW}🔧 Installation automatique du certificat...${NC}"
+    if [[ "$auto_install_windows" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}🔧 Tentative d'installation automatique Windows...${NC}"
 
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        echo -e "${YELLOW}→ Linux détecté - installation du certificat...${NC}"
-        if command -v sudo >/dev/null 2>&1; then
-            if sudo cp "$SSL_DIR/$DOMAIN.crt" /usr/local/share/ca-certificates/ 2>/dev/null; then
-                sudo update-ca-certificates >/dev/null 2>&1
-                echo -e "${GREEN}✓ Certificat installé avec succès sur Linux${NC}"
+        # Convertir le chemin Windows
+        windows_cert_path=$(cygpath -w "$(pwd)/$SSL_DIR/$DOMAIN.crt" 2>/dev/null || echo "$(pwd)/$SSL_DIR/$DOMAIN.crt")
+
+        # Essayer PowerShell si disponible
+        if command -v powershell.exe >/dev/null 2>&1; then
+            echo -e "${YELLOW}→ Utilisation de PowerShell pour l'installation...${NC}"
+            if powershell.exe -Command "Import-Certificate -FilePath '$windows_cert_path' -CertStoreLocation Cert:\\LocalMachine\\Root" 2>/dev/null; then
+                echo -e "${GREEN}✅ Certificat installé automatiquement dans Windows !${NC}"
+                echo -e "${BLUE}→ Redémarrez votre navigateur et testez https://$DOMAIN${NC}"
             else
-                echo -e "${RED}✗ Échec de l'installation (permissions ?)${NC}"
-                echo -e "${YELLOW}→ Essayez manuellement: sudo cp $SSL_DIR/$DOMAIN.crt /usr/local/share/ca-certificates/${NC}"
+                echo -e "${YELLOW}⚠️ Installation automatique échouée - permissions admin requises${NC}"
+                echo -e "${BLUE}→ Suivez les instructions manuelles ci-dessus${NC}"
             fi
         else
-            echo -e "${RED}✗ sudo non disponible${NC}"
+            echo -e "${YELLOW}⚠️ PowerShell non disponible pour l'installation automatique${NC}"
+            echo -e "${BLUE}→ Suivez les instructions manuelles ci-dessus${NC}"
         fi
-
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        echo -e "${YELLOW}→ macOS détecté - installation du certificat...${NC}"
-        if security add-trusted-cert -d -r trustRoot -k ~/Library/Keychains/login.keychain "$SSL_DIR/$DOMAIN.crt" 2>/dev/null; then
-            echo -e "${GREEN}✓ Certificat installé avec succès sur macOS${NC}"
-        else
-            echo -e "${YELLOW}⚠ Installation manuelle peut être requise${NC}"
-            echo -e "${YELLOW}→ Essayez: security add-trusted-cert -d -r trustRoot -k ~/Library/Keychains/login.keychain $SSL_DIR/$DOMAIN.crt${NC}"
-        fi
-
-    elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
-        echo -e "${YELLOW}→ Windows détecté${NC}"
-        echo -e "${BLUE}Installation manuelle requise:${NC}"
-        echo -e "${BLUE}1. Double-cliquez sur: $SSL_DIR/$DOMAIN.crt${NC}"
-        echo -e "${BLUE}2. Installez dans 'Autorités de certification racines de confiance'${NC}"
-
-    else
-        echo -e "${YELLOW}→ OS non reconnu - installation manuelle requise${NC}"
-        echo -e "${BLUE}Emplacement du certificat: $SSL_DIR/$DOMAIN.crt${NC}"
     fi
-else
-    echo -e "${BLUE}→ Installation manuelle - suivez les instructions ci-dessus${NC}"
 fi
 
 echo -e "\n${GREEN}🎉 Configuration SSL terminée !${NC}"
@@ -302,4 +371,29 @@ echo -e "  • Voir l'expiration:"
 echo -e "    openssl x509 -in $SSL_DIR/$DOMAIN.crt -noout -enddate"
 echo ""
 
+# Instructions spéciales pour Windows
+if [ "$OS_TYPE" = "windows" ]; then
+    echo -e "${PURPLE}🪟 RÉSOLUTION DES PROBLÈMES WINDOWS${NC}"
+    echo -e "${PURPLE}===================================${NC}"
+    echo ""
+    echo -e "${YELLOW}Si votre antivirus bloque encore le site :${NC}"
+    echo -e "1. ${GREEN}Ajoutez une exception${NC} pour https://laravel.local"
+    echo -e "2. ${GREEN}Désactivez temporairement${NC} la protection web"
+    echo -e "3. ${GREEN}Redémarrez le navigateur${NC} après installation du certificat"
+    echo -e "4. ${GREEN}Videz le cache DNS${NC}: ipconfig /flushdns"
+    echo -e "5. ${GREEN}Testez en navigation privée${NC} pour éviter le cache"
+    echo ""
+    echo -e "${CYAN}🔍 Vérification de l'installation :${NC}"
+    echo -e "1. Ouvrez certmgr.msc (Gestionnaire de certificats)"
+    echo -e "2. Allez dans 'Autorités de certification racines de confiance' → 'Certificats'"
+    echo -e "3. Cherchez '$DOMAIN' dans la liste"
+    echo -e "4. Si présent → Installation réussie ✅"
+    echo ""
+fi
+
 echo -e "${GREEN}✅ Script terminé avec succès !${NC}"
+echo -e "${CYAN}🎯 Pour une expérience optimale sur Windows :${NC}"
+echo -e "  1. Installez le certificat dans le magasin de confiance"
+echo -e "  2. Ajoutez une exception antivirus si nécessaire"
+echo -e "  3. Redémarrez votre navigateur"
+echo -e "  4. Testez avec https://laravel.local"

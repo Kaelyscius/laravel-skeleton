@@ -688,6 +688,51 @@ make stats           # Utilisation des ressources
 docker system df     # Espace Docker détaillé
 docker system prune  # Nettoyer Docker
 ```
+Créez un hook git à la racine du projet pour automatiser les vérifications :
+# Depuis la racine du projet (pas src/)
+mkdir -p .git/hooks
+
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/bash
+
+echo "🔍 Vérifications de qualité avant commit..."
+
+# Aller à la racine du projet
+cd "$(git rev-parse --show-toplevel)"
+
+# Vérifier que Docker est en cours
+if ! docker ps >/dev/null 2>&1; then
+echo "❌ Docker n'est pas en cours d'exécution"
+exit 1
+fi
+
+# Lancer les vérifications de qualité
+echo "→ Vérification du style de code..."
+if ! make ecs; then
+echo "❌ Erreurs de style détectées"
+echo "💡 Corrigez avec: make ecs-fix"
+exit 1
+fi
+
+echo "→ Analyse statique..."
+if ! make phpstan; then
+echo "❌ Erreurs PHPStan détectées"
+echo "💡 Consultez les erreurs ci-dessus"
+exit 1
+fi
+
+echo "→ Tests unitaires..."
+if ! make test-unit; then
+echo "❌ Tests unitaires échoués"
+exit 1
+fi
+
+echo "✅ Toutes les vérifications sont passées !"
+echo "🚀 Commit autorisé"
+EOF
+
+# Rendre le hook exécutable
+chmod +x .git/hooks/pre-commit
 
 ## 🚀 Optimisations de performance
 

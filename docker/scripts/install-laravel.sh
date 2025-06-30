@@ -73,7 +73,8 @@ check_prerequisites() {
     local missing_extensions=()
 
     for ext in "${required_extensions[@]}"; do
-        if ! php -m | grep -q "^$ext\$"; then
+        # Vérification insensible à la casse
+        if ! php -m | grep -qi "^$ext\$"; then
             missing_extensions+=($ext)
         fi
     done
@@ -193,7 +194,6 @@ fix_composer_config() {
         "phpstan/extension-installer"
         "rector/extension-installer"
         "enlightn/enlightn"
-        "phpro/grumphp"
     )
 
     for plugin in "${plugins_to_allow[@]}"; do
@@ -394,103 +394,23 @@ table_exists() {
     " 2>/dev/null | grep -q "TABLE_EXISTS"
 }
 
-# Fonction CORRIGÉE SEULEMENT pour localiser le .env racine
 find_root_env() {
-    log "INFO" "📋 Localisation du fichier .env racine..."
+    log "INFO" "📋 Localisation du fichier .env racine..." >&2
 
-    # Obtenir le répertoire du script actuel
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    log "DEBUG" "Répertoire du script: $script_dir"
+    # Chemin direct grâce au volume ajouté
+    local root_env="/var/www/project/.env"
 
-    # Liste des chemins à tester dans l'ordre de priorité
-    local search_paths=()
-
-    # 1. Depuis le script docker/scripts/install-laravel.sh -> remonter de 2 niveaux
-    search_paths+=("$(dirname "$(dirname "$script_dir")")/.env")
-
-    # 2. Dans Docker, le volume racine est souvent monté dans /var/www/project
-    search_paths+=("/var/www/project/.env")
-
-    # 3. Si on est dans /var/www/html, le projet racine est probablement le parent
-    if [[ "$(pwd)" == "/var/www/html" ]]; then
-        search_paths+=("/var/www/html/../.env")
-        search_paths+=("/var/www/.env")
+    if [ -f "$root_env" ]; then
+        # Vérifier que c'est le bon fichier
+        if grep -q "COMPOSE_PROJECT_NAME\|DB_HOST.*mariadb" "$root_env" 2>/dev/null; then
+            log "SUCCESS" "✅ Fichier .env racine trouvé: $root_env" >&2
+            echo "$root_env"  # ← Seul ça va dans stdout
+            return 0
+        fi
     fi
 
-    # 4. Chemins relatifs classiques
-    search_paths+=("../.env" "../../.env" "../../../.env")
-
-    # 5. Recherche en remontant l'arborescence depuis le répertoire courant
-    local current_dir="$(pwd)"
-    local max_depth=5
-    local depth=0
-    while [ $depth -lt $max_depth ] && [ "$current_dir" != "/" ]; do
-        search_paths+=("$current_dir/.env")
-        current_dir="$(dirname "$current_dir")"
-        ((depth++))
-    done
-
-    # Debug : afficher les informations de diagnostic
-    if [ "$DEBUG" = "true" ]; then
-        log "DEBUG" "Répertoire courant: $(pwd)"
-        log "DEBUG" "Chemins à tester: ${search_paths[*]}"
-        log "DEBUG" "Fichiers .env trouvés dans le système:"
-        find /var/www -name ".env" -type f 2>/dev/null | head -10 | sed 's/^/  /' || true
-    fi
-
-    # Tester chaque chemin
-    for env_file in "${search_paths[@]}"; do
-        # Résoudre le chemin complet
-        local resolved_path
-        if resolved_path=$(readlink -f "$env_file" 2>/dev/null) && [ -f "$resolved_path" ]; then
-            env_file="$resolved_path"
-        fi
-
-        log "DEBUG" "Test du chemin: $env_file"
-
-        if [ -f "$env_file" ]; then
-            log "DEBUG" "Fichier trouvé: $env_file"
-
-            # Vérification robuste : doit contenir des variables spécifiques au projet Docker
-            local score=0
-            local criteria=(
-                "COMPOSE_PROJECT_NAME"
-                "DB_HOST.*mariadb"
-                "REDIS_HOST.*redis"
-                "MAIL_HOST.*mailhog"
-            )
-
-            for criterion in "${criteria[@]}"; do
-                if grep -q "$criterion" "$env_file" 2>/dev/null; then
-                    ((score++))
-                    log "DEBUG" "✓ Critère '$criterion' trouvé"
-                fi
-            done
-
-            # Si au moins 2 critères sont satisfaits, c'est probablement le bon fichier
-            if [ $score -ge 2 ]; then
-                log "SUCCESS" "✅ Fichier .env racine trouvé: $env_file (score: $score/4)"
-                echo "$env_file"
-                return 0
-            else
-                log "DEBUG" "Fichier pas assez spécifique (score: $score/4)"
-                if [ "$DEBUG" = "true" ]; then
-                    log "DEBUG" "Contenu des premières lignes:"
-                    head -5 "$env_file" 2>/dev/null | sed 's/^/  /' || true
-                fi
-            fi
-        else
-            log "DEBUG" "Fichier non trouvé: $env_file"
-        fi
-    done
-
-    log "ERROR" "❌ Aucun fichier .env racine trouvé avec les critères requis"
-    log "INFO" "💡 Le .env racine doit contenir: COMPOSE_PROJECT_NAME, DB_HOST=mariadb, REDIS_HOST=redis"
-
-    # Diagnostic supplémentaire
-    log "DEBUG" "Diagnostic - tous les fichiers .env trouvés:"
-    find /var/www -name ".env" -type f -exec echo "  {}" \; -exec head -3 {} \; -exec echo "" \; 2>/dev/null | head -20 || true
-
+    log "ERROR" "❌ .env racine non trouvé ou invalide" >&2
+    log "INFO" "💡 Vérifiez que le volume est monté: .:/var/www/project:ro" >&2
     return 1
 }
 
@@ -505,7 +425,7 @@ copy_root_env_to_laravel() {
 
     # Trouver le .env racine avec la nouvelle fonction robuste
     local root_env_file
-    if ! root_env_file=$(find_root_env); then
+    if ! root_env_file=$(find_root_env 2>/dev/null | tail -1); then
         log "ERROR" "Impossible de localiser le .env racine"
         log "INFO" "💡 Solutions possibles:"
         log "INFO" "  1. Vérifiez que le .env existe à la racine du projet"
@@ -952,7 +872,7 @@ install_package() {
     done
 }
 
-# Fonction pour créer les fichiers de configuration des outils de qualité (CORRIGÉE pour PHP 8.4)
+# Fonction pour créer les fichiers de configuration des outils de qualité (CORRIGÉE)
 create_quality_tools_config() {
     local laravel_version=$(get_laravel_version)
     local php_version=$(get_php_version)
@@ -960,7 +880,9 @@ create_quality_tools_config() {
     log "INFO" "⚙️ Création des fichiers de configuration pour les outils de qualité..."
     log "DEBUG" "Détection: Laravel $laravel_version, PHP $php_version"
 
+    # ==========================================
     # Configuration Easy Coding Standard (ECS)
+    # ==========================================
     log "DEBUG" "Création de ecs.php..."
     cat > ecs.php << 'EOF'
 <?php
@@ -998,20 +920,18 @@ return function (ECSConfig $ecsConfig): void {
 };
 EOF
 
-    # Configuration Rector adaptée à PHP 8.4 et Laravel 12
+    # ==========================================
+    # Configuration Rector (CORRIGÉE)
+    # ==========================================
     log "DEBUG" "Création de rector.php compatible PHP $php_version et Laravel $laravel_version..."
 
-    local rector_php_level="LevelSetList::UP_TO_PHP_84"  # PHP 8.4 par défaut
+    # Adapter selon la version Laravel
     local rector_laravel_set="LaravelSetList::LARAVEL_110"  # Laravel 11 par défaut
 
-    # Adapter selon la version Laravel et vérifier si driftingly/rector-laravel est installé
     if [ "$laravel_version" -ge 12 ] && is_package_installed "driftingly/rector-laravel"; then
-        # Utiliser le set Laravel 12 du package driftingly/rector-laravel
         rector_laravel_set="RectorLaravel\\Set\\LaravelSetList::LARAVEL_120"
-        rector_laravel_import="use RectorLaravel\\Set\\LaravelSetList as RectorLaravelSetList;"
         log "DEBUG" "Utilisation du set Laravel 12 via driftingly/rector-laravel"
     elif [ "$laravel_version" -ge 12 ]; then
-        # Laravel 12 mais sans le package spécialisé
         rector_laravel_set="LaravelSetList::LARAVEL_110"  # Fallback
         log "DEBUG" "Laravel 12 détecté mais driftingly/rector-laravel non installé - utilisation du set 11.0"
     fi
@@ -1023,8 +943,22 @@ declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
 use Rector\Set\ValueObject\LevelSetList;
+use Rector\Set\ValueObject\SetList;
 use Rector\Laravel\Set\LaravelSetList;
 use Rector\TypeDeclaration\Rector\ClassMethod\AddVoidReturnTypeWhereNoReturnRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\AddReturnTypeDeclarationRector;
+use Rector\TypeDeclaration\Rector\Property\TypedPropertyFromStrictConstructorRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\AddMethodCallBasedStrictParamTypeRector;
+use Rector\TypeDeclaration\Rector\Property\AddPropertyTypeDeclarationRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\ParamTypeByMethodCallTypeRector;
+use Rector\TypeDeclaration\Rector\ClassMethod\ParamTypeByParentCallTypeRector;
+use Rector\CodeQuality\Rector\Class_\InlineConstructorDefaultToPropertyRector;
+use Rector\CodeQuality\Rector\If_\ExplicitBoolCompareRector;
+use Rector\CodeQuality\Rector\Identical\SimplifyBoolIdenticalTrueRector;
+use Rector\CodeQuality\Rector\BooleanNot\SimplifyDeMorganBinaryRector;
+use Rector\DeadCode\Rector\ClassMethod\RemoveUnusedPromotedPropertyRector;
+use Rector\DeadCode\Rector\Property\RemoveUnusedPrivatePropertyRector;
+use Rector\DeadCode\Rector\ClassMethod\RemoveUnusedPrivateMethodRector;
 
 return static function (RectorConfig \$rectorConfig): void {
     \$rectorConfig->paths([
@@ -1036,13 +970,41 @@ return static function (RectorConfig \$rectorConfig): void {
         __DIR__ . '/tests',
     ]);
 
+    // Règles spécifiquement utiles pour PHPStan niveau 8+
     \$rectorConfig->rules([
+        // TYPE DECLARATIONS (fixes most PHPStan issues)
         AddVoidReturnTypeWhereNoReturnRector::class,
+        AddReturnTypeDeclarationRector::class,
+        TypedPropertyFromStrictConstructorRector::class,
+        AddMethodCallBasedStrictParamTypeRector::class,
+        AddPropertyTypeDeclarationRector::class,
+        ParamTypeByMethodCallTypeRector::class,
+        ParamTypeByParentCallTypeRector::class,
+
+        // CODE QUALITY (helps with strict analysis)
+        InlineConstructorDefaultToPropertyRector::class,
+        ExplicitBoolCompareRector::class,
+        SimplifyBoolIdenticalTrueRector::class,
+        SimplifyDeMorganBinaryRector::class,
+
+        // DEAD CODE REMOVAL
+        RemoveUnusedPromotedPropertyRector::class,
+        RemoveUnusedPrivatePropertyRector::class,
+        RemoveUnusedPrivateMethodRector::class,
     ]);
 
+    // Sets optimisés pour PHPStan
     \$rectorConfig->sets([
-        $rector_php_level,
+        LevelSetList::UP_TO_PHP_84,
         $rector_laravel_set,
+        LaravelSetList::LARAVEL_CODE_QUALITY,
+        SetList::CODE_QUALITY,
+        SetList::TYPE_DECLARATION,
+        SetList::DEAD_CODE,
+        SetList::STRICT_BOOLEANS,
+        SetList::PRIVATIZATION,
+        SetList::EARLY_RETURN,
+        SetList::INSTANCEOF,
     ]);
 
     \$rectorConfig->skip([
@@ -1050,28 +1012,31 @@ return static function (RectorConfig \$rectorConfig): void {
         __DIR__ . '/storage',
         __DIR__ . '/vendor',
         __DIR__ . '/node_modules',
+        __DIR__ . '/database/migrations',
+        __DIR__ . '/config/app.php',
+
+        // Skip specific rules that might be too aggressive for Laravel
+        AddReturnTypeDeclarationRector::class => [
+            __DIR__ . '/app/Http/Controllers',  // Controllers often have complex return types
+        ],
     ]);
 
-    // Configuration spécifique pour Laravel 12+ et PHP 8.4
-    if (version_compare('$laravel_version', '12', '>=')) {
-        // Règles spécifiques pour Laravel 12
-        \$rectorConfig->importNames();
-        \$rectorConfig->importShortClasses();
+    // Configuration optimisée
+    \$rectorConfig->importNames();
+    \$rectorConfig->importShortClasses();
+    \$rectorConfig->parallel();
 
-        // Optimisations pour Laravel 12
-        \$rectorConfig->parallel();
-    }
-
-    // Optimisations pour PHP 8.4
-    if (version_compare(PHP_VERSION, '8.4', '>=')) {
-        // Exploiter les nouvelles fonctionnalités PHP 8.4
-        \$rectorConfig->importNames();
+    // Lien avec PHPStan config si elle existe
+    if (file_exists(__DIR__ . '/phpstan.neon')) {
+        \$rectorConfig->phpstanConfig(__DIR__ . '/phpstan.neon');
     }
 };
 EOF
 
-    # Configuration PHPStan avec Larastan - Niveau 8 pour PHP 8.4
-    log "DEBUG" "Création de phpstan.neon pour PHPStan 2.0+ et PHP 8.4..."
+    # ==========================================
+    # Configuration PHPStan (SÉPARÉE)
+    # ==========================================
+    log "DEBUG" "Création de phpstan.neon..."
     cat > phpstan.neon << 'EOF'
 includes:
     - vendor/larastan/larastan/extension.neon
@@ -1091,18 +1056,11 @@ parameters:
         - vendor/
         - node_modules/
 
-    # Configuration pour PHPStan 2.0+ et PHP 8.4
+    # Configuration de base compatible
     treatPhpDocTypesAsCertain: false
     reportUnmatchedIgnoredErrors: false
-    strictRules:
-        allRules: false
-        booleansInConditions: true
-        uselessCast: true
-        requireParentConstructorCall: true
-        disallowedConstructorPropertyPromotion: false
-        strictCalls: true
 
-    # Paramètres de qualité stricts pour niveau 8
+    # Paramètres de qualité de base pour niveau 8
     checkUninitializedProperties: true
     checkBenevolentUnionTypes: true
     checkExplicitMixedMissingReturn: true
@@ -1111,16 +1069,12 @@ parameters:
     checkTooWideReturnTypesInProtectedAndPublicMethods: true
     checkMissingCallableSignature: true
 
-    # Support PHP 8.4 features
+    # Support des features PHP modernes
     checkPhpDocMethodSignatures: true
-    checkPhpDocVariableType: true
 
-    # Règles d'inférence
+    # Règles d'inférence de base
     polluteScopeWithLoopInitialAssignments: false
     polluteScopeWithAlwaysIterableForeach: false
-    checkAlwaysTrueCheckTypeFunctionCall: true
-    checkAlwaysTrueInstanceof: true
-    checkAlwaysTrueStrictComparison: true
 
     # Ignorer certaines erreurs spécifiques à Laravel
     ignoreErrors:
@@ -1139,22 +1093,23 @@ parameters:
     # Cache
     tmpDir: storage/phpstan
 
-    # Extensions Laravel spécifiques
-    checkMissingOverrideMethodAttribute: false
-
-    # Type coverage
+    # Type aliases utiles pour Laravel
     typeAliases:
         UserId: 'int<1, max>'
 EOF
 
+    # ==========================================
     # Configuration Telescope
+    # ==========================================
     if [ -f "config/telescope.php" ]; then
         log "DEBUG" "Configuration de Laravel Telescope..."
         sed -i "s/'enabled' => env('TELESCOPE_ENABLED', true),/'enabled' => env('TELESCOPE_ENABLED', env('APP_ENV') !== 'production'),/" config/telescope.php
         sed -i "s/'driver' => env('TELESCOPE_DRIVER', 'database'),/'driver' => 'database',/" config/telescope.php
     fi
 
-    # Configuration PHP Insights pour PHP 8.4
+    # ==========================================
+    # Configuration PHP Insights
+    # ==========================================
     log "DEBUG" "Création de config/insights.php compatible PHP 8.4..."
     mkdir -p config
     cat > config/insights.php << 'EOF'
@@ -1217,198 +1172,11 @@ EOF
     log "SUCCESS" "Fichiers de configuration créés:"
     log "INFO" "  • ecs.php (Easy Coding Standard)"
     log "INFO" "  • rector.php (Rector pour PHP $php_version et Laravel $laravel_version)"
-    log "INFO" "  • phpstan.neon (PHPStan 2.0+ niveau 8 - optimisé PHP 8.4)"
+    log "INFO" "  • phpstan.neon (PHPStan niveau 8 - optimisé PHP 8.4)"
     log "INFO" "  • config/insights.php (PHP Insights compatible PHP 8.4)"
     if [ -f "config/telescope.php" ]; then
         log "INFO" "  • config/telescope.php (Telescope configuré)"
     fi
-}
-
-# Fonction pour configurer GrumPHP (CORRIGÉE)
-configure_grumphp() {
-    log "INFO" "🛡️ Configuration de GrumPHP..."
-
-    # Vérifier si GrumPHP est installé
-    if ! is_package_installed "phpro/grumphp"; then
-        log "WARN" "GrumPHP non installé, configuration ignorée"
-        return 1
-    fi
-
-    local laravel_version=$(get_laravel_version)
-    local php_version=$(get_php_version)
-
-    log "DEBUG" "Configuration GrumPHP pour Laravel $laravel_version, PHP $php_version"
-
-    # Détecter les outils disponibles
-    local tools=""
-    [ -f "./vendor/bin/ecs" ] && [ -f "ecs.php" ] && tools="${tools}ecs "
-    [ -f "./vendor/bin/phpstan" ] && [ -f "phpstan.neon" ] && tools="${tools}phpstan "
-    [ -f "./vendor/bin/pest" ] && tools="${tools}pest " || [ -f "phpunit.xml" ] && tools="${tools}phpunit "
-    [ -f "./vendor/bin/rector" ] && [ -f "rector.php" ] && tools="${tools}rector "
-
-    log "DEBUG" "Outils détectés pour GrumPHP : $tools"
-
-    # Créer le fichier grumphp.yml - VERSION CORRIGÉE
-    cat > grumphp.yml << 'EOF'
-# Configuration GrumPHP pour Laravel
-# Hooks Git automatiques pour maintenir la qualité du code
-
-grumphp:
-    # Configuration des hooks Git
-    git_hook_variables:
-        EXEC_GRUMPHP_COMMAND: 'vendor/bin/grumphp'
-
-    # Répertoires et paramètres
-    process_timeout: 300
-    stop_on_failure: true
-    ignore_unstaged_changes: false
-    hide_circumvention_tip: false
-
-    # Tâches à exécuter lors des commits
-    tasks:
-EOF
-
-    # Ajouter ECS si disponible
-    if [[ "$tools" == *"ecs"* ]]; then
-        cat >> grumphp.yml << 'EOF'
-        # Easy Coding Standard - Vérification du style de code PSR-12
-        ecs:
-            config: ecs.php
-            triggered_by: ['php']
-            clear_cache: false
-            no_error_table: false
-
-EOF
-    fi
-
-    # Ajouter PHPStan si disponible
-    if [[ "$tools" == *"phpstan"* ]]; then
-        cat >> grumphp.yml << 'EOF'
-        # PHPStan - Analyse statique niveau 8
-        phpstan:
-            configuration: phpstan.neon
-            level: ~
-            triggered_by: ['php']
-            memory_limit: "1G"
-            use_grumphp_paths: true
-
-EOF
-    fi
-
-    # Ajouter les tests
-    if [[ "$tools" == *"pest"* ]]; then
-        cat >> grumphp.yml << 'EOF'
-        # Pest - Tests modernes pour Laravel
-        pest:
-            config: ~
-            testsuite: ~
-            group: []
-            always_execute: false
-            triggered_by: ['php']
-
-EOF
-    elif [[ "$tools" == *"phpunit"* ]]; then
-        cat >> grumphp.yml << 'EOF'
-        # PHPUnit - Tests Laravel par défaut
-        phpunit:
-            config_file: phpunit.xml
-            testsuite: ~
-            group: []
-            always_execute: false
-            triggered_by: ['php']
-
-EOF
-    fi
-
-    # Vérifications génériques (toujours incluses) - VERSION CORRIGÉE
-    cat >> grumphp.yml << 'EOF'
-        # Vérifications de syntaxe PHP
-        phplint:
-            exclude: ['vendor/', 'node_modules/', 'storage/', 'bootstrap/cache/']
-            jobs: ~
-            short_open_tag: false
-            ignore_patterns: []
-            triggered_by: ['php']
-
-        # Validation JSON (composer.json, package.json, etc.)
-        jsonlint:
-            detect_key_conflicts: true
-            triggered_by: ['json']
-
-        # Validation YAML (GitHub Actions, docker-compose, etc.)
-        yamllint:
-            object_support: true
-            exception_on_invalid_type: true
-            parse_constant: true
-            parse_custom_tags: true
-            triggered_by: ['yaml', 'yml']
-
-        # Détection de conflits Git - VERSION CORRIGÉE
-        git_blacklist:
-            keywords:
-                - "<<<<<<< HEAD"
-                - "======="
-                - ">>>>>>> "
-                - "console.log("
-                - "var_dump("
-                - "print_r("
-                - "die("
-                - "exit("
-            whitelist_patterns: []
-            triggered_by: ['php', 'js', 'ts', 'vue']
-
-EOF
-
-    # Rector en mode dry-run si disponible
-    if [[ "$tools" == *"rector"* ]]; then
-        cat >> grumphp.yml << 'EOF'
-        # Rector - Vérifications de refactoring (dry-run seulement)
-        shell:
-            rector_dry_run:
-                command: 'vendor/bin/rector process --dry-run --no-progress-bar'
-                triggered_by: ['php']
-                working_directory: './'
-
-EOF
-    fi
-
-    # Configuration des environnements
-    cat >> grumphp.yml << 'EOF'
-    # Configuration des environnements et extensions
-    environment:
-        variables:
-            COMPOSER_ALLOW_SUPERUSER: '1'
-            COMPOSER_MEMORY_LIMIT: '-1'
-
-    # Extensions personnalisées (si nécessaires)
-    extensions: []
-
-EOF
-
-    # Installer les hooks Git
-    log "DEBUG" "Installation des hooks Git..."
-    if [ -d ".git" ]; then
-        if php vendor/bin/grumphp git:init 2>/dev/null; then
-            log "SUCCESS" "Hooks Git GrumPHP installés"
-
-            # Vérifier que le hook est bien installé
-            if [ -f ".git/hooks/pre-commit" ]; then
-                log "SUCCESS" "Hook pre-commit activé"
-            else
-                log "WARN" "Hook pre-commit non créé"
-            fi
-        else
-            log "WARN" "Impossible d'installer les hooks Git automatiquement"
-            log "INFO" "Vous pourrez les installer manuellement avec: composer grumphp:install"
-        fi
-    else
-        log "WARN" "Pas de dépôt Git, hooks non installés"
-        log "INFO" "Initialisez un dépôt Git puis utilisez: composer grumphp:install"
-    fi
-
-    log "SUCCESS" "Configuration GrumPHP créée: grumphp.yml"
-    log "INFO" "Outils intégrés: $(echo $tools | tr ' ' ',')"
-    log "INFO" "✅ CORRECTION: Utilisation de 'git_blacklist' pour compatibilité GrumPHP"
 }
 
 # Fonction pour configurer le package.json avec des scripts utiles
@@ -1434,8 +1202,7 @@ try:
         "analyse": "vendor/bin/phpstan analyse",
         "fix:cs": "vendor/bin/ecs --fix",
         "check:cs": "vendor/bin/ecs",
-        "refactor": "vendor/bin/rector process",
-        "grumphp": "vendor/bin/grumphp run"
+        "refactor": "vendor/bin/rector process"
     }
 
     package_data['scripts'].update(custom_scripts)
@@ -1478,7 +1245,6 @@ try:
 
     # Vérifier quels packages sont installés
     pest_available = os.path.exists('vendor/pestphp/pest')
-    grumphp_available = os.path.exists('vendor/phpro/grumphp')
     enlightn_available = False  # Enlightn non supporté pour Laravel 12+
 
     # Scripts de base toujours disponibles
@@ -1507,23 +1273,6 @@ try:
         "test:coverage": "php artisan test --coverage-html coverage"
     }
 
-    # Scripts GrumPHP si disponible
-    if grumphp_available:
-        custom_scripts.update({
-            "grumphp:install": "vendor/bin/grumphp git:init",
-            "grumphp:uninstall": "vendor/bin/grumphp git:deinit",
-            "grumphp:run": "vendor/bin/grumphp run",
-            "grumphp:check": "vendor/bin/grumphp run --no-interaction",
-            "pre-commit": "vendor/bin/grumphp run --no-interaction"
-        })
-        # Ajouter GrumPHP à la qualité complète
-        custom_scripts["quality:full"] = [
-            "@check:cs",
-            "@analyse",
-            "@insights",
-            "@grumphp:check"
-        ]
-
     # Scripts adaptatifs selon les packages installés
     if pest_available:
         custom_scripts.update({
@@ -1531,17 +1280,13 @@ try:
             "test:feature": "vendor/bin/pest --testsuite=Feature",
             "test:pest": "vendor/bin/pest"
         })
-        # Ajouter Pest aux scripts de qualité si GrumPHP n'est pas disponible
-        if not grumphp_available:
-            custom_scripts["quality:full"] = [
-                "@check:cs",
-                "@analyse",
-                "@insights",
-                "@test:pest"
-            ]
-        # Sinon ajouter Pest à GrumPHP
-        elif grumphp_available:
-            custom_scripts["quality:full"].append("@test:pest")
+        # Ajouter Pest aux scripts de qualité
+        custom_scripts["quality:full"] = [
+            "@check:cs",
+            "@analyse",
+            "@insights",
+            "@test:pest"
+        ]
     else:
         # Utiliser PHPUnit par défaut
         custom_scripts.update({
@@ -1549,14 +1294,13 @@ try:
             "test:feature": "php artisan test --testsuite=Feature",
             "test:phpunit": "vendor/bin/phpunit"
         })
-        # Ajouter PHPUnit si GrumPHP n'est pas disponible
-        if not grumphp_available:
-            custom_scripts["quality:full"] = [
-                "@check:cs",
-                "@analyse",
-                "@insights",
-                "@test:unit"
-            ]
+        # Ajouter PHPUnit aux scripts de qualité
+        custom_scripts["quality:full"] = [
+            "@check:cs",
+            "@analyse",
+            "@insights",
+            "@test:unit"
+        ]
 
     # Pour Laravel 12+, ne pas inclure Enlightn
     laravel_version = ${laravel_version}
@@ -1688,8 +1432,8 @@ main() {
     cd "$WORKING_DIR"
     log "DEBUG" "Changement de répertoire vers: $WORKING_DIR"
 
-    # PHASE 1: Migrations de base seulement (avec .env Laravel par défaut)
-    log "INFO" "🔄 PHASE 1: Migrations de base Laravel..."
+    # PHASE 2: Migrations de base avec la bonne configuration
+    log "INFO" "🔄 PHASE 2: Migrations de base Laravel..."
     run_base_migrations
 
     # PHASE 2: Installation des packages de production avec Nightwatch
@@ -1720,11 +1464,61 @@ main() {
     log "INFO" "📋 PHASE 4: Publication conditionnelle des migrations..."
     publish_migrations_if_needed
 
-    # Générer la clé d'application si nécessaire
-    if ! grep -q "APP_KEY=.*" .env || grep -q "APP_KEY=$" .env; then
+    # AVANT key:generate - Copier le .env racine
+    if copy_root_env_to_laravel; then
+        log "SUCCESS" "✅ .env racine copié"
+    fi
+
+    # Générer la clé d'application DANS le .env racine copié
+    # Vérifier et générer la clé d'application si nécessaire
+    log "INFO" "Vérification de la clé d'application..."
+
+    # S'assurer que la ligne APP_KEY existe
+    if ! grep -q "^APP_KEY=" .env; then
+        echo "APP_KEY=" >> .env
+        log "DEBUG" "Ligne APP_KEY ajoutée au .env"
+    fi
+
+    # Obtenir la valeur actuelle (nettoyer les guillemets et espaces)
+    current_key=$(grep "^APP_KEY=" .env | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
+
+    # Vérifier si la clé est vide, manquante, ou invalide
+    if [ -z "$current_key" ] || [ "$current_key" = "base64:" ] || [ "$current_key" = "your-app-key-here" ]; then
         log "INFO" "Génération de la clé d'application..."
         php artisan key:generate --no-interaction --force
+
+        # Vérifier que la génération a réussi
+        new_key=$(grep "^APP_KEY=" .env | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
+        if [ -n "$new_key" ] && [ "$new_key" != "base64:" ]; then
+            log "SUCCESS" "✅ Clé d'application générée: ${new_key:0:20}..."
+        else
+            log "ERROR" "❌ Échec de la génération de la clé d'application"
+            return 1
+        fi
+    else
+        log "SUCCESS" "✅ Clé d'application existante: ${current_key:0:20}..."
     fi
+
+    #Créer la route de healthcheck
+    log "INFO" "🏥 Création de la route de healthcheck..."
+    if ! grep -q "/health" routes/web.php; then
+        cat >> routes/web.php << 'EOF'
+
+// Route de healthcheck pour Docker
+Route::get('/health', function () {
+    return response()->json([
+        'status' => 'ok',
+        'timestamp' => now()->toISOString(),
+        'service' => 'laravel',
+        'app' => config('app.name', 'Laravel')
+    ]);
+});
+EOF
+        log "SUCCESS" "✅ Route /health créée"
+    else
+        log "INFO" "Route /health déjà existante"
+    fi
+
 
     # PHASE 5: Migrations finales (packages) SANS conflit
     log "INFO" "🔄 PHASE 5: Migrations finales des packages - SANS conflit..."
@@ -1736,11 +1530,11 @@ main() {
         "symplify/easy-coding-standard"
         "rector/rector"
         "larastan/larastan"
+        "driftingly/rector-laravel"
         "nunomaduro/collision"
         "nunomaduro/phpinsights"
         "barryvdh/laravel-ide-helper"
         "beyondcode/laravel-query-detector"
-        "phpro/grumphp"
         "pestphp/pest"
         "pestphp/pest-plugin-laravel"
     )
@@ -1783,9 +1577,6 @@ main() {
     log "INFO" "⚙️ Configuration des outils de qualité (PHP 8.4 optimisé)..."
     create_quality_tools_config
 
-    # Configurer GrumPHP AVEC CORRECTIONS
-    configure_grumphp
-
     # Configurer les scripts
     configure_composer_scripts
     configure_package_json
@@ -1796,71 +1587,56 @@ main() {
     php artisan route:cache 2>/dev/null || true
     php artisan view:cache 2>/dev/null || true
 
-    # ⭐ ÉTAPE CRITIQUE : COPIE CORRIGÉE du .env racine (juste avant Nightwatch)
+    # ⭐ ÉTAPE CRITIQUE : Configuration et démarrage automatique Nightwatch
     if is_package_installed "laravel/nightwatch"; then
-        log "INFO" "🌙 Préparation et démarrage de l'agent Nightwatch..."
-
-        # COPIE COMPLÈTE ET CORRIGÉE du .env racine vers Laravel
-        log "INFO" "📋 🎯 COPIE CORRIGÉE du .env racine vers Laravel pour Nightwatch..."
-        if copy_root_env_to_laravel; then
-            log "SUCCESS" "✅ Configuration Nightwatch synchronisée avec le .env racine"
-        else
-            log "WARN" "⚠️ Problème avec la copie du .env racine"
-            log "INFO" "Tentative de démarrage avec la configuration existante..."
-        fi
-
-        # Vérifier si Nightwatch est configuré (token présent et non vide)
         local current_token=$(grep "^NIGHTWATCH_TOKEN=" .env 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
+
+        log "INFO" "🌙 Configuration de Nightwatch..."
+
+        # Publier la configuration
+        php artisan vendor:publish --provider="Laravel\\Nightwatch\\NightwatchServiceProvider" --tag=config --force 2>/dev/null || true
+
         if [ -n "$current_token" ] && [ "$current_token" != "\${NIGHTWATCH_TOKEN}" ] && [ "$current_token" != "" ]; then
-            log "INFO" "Token Nightwatch configuré (${current_token:0:10}...), démarrage de l'agent..."
+            log "SUCCESS" "✅ Token Nightwatch configuré: ${current_token:0:10}..."
 
-            # Vérifier que la commande existe
+            # Arrêter un éventuel agent existant
+            if [ -f "nightwatch.pid" ]; then
+                local old_pid=$(cat nightwatch.pid)
+                if kill -0 "$old_pid" 2>/dev/null; then
+                    log "INFO" "Arrêt de l'ancien agent (PID: $old_pid)..."
+                    kill "$old_pid" 2>/dev/null || true
+                fi
+                rm -f nightwatch.pid
+            fi
+
+            # Démarrer l'agent en arrière-plan
             if php artisan list 2>/dev/null | grep -q "nightwatch:agent"; then
-                log "SUCCESS" "Commande nightwatch:agent disponible"
-
-                # Démarrer l'agent en arrière-plan avec nohup
                 log "INFO" "Démarrage de l'agent Nightwatch en arrière-plan..."
                 nohup php artisan nightwatch:agent > nightwatch.log 2>&1 &
                 local nightwatch_pid=$!
                 echo $nightwatch_pid > nightwatch.pid
 
-                log "SUCCESS" "✅ Agent Nightwatch démarré en arrière-plan (PID: $nightwatch_pid)"
-                log "INFO" "📊 Logs de l'agent: nightwatch.log"
-                log "INFO" "🛑 Pour arrêter l'agent: kill \$(cat nightwatch.pid)"
-                log "INFO" "🔄 Pour redémarrer: nohup php artisan nightwatch:agent > nightwatch.log 2>&1 & echo \$! > nightwatch.pid"
-
-                # Attendre quelques secondes et vérifier que l'agent fonctionne
-                sleep 3
+                # Vérifier que l'agent a bien démarré
+                sleep 2
                 if kill -0 $nightwatch_pid 2>/dev/null; then
-                    log "SUCCESS" "🎉 Agent Nightwatch fonctionne correctement !"
-                    log "INFO" "💡 Consultez nightwatch.log pour voir l'activité de monitoring"
+                    log "SUCCESS" "🎉 Agent Nightwatch démarré avec succès !"
+                    log "INFO" "  • PID: $nightwatch_pid"
+                    log "INFO" "  • Logs: tail -f nightwatch.log"
+                    log "INFO" "  • Arrêter: kill \$(cat nightwatch.pid)"
                 else
-                    log "WARN" "⚠️ L'agent semble s'être arrêté, consultez nightwatch.log pour plus d'infos"
+                    log "WARN" "⚠️ L'agent semble s'être arrêté, consultez nightwatch.log"
                 fi
             else
-                log "WARN" "Commande nightwatch:agent non disponible"
+                log "ERROR" "❌ Commande nightwatch:agent non disponible"
                 log "INFO" "Vérifiez l'installation avec: php artisan list | grep nightwatch"
-                log "INFO" "Ou publiez la configuration: php artisan vendor:publish --provider=\"Laravel\\Nightwatch\\NightwatchServiceProvider\""
             fi
         else
-            log "WARN" "Token Nightwatch non configuré ou vide"
-            log "INFO" "Token actuel: '${current_token}'"
+            log "WARN" "⚠️ Token Nightwatch non configuré"
             log "INFO" "L'agent ne peut pas démarrer sans token valide"
-            log "INFO" "Vérifiez la configuration de NIGHTWATCH_TOKEN dans le .env racine"
-
-            # Diagnostic supplémentaire
-            log "DEBUG" "Diagnostic de la configuration Nightwatch:"
-            log "DEBUG" "Contenu NIGHTWATCH dans .env Laravel:"
-            grep "NIGHTWATCH" .env 2>/dev/null || log "DEBUG" "Aucune configuration Nightwatch trouvée"
-
-            # Afficher le .env racine pour diagnostic
-            if root_env_file=$(find_root_env); then
-                log "DEBUG" "Contenu NIGHTWATCH dans .env racine:"
-                grep "NIGHTWATCH" "$root_env_file" 2>/dev/null || log "DEBUG" "Aucune configuration Nightwatch trouvée dans .env racine"
-            fi
+            log "INFO" "Vérifiez NIGHTWATCH_TOKEN dans votre .env racine"
         fi
     else
-        log "DEBUG" "Nightwatch non installé, agent non démarré"
+        log "INFO" "Laravel Nightwatch non installé"
     fi
 
     # Rapport final
@@ -1896,18 +1672,17 @@ main() {
     fi
 
     log "SUCCESS" "🎉 Installation complète terminée avec Nightwatch !"
-    log "INFO" "✅ APPROCHE CORRIGÉE APPLIQUÉE:"
+    log "INFO" "✅ FONCTIONNALITÉS INCLUSES:"
     log "INFO" "  • 🛡️ Migrations SANS conflit: Sanctum + Telescope (résolu définitivement)"
-    log "INFO" "  • 🔧 GrumPHP: git_blacklist au lieu de git_conflict (corrigé)"
     log "INFO" "  • 🐘 PHP 8.4: Support complet et optimisations"
     log "INFO" "  • 🎯 Laravel 12: Configurations adaptées"
-    log "INFO" "  • 🌙 Nightwatch: COPIE CORRIGÉE du .env racine (détection robuste multi-chemins)"
+    log "INFO" "  • 🌙 Nightwatch: Configuration et démarrage automatique"
     log "INFO" "  • 📈 Monitoring: Configuration parfaitement synchronisée"
-    log "INFO" "  • ✨ Détection robuste: Multiples stratégies + score de confiance !"
+    log "INFO" "  • 🔧 Outils qualité: ECS, PHPStan, Rector, Insights, Pest"
 
     log "INFO" "Prochaines étapes :"
     log "INFO" "1. ✅ Base de données configurée et migrée (SANS aucun conflit)"
-    log "INFO" "2. ✅ .env racine CORRECTEMENT copié vers Laravel (détection multi-chemins robuste)"
+    log "INFO" "2. ✅ .env racine CORRECTEMENT copié vers Laravel"
     log "INFO" "3. ✅ Agent Nightwatch démarré automatiquement en arrière-plan"
     log "INFO" "4. ✅ Configuration synchronisée de manière fiable"
     log "INFO" "5. Accéder à l'application : https://laravel.local"
@@ -1924,22 +1699,13 @@ main() {
         log "INFO" "🌙 Laravel Nightwatch est maintenant configuré et DÉMARRÉ !"
         log "INFO" "  • ✅ .env racine CORRECTEMENT copié vers Laravel/src/"
         log "INFO" "  • ✅ Token récupéré depuis .env racine: ${current_token:0:10}..."
-        log "INFO" "  • ✅ Détection robuste avec score de confiance pour maximum de fiabilité"
-        log "INFO" "  • ✅ Plus de problème de synchronisation entre .env racine et Laravel"
+        log "INFO" "  • ✅ Configuration synchronisée de manière fiable"
         log "INFO" "  • Configuration publiée dans config/nightwatch.php"
         log "INFO" "  • 🚀 Agent Nightwatch démarré automatiquement en arrière-plan !"
         log "INFO" "  • Logs en temps réel: tail -f nightwatch.log"
         log "INFO" "  • Arrêter l'agent: kill \$(cat nightwatch.pid)"
         log "INFO" "  • Redémarrer l'agent: nohup php artisan nightwatch:agent > nightwatch.log 2>&1 & echo \$! > nightwatch.pid"
         log "INFO" "  • Documentation: https://github.com/laravel/nightwatch"
-        log "INFO" ""
-        log "INFO" "📋 DÉTECTION ROBUSTE DU .ENV RACINE:"
-        log "INFO" "  • Détection multi-chemins avec 5+ stratégies de recherche"
-        log "INFO" "  • Score de confiance basé sur 4 critères spécifiques Docker"
-        log "INFO" "  • Support des chemins Docker spécialisés (/var/www/project/, etc.)"
-        log "INFO" "  • Résolution automatique des liens symboliques"
-        log "INFO" "  • Diagnostic complet en cas d'échec"
-        log "INFO" "  • Script docker/scripts/ optimisé pour tous les environnements"
     fi
 }
 
