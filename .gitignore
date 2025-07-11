@@ -34,7 +34,41 @@ docker/php/logs/*
 docker/supervisor/logs/*
 !docker/supervisor/logs/.gitkeep
 
+# ===========================================
+# 🔐 FICHIERS SENSIBLES - SÉCURITÉ CRITIQUE
+# ===========================================
+# Tous les fichiers .env et leurs sauvegardes
+.env.*
+.env.backup*
+.env.local*
+.env.production*
+.env.staging*
+.env.development*
+
+# Fichiers de configuration sensibles
+config/*.key
+config/*.pem
+config/*.p12
+*.key
+*.pem
+*.p12
+
+# Tokens et clés API
+*token*
+*secret*
+*password*
+.secrets/
+secrets/
+
+# Certificats SSL (sauf .gitkeep)
+docker/apache/conf/ssl/*.crt
+docker/apache/conf/ssl/*.key
+docker/apache/conf/ssl/*.pem
+!docker/apache/conf/ssl/.gitkeep
+
+# ===========================================
 # IDE
+# ===========================================
 .idea/
 .vscode/
 *.swp
@@ -43,19 +77,25 @@ docker/supervisor/logs/*
 .DS_Store
 Thumbs.db
 
+# ===========================================
 # Tests
+# ===========================================
 /coverage
 .phpunit.result.cache
 .phpunit.cache
 /phpunit.xml
 /phpstan.cache
 
+# ===========================================
 # Build
+# ===========================================
 /build
 /dist
 *.log
 
+# ===========================================
 # OS
+# ===========================================
 .DS_Store
 .DS_Store?
 ._*
@@ -65,14 +105,35 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# Backup files
+# ===========================================
+# Backup files (CRITIQUE)
+# ===========================================
 *.bak
-*.backup
+*.backup*
 *.old
 *.orig
 *.tmp
 *.temp
+*backup*
+.env.backup.*
 
+# ===========================================
 # Monitoring
+# ===========================================
 /monitoring/data/*
 !/monitoring/data/.gitkeep
+
+# ===========================================
+# Logs sensibles
+# ===========================================
+*.log
+logs/
+nightwatch.log
+nightwatch.pid
+
+# ===========================================
+# Rapports de sécurité
+# ===========================================
+reports/security/*.json
+reports/security/*.html
+!reports/security/.gitkeep
