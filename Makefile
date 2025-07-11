@@ -632,3 +632,218 @@ nightwatch-logs-tail: ## Voir les dernières lignes des logs
 		else \
 			echo 'Aucun log disponible'; \
 		fi"
+
+# =============================================================================
+# SÉCURITÉ ET SNYK
+# =============================================================================
+
+.PHONY: security-install
+security-install: ## Installer Snyk CLI
+	@echo "$(YELLOW)📦 Installation de Snyk CLI...$(NC)"
+	@if command -v npm >/dev/null 2>&1; then \
+		npm install -g snyk; \
+		echo "$(GREEN)✓ Snyk CLI installé$(NC)"; \
+	else \
+		echo "$(RED)❌ npm requis pour installer Snyk$(NC)"; \
+		echo "$(BLUE)→ Installez Node.js puis relancez: make security-install$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: security-auth
+security-auth: ## Authentifier Snyk avec le token du .env
+	@echo "$(YELLOW)🔐 Authentification Snyk...$(NC)"
+	@if [ -f ".env" ] && grep -q "^SNYK_TOKEN=" .env; then \
+		SNYK_TOKEN=$$(grep "^SNYK_TOKEN=" .env | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$$//'); \
+		if [ -n "$$SNYK_TOKEN" ] && [ "$$SNYK_TOKEN" != "" ]; then \
+			echo "$$SNYK_TOKEN" | snyk auth --stdin; \
+			echo "$(GREEN)✓ Authentification Snyk réussie$(NC)"; \
+		else \
+			echo "$(YELLOW)⚠ SNYK_TOKEN vide dans .env$(NC)"; \
+			echo "$(BLUE)→ Configurez votre token sur https://app.snyk.io/account$(NC)"; \
+		fi; \
+	else \
+		echo "$(YELLOW)⚠ SNYK_TOKEN non trouvé dans .env$(NC)"; \
+		echo "$(BLUE)→ Ajoutez SNYK_TOKEN=votre_token dans votre .env$(NC)"; \
+	fi
+
+.PHONY: security-check
+security-check: ## Vérifier la configuration Snyk
+	@echo "$(CYAN)🔧 Vérification de la configuration Snyk$(NC)"
+	@if command -v snyk >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ Snyk CLI installé (version: $$(snyk --version))$(NC)"; \
+	else \
+		echo "$(RED)❌ Snyk CLI non installé$(NC)"; \
+		echo "$(BLUE)→ Installez avec: make security-install$(NC)"; \
+		exit 1; \
+	fi
+	@if [ -f "./scripts/security/snyk-scan.sh" ]; then \
+		chmod +x "./scripts/security/snyk-scan.sh"; \
+		./scripts/security/snyk-scan.sh --config; \
+	else \
+		echo "$(RED)❌ Script Snyk non trouvé$(NC)"; \
+	fi
+
+.PHONY: security-scan
+security-scan: ## Scanner les vulnérabilités avec Snyk (complet)
+	@echo "$(PURPLE)🛡️ Scan de sécurité complet avec Snyk$(NC)"
+	@if [ -f "./scripts/security/snyk-scan.sh" ]; then \
+		chmod +x "./scripts/security/snyk-scan.sh"; \
+		./scripts/security/snyk-scan.sh; \
+	else \
+		echo "$(RED)❌ Script Snyk non trouvé: ./scripts/security/snyk-scan.sh$(NC)"; \
+		echo "$(BLUE)→ Vérifiez que le script existe et est exécutable$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: security-scan-php
+security-scan-php: ## Scanner uniquement les dépendances PHP
+	@echo "$(PURPLE)🐘 Scan des dépendances PHP avec Snyk$(NC)"
+	@if [ -f "./scripts/security/snyk-scan.sh" ]; then \
+		chmod +x "./scripts/security/snyk-scan.sh"; \
+		./scripts/security/snyk-scan.sh --php-only; \
+	else \
+		echo "$(RED)❌ Script Snyk non trouvé$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: security-scan-node
+security-scan-node: ## Scanner uniquement les dépendances Node.js
+	@echo "$(PURPLE)📦 Scan des dépendances Node.js avec Snyk$(NC)"
+	@if [ -f "./scripts/security/snyk-scan.sh" ]; then \
+		chmod +x "./scripts/security/snyk-scan.sh"; \
+		./scripts/security/snyk-scan.sh --node-only; \
+	else \
+		echo "$(RED)❌ Script Snyk non trouvé$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: security-scan-docker
+security-scan-docker: ## Scanner les images Docker avec Snyk
+	@echo "$(PURPLE)🐳 Scan des images Docker avec Snyk$(NC)"
+	@if [ -f "./scripts/security/snyk-scan.sh" ]; then \
+		chmod +x "./scripts/security/snyk-scan.sh"; \
+		./scripts/security/snyk-scan.sh --docker-only; \
+	else \
+		echo "$(RED)❌ Script Snyk non trouvé$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: security-scan-critical
+security-scan-critical: ## Scanner uniquement les vulnérabilités critiques
+	@echo "$(PURPLE)🚨 Scan des vulnérabilités critiques avec Snyk$(NC)"
+	@if [ -f "./scripts/security/snyk-scan.sh" ]; then \
+		chmod +x "./scripts/security/snyk-scan.sh"; \
+		./scripts/security/snyk-scan.sh --severity critical; \
+	else \
+		echo "$(RED)❌ Script Snyk non trouvé$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: security-monitor
+security-monitor: ## Activer le monitoring Snyk pour le projet
+	@echo "$(CYAN)📊 Activation du monitoring Snyk...$(NC)"
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	@if [ -f "src/composer.json" ]; then \
+		echo "$(YELLOW)→ Monitoring des dépendances PHP...$(NC)"; \
+		cd src && snyk monitor --file=composer.json; \
+	fi
+	@if [ -f "src/package.json" ]; then \
+		echo "$(YELLOW)→ Monitoring des dépendances Node.js...$(NC)"; \
+		cd src && snyk monitor --file=package.json; \
+	fi
+	@echo "$(GREEN)✓ Monitoring configuré$(NC)"
+	@echo "$(BLUE)→ Consultez vos projets: https://app.snyk.io/projects$(NC)"
+
+.PHONY: security-reports
+security-reports: ## Afficher les derniers rapports de sécurité
+	@echo "$(CYAN)📋 Rapports de sécurité Snyk$(NC)"
+	@if [ -d "reports/security" ]; then \
+		echo "$(YELLOW)📁 Rapports disponibles:$(NC)"; \
+		ls -la reports/security/ | grep -E '\.(json|md)$$' | tail -10; \
+		echo ""; \
+		if [ -f "$$(ls -t reports/security/*.md 2>/dev/null | head -1)" ]; then \
+			echo "$(CYAN)📄 Dernier rapport de synthèse:$(NC)"; \
+			cat "$$(ls -t reports/security/*.md | head -1)"; \
+		fi; \
+	else \
+		echo "$(YELLOW)⚠ Aucun rapport trouvé$(NC)"; \
+		echo "$(BLUE)→ Lancez un scan: make security-scan$(NC)"; \
+	fi
+
+.PHONY: security-clean
+security-clean: ## Nettoyer les anciens rapports de sécurité
+	@echo "$(YELLOW)🧹 Nettoyage des rapports de sécurité...$(NC)"
+	@if [ -d "reports/security" ]; then \
+		find reports/security -name "*.json" -mtime +30 -delete 2>/dev/null || true; \
+		find reports/security -name "*.md" -mtime +30 -delete 2>/dev/null || true; \
+		echo "$(GREEN)✓ Rapports de plus de 30 jours supprimés$(NC)"; \
+	else \
+		echo "$(BLUE)→ Aucun répertoire de rapports à nettoyer$(NC)"; \
+	fi
+
+.PHONY: security-setup
+security-setup: ## Configuration complète de Snyk
+	@echo "$(CYAN)🛡️ Configuration complète de Snyk$(NC)"
+	@echo "$(CYAN)================================$(NC)"
+	@$(MAKE) security-install
+	@echo ""
+	@$(MAKE) security-auth
+	@echo ""
+	@$(MAKE) security-check
+	@echo ""
+	@echo "$(GREEN)✅ Configuration Snyk terminée !$(NC)"
+	@echo ""
+	@echo "$(YELLOW)📋 Prochaines étapes :$(NC)"
+	@echo "  $(GREEN)make security-scan$(NC)          - Lancer un scan complet"
+	@echo "  $(GREEN)make security-monitor$(NC)       - Activer le monitoring"
+	@echo "  $(GREEN)make security-reports$(NC)       - Voir les rapports"
+	@echo ""
+	@echo "$(BLUE)🔗 Ressources utiles :$(NC)"
+	@echo "  • Dashboard Snyk: https://app.snyk.io/projects"
+	@echo "  • Documentation: https://docs.snyk.io/"
+	@echo "  • Token API: https://app.snyk.io/account"
+
+# =============================================================================
+# AIDE SÉCURITÉ
+# =============================================================================
+
+.PHONY: help-security
+help-security: ## Aide pour les commandes de sécurité Snyk
+	@echo "$(CYAN)🛡️ Commandes de Sécurité Snyk$(NC)"
+	@echo "$(CYAN)==============================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)🚀 Configuration initiale :$(NC)"
+	@echo "  $(GREEN)make security-setup$(NC)         - Configuration complète (install + auth + check)"
+	@echo "  $(GREEN)make security-install$(NC)       - Installer Snyk CLI"
+	@echo "  $(GREEN)make security-auth$(NC)          - Authentifier avec le token .env"
+	@echo "  $(GREEN)make security-check$(NC)         - Vérifier la configuration"
+	@echo ""
+	@echo "$(YELLOW)🔍 Scans de sécurité :$(NC)"
+	@echo "  $(GREEN)make security-scan$(NC)          - Scan complet (PHP + Node.js + Docker)"
+	@echo "  $(GREEN)make security-scan-php$(NC)      - Scan des dépendances PHP uniquement"
+	@echo "  $(GREEN)make security-scan-node$(NC)     - Scan des dépendances Node.js uniquement"
+	@echo "  $(GREEN)make security-scan-docker$(NC)   - Scan des images Docker uniquement"
+	@echo "  $(GREEN)make security-scan-critical$(NC) - Scan des vulnérabilités critiques uniquement"
+	@echo ""
+	@echo "$(YELLOW)📊 Monitoring et rapports :$(NC)"
+	@echo "  $(GREEN)make security-monitor$(NC)       - Activer le monitoring continu"
+	@echo "  $(GREEN)make security-reports$(NC)       - Afficher les derniers rapports"
+	@echo "  $(GREEN)make security-clean$(NC)         - Nettoyer les anciens rapports"
+	@echo ""
+	@echo "$(YELLOW)⚙️ Configuration dans .env :$(NC)"
+	@echo "  $(CYAN)SNYK_TOKEN$(NC)                  - Token d'authentification Snyk"
+	@echo "  $(CYAN)SNYK_SEVERITY_THRESHOLD$(NC)     - Seuil de sévérité (low|medium|high|critical)"
+	@echo "  $(CYAN)SNYK_FAIL_ON_ISSUES$(NC)         - Faire échouer en cas de vulnérabilités"
+	@echo "  $(CYAN)SNYK_MONITOR_ENABLED$(NC)        - Activer le monitoring automatique"
+	@echo "  $(CYAN)SNYK_ORG_ID$(NC)                 - ID de votre organisation Snyk"
+	@echo ""
+	@echo "$(YELLOW)💡 Workflow recommandé :$(NC)"
+	@echo "  1. $(GREEN)make security-setup$(NC)      - Configuration initiale"
+	@echo "  2. $(GREEN)make security-scan$(NC)       - Premier scan complet"
+	@echo "  3. $(GREEN)make security-monitor$(NC)    - Activer le monitoring"
+	@echo "  4. Intégrer dans votre CI/CD"
+	@echo ""
+	@echo "$(BLUE)🔗 Liens utiles :$(NC)"
+	@echo "  • Dashboard: https://app.snyk.io/projects"
+	@echo "  • Token API: https://app.snyk.io/account"
+	@echo "  • Documentation: https://docs.snyk.io/"
