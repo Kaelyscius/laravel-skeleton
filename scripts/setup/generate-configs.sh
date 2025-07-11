@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =============================================================================
-# GÉNÉRATEUR DE CONFIGURATION .ENV RACINE
+# GÉNÉRATEUR DE CONFIGURATION .ENV RACINE - VERSION CORRIGÉE
 # =============================================================================
 # Ce script met à jour UNIQUEMENT le .env racine
 # La copie vers src/.env est gérée par install-laravel.sh
@@ -152,42 +152,40 @@ generate_updated_env() {
     local domain=$(get_env_value "SSL_COMMON_NAME" "" "laravel.local")
 
     # Construire le nouveau .env racine
-    cat > "$ENV_FILE" << EOF
+    cat > "$ENV_FILE" << 'ENVEOF'
 # ===========================================
 # 🚀 LARAVEL DOCKER ENVIRONMENT - Mis à jour automatiquement
-# Environnement: $TARGET_ENV
-# Mis à jour le: $(date '+%Y-%m-%d %H:%M:%S')
 # ===========================================
 
 # Application
-APP_NAME=$(get_env_value "APP_NAME" "" "Laravel")
-APP_ENV=$TARGET_ENV
-APP_KEY=$(get_env_value "APP_KEY" "" "")
-APP_DEBUG=$debug_value
-APP_URL=https://$domain
+APP_NAME=Laravel
+APP_ENV=local
+APP_KEY=
+APP_DEBUG=true
+APP_URL=https://laravel.local
 APP_TIMEZONE=UTC
 
 # Docker
-COMPOSE_PROJECT_NAME=$(get_env_value "COMPOSE_PROJECT_NAME" "" "laravel-app")
-COMPOSE_BAKE=$(get_env_value "COMPOSE_BAKE" "" "true")
+COMPOSE_PROJECT_NAME=laravel-app
+COMPOSE_BAKE=true
 
 # ===========================================
 # 💾 DATABASE (MariaDB)
 # ===========================================
 DB_CONNECTION=mysql
 DB_HOST=mariadb
-DB_PORT=$(get_config ".network.ports.mariadb" "3306")
-DB_DATABASE=$(get_env_value "DB_DATABASE" "" "laravel")
-DB_USERNAME=$(get_env_value "DB_USERNAME" "" "laravel")
-DB_PASSWORD=$(get_env_value "DB_PASSWORD" "" "secret")
-DB_ROOT_PASSWORD=$(get_env_value "DB_ROOT_PASSWORD" "" "rootsecret")
+DB_PORT=3306
+DB_DATABASE=laravel
+DB_USERNAME=laravel
+DB_PASSWORD=secret
+DB_ROOT_PASSWORD=rootsecret
 
 # ===========================================
 # 🗄️ REDIS
 # ===========================================
 REDIS_HOST=redis
-REDIS_PASSWORD=$(get_env_value "REDIS_PASSWORD" "" "redissecret")
-REDIS_PORT=$(get_config ".network.ports.redis" "6379")
+REDIS_PASSWORD=redissecret
+REDIS_PORT=6379
 
 # ===========================================
 # 📧 EMAIL (Développement avec MailHog)
@@ -198,8 +196,8 @@ MAIL_PORT=1025
 MAIL_USERNAME=null
 MAIL_PASSWORD=null
 MAIL_ENCRYPTION=null
-MAIL_FROM_ADDRESS="hello@$domain"
-MAIL_FROM_NAME="\${APP_NAME}"
+MAIL_FROM_ADDRESS="hello@laravel.local"
+MAIL_FROM_NAME="${APP_NAME}"
 
 # ===========================================
 # 🔍 QUEUES & CACHE & SESSION (Redis)
@@ -208,120 +206,122 @@ QUEUE_CONNECTION=redis
 CACHE_DRIVER=redis
 CACHE_STORE=redis
 SESSION_DRIVER=redis
-SESSION_LIFETIME=$(get_env_value "SESSION_LIFETIME" "" "120")
+SESSION_LIFETIME=120
 
 # ===========================================
 # 📻 BROADCASTING & FILESYSTEM
 # ===========================================
-BROADCAST_DRIVER=$(get_env_value "BROADCAST_DRIVER" "" "log")
-FILESYSTEM_DISK=$(get_env_value "FILESYSTEM_DISK" "" "local")
+BROADCAST_DRIVER=log
+FILESYSTEM_DISK=local
 
 # ===========================================
 # 🔒 HASHING & PASSWORDS
 # ===========================================
-BCRYPT_ROUNDS=$(get_env_value "BCRYPT_ROUNDS" "" "10")
+BCRYPT_ROUNDS=10
 
 # ===========================================
 # 📊 MONITORING - Watchtower & Uptime
 # ===========================================
-WATCHTOWER_NOTIFICATIONS=$(get_env_value "WATCHTOWER_NOTIFICATIONS" "" "")
-WATCHTOWER_DEBUG=$(get_env_value "WATCHTOWER_DEBUG" "" "false")
+WATCHTOWER_NOTIFICATIONS=
+WATCHTOWER_DEBUG=false
 
 # Ports de monitoring
-DOZZLE_PORT=$(get_config ".network.ports.dozzle" "9999")
+DOZZLE_PORT=9999
 
 # ===========================================
 # 🔐 SÉCURITÉ & SSL
 # ===========================================
-JWT_SECRET=$(get_env_value "JWT_SECRET" "" "your-jwt-secret-key")
-SESSION_SECURE_COOKIE=$(get_env_value "SESSION_SECURE_COOKIE" "" "true")
-SESSION_HTTP_ONLY=$(get_env_value "SESSION_HTTP_ONLY" "" "true")
-SESSION_SAME_SITE=$(get_env_value "SESSION_SAME_SITE" "" "lax")
+JWT_SECRET=your-jwt-secret-key
+SESSION_SECURE_COOKIE=true
+SESSION_HTTP_ONLY=true
+SESSION_SAME_SITE=lax
 
 # SSL Certificate
-SSL_COUNTRY=$(get_env_value "SSL_COUNTRY" "" "FR")
-SSL_STATE=$(get_env_value "SSL_STATE" "" "IDF")
-SSL_LOCALITY=$(get_env_value "SSL_LOCALITY" "" "Paris")
-SSL_ORGANIZATION=$(get_env_value "SSL_ORGANIZATION" "" "Laravel")
-SSL_ORGANIZATIONAL_UNIT=$(get_env_value "SSL_ORGANIZATIONAL_UNIT" "" "Development")
-SSL_COMMON_NAME=$(get_env_value "SSL_COMMON_NAME" "" "$domain")
+SSL_COUNTRY=FR
+SSL_STATE=IDF
+SSL_LOCALITY=Paris
+SSL_ORGANIZATION=Laravel
+SSL_ORGANIZATIONAL_UNIT=Development
+SSL_COMMON_NAME=laravel.local
 
 # ===========================================
 # 🔧 DÉVELOPPEMENT & LOGGING
 # ===========================================
 LOG_CHANNEL=stack
-LOG_STACK=$(get_env_value "LOG_STACK" "" "single,nightwatch,daily")
-LOG_DEPRECATIONS_CHANNEL=$(get_env_value "LOG_DEPRECATIONS_CHANNEL" "" "null")
-LOG_LEVEL=$log_level
+LOG_STACK=single,nightwatch,daily
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=debug
 
 # ===========================================
 # 🌙 NIGHTWATCH - Monitoring Laravel
 # ===========================================
-NIGHTWATCH_TOKEN=$(get_env_value "NIGHTWATCH_TOKEN" "" "\${NIGHTWATCH_TOKEN}")
-NIGHTWATCH_EXCEPTION_SAMPLE_RATE=$(get_env_value "NIGHTWATCH_EXCEPTION_SAMPLE_RATE" "" "1.0")
-NIGHTWATCH_COMMAND_SAMPLE_RATE=$(get_env_value "NIGHTWATCH_COMMAND_SAMPLE_RATE" "" "1.0")
-NIGHTWATCH_REQUEST_SAMPLE_RATE=$(get_env_value "NIGHTWATCH_REQUEST_SAMPLE_RATE" "" "0.1")
+NIGHTWATCH_TOKEN=${NIGHTWATCH_TOKEN}
+NIGHTWATCH_EXCEPTION_SAMPLE_RATE=1.0
+NIGHTWATCH_COMMAND_SAMPLE_RATE=1.0
+NIGHTWATCH_REQUEST_SAMPLE_RATE=0.1
 
 # ===========================================
 # 🔭 TELESCOPE & HORIZON
 # ===========================================
-TELESCOPE_ENABLED=$(get_env_value "TELESCOPE_ENABLED" "" "true")
-HORIZON_PREFIX=$(get_env_value "HORIZON_PREFIX" "" "horizon:\${APP_NAME}")
-HORIZON_DASHBOARD_ENABLED=$(get_env_value "HORIZON_DASHBOARD_ENABLED" "" "true")
+TELESCOPE_ENABLED=true
+HORIZON_PREFIX=horizon:${APP_NAME}
+HORIZON_DASHBOARD_ENABLED=true
 
 # ===========================================
 # ⚡ VITE (Frontend)
 # ===========================================
-VITE_APP_NAME=$(get_env_value "VITE_APP_NAME" "" "\${APP_NAME}")
+VITE_APP_NAME="${APP_NAME}"
 
 # ===========================================
 # 🛡️ SÉCURITÉ - SNYK CONFIGURATION
 # ===========================================
-SNYK_TOKEN=$(get_env_value "SNYK_TOKEN" "" "")
-SNYK_SEVERITY_THRESHOLD=$(get_env_value "SNYK_SEVERITY_THRESHOLD" "" "high")
-SNYK_FAIL_ON_ISSUES=$(get_env_value "SNYK_FAIL_ON_ISSUES" "" "false")
-SNYK_MONITOR_ENABLED=$(get_env_value "SNYK_MONITOR_ENABLED" "" "true")
-SNYK_ORG_ID=$(get_env_value "SNYK_ORG_ID" "" "")
-SNYK_EXCLUDE_PATHS=$(get_env_value "SNYK_EXCLUDE_PATHS" "" "vendor/,node_modules/,tests/,storage/")
-SNYK_INCLUDE_DEV_DEPS=$(get_env_value "SNYK_INCLUDE_DEV_DEPS" "" "true")
-SNYK_PRINT_DEPS=$(get_env_value "SNYK_PRINT_DEPS" "" "false")
-SNYK_DOCKER_SCAN_ENABLED=$(get_env_value "SNYK_DOCKER_SCAN_ENABLED" "" "false")
-SNYK_PROJECT_NAME_PHP=$(get_env_value "SNYK_PROJECT_NAME_PHP" "" "\${APP_NAME}-php")
-SNYK_PROJECT_NAME_NODE=$(get_env_value "SNYK_PROJECT_NAME_NODE" "" "\${APP_NAME}-node")
-EOF
+SNYK_TOKEN=
+SNYK_SEVERITY_THRESHOLD=high
+SNYK_FAIL_ON_ISSUES=false
+SNYK_MONITOR_ENABLED=true
+SNYK_ORG_ID=
+SNYK_EXCLUDE_PATHS=vendor/,node_modules/,tests/,storage/
+SNYK_INCLUDE_DEV_DEPS=true
+SNYK_PRINT_DEPS=false
+SNYK_DOCKER_SCAN_ENABLED=false
+SNYK_PROJECT_NAME_PHP=${APP_NAME}-php
+SNYK_PROJECT_NAME_NODE=${APP_NAME}-node
+ENVEOF
 
-    # Configuration spécifique à l'environnement
-    if [ "$TARGET_ENV" = "local" ] || [ "$TARGET_ENV" = "development" ]; then
-        cat >> "$ENV_FILE" << EOF
-
-# ===========================================
-# 🔧 DÉVELOPPEMENT
-# ===========================================
-XDEBUG_ENABLE=$(get_env_value "XDEBUG_ENABLE" "" "false")
-XDEBUG_MODE=$(get_env_value "XDEBUG_MODE" "" "debug")
-XDEBUG_CLIENT_HOST=$(get_env_value "XDEBUG_CLIENT_HOST" "" "host.docker.internal")
-EOF
-    fi
-
-    # Configuration OPcache selon l'environnement
-    if [ "$TARGET_ENV" = "production" ]; then
-        cat >> "$ENV_FILE" << EOF
-
-# Production optimizations
-PHP_OPCACHE_VALIDATE_TIMESTAMPS=0
-PHP_OPCACHE_PRELOAD=/var/www/html/config/opcache-preload.php
-PHP_OPCACHE_PRELOAD_USER=www-data
-EOF
-    else
-        cat >> "$ENV_FILE" << EOF
-
-# Development settings
-PHP_OPCACHE_VALIDATE_TIMESTAMPS=1
-PHP_OPCACHE_REVALIDATE_FREQ=0
-EOF
-    fi
+    # Mise à jour dynamique des valeurs selon l'environnement et configuration existante
+    update_env_values_dynamically
 
     log "SUCCESS" "✅ Fichier .env RACINE mis à jour pour l'environnement $TARGET_ENV"
+}
+
+# Fonction pour mettre à jour dynamiquement les valeurs
+update_env_values_dynamically() {
+    local temp_file=$(mktemp)
+
+    # Mise à jour des valeurs spécifiques
+    {
+        echo "# Valeurs mises à jour dynamiquement"
+        echo "APP_ENV=$TARGET_ENV"
+
+        if [ "$TARGET_ENV" = "production" ]; then
+            echo "APP_DEBUG=false"
+            echo "LOG_LEVEL=error"
+        else
+            echo "APP_DEBUG=true"
+            echo "LOG_LEVEL=debug"
+        fi
+
+        # Préserver les valeurs existantes importantes
+        for var in NIGHTWATCH_TOKEN SNYK_TOKEN DB_PASSWORD REDIS_PASSWORD; do
+            if [ -n "${EXISTING_ENV_VALUES[$var]}" ]; then
+                echo "$var=${EXISTING_ENV_VALUES[$var]}"
+            fi
+        done
+    } > "$temp_file"
+
+    # Merger avec le fichier principal
+    cat "$temp_file" >> "$ENV_FILE"
+    rm -f "$temp_file"
 }
 
 # Fonction principale
@@ -344,4 +344,3 @@ main() {
 if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
     main "$@"
 fi
-EOF
