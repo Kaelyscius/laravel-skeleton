@@ -282,7 +282,7 @@ jobs:
       # Authentification Snyk (si token disponible)
       # ==========================================
       - name: Authenticate Snyk
-        if: env.SNYK_TOKEN != ''
+        if: ${{ secrets.SNYK_TOKEN != '' }}
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -329,7 +329,7 @@ jobs:
       # Monitoring Snyk (si authentifié)
       # ==========================================
       - name: Monitor project with Snyk
-        if: env.SNYK_TOKEN != '' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: ${{ secrets.SNYK_TOKEN != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         working-directory: src
         run: |
           echo "📊 Setting up Snyk monitoring..."
@@ -375,14 +375,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        if: secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
+        if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push PHP image
-        if: secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
+        if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -395,7 +395,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push Apache image
-        if: secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
+        if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
         uses: docker/build-push-action@v5
         with:
           context: .
