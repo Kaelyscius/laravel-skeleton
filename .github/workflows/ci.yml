@@ -259,7 +259,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ==========================================
-      # Setup pour Snyk
+      # Setup pour Snyk et vérification des credentials Docker
       # ==========================================
       - name: Setup Node.js for Snyk
         uses: actions/setup-node@v4
@@ -281,8 +281,19 @@ jobs:
       # ==========================================
       # Authentification Snyk (si token disponible)
       # ==========================================
+      - name: Check Snyk token availability
+        id: snyk_check
+        run: |
+          if [ -n "${{ secrets.SNYK_TOKEN }}" ]; then
+            echo "snyk_available=true" >> $GITHUB_OUTPUT
+            echo "✅ SNYK_TOKEN available"
+          else
+            echo "snyk_available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ SNYK_TOKEN not configured - running in limited mode"
+          fi
+
       - name: Authenticate Snyk
-        if: ${{ secrets.SNYK_TOKEN != '' }}
+        if: steps.snyk_check.outputs.snyk_available == 'true'
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -295,7 +306,7 @@ jobs:
         run: |
           if [ -f "composer.json" ]; then
             echo "🔍 Scanning PHP dependencies with Snyk..."
-            if [ -n "${{ secrets.SNYK_TOKEN }}" ]; then
+            if [ "${{ steps.snyk_check.outputs.snyk_available }}" = "true" ]; then
               snyk test --severity-threshold=high --file=composer.json || echo "⚠️ Vulnerabilities found in PHP dependencies"
             else
               echo "⚠️ SNYK_TOKEN not configured - running without authentication"
@@ -314,7 +325,7 @@ jobs:
         run: |
           if [ -f "package.json" ]; then
             echo "🔍 Scanning Node.js dependencies with Snyk..."
-            if [ -n "${{ secrets.SNYK_TOKEN }}" ]; then
+            if [ "${{ steps.snyk_check.outputs.snyk_available }}" = "true" ]; then
               snyk test --severity-threshold=high --file=package.json || echo "⚠️ Vulnerabilities found in Node.js dependencies"
             else
               echo "⚠️ SNYK_TOKEN not configured - running without authentication"
@@ -329,7 +340,7 @@ jobs:
       # Monitoring Snyk (si authentifié)
       # ==========================================
       - name: Monitor project with Snyk
-        if: ${{ secrets.SNYK_TOKEN != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        if: steps.snyk_check.outputs.snyk_available == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: src
         run: |
           echo "📊 Setting up Snyk monitoring..."
@@ -374,15 +385,26 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Check Docker credentials
+        id: docker_check
+        run: |
+          if [ -n "${{ secrets.DOCKER_USERNAME }}" ] && [ -n "${{ secrets.DOCKER_PASSWORD }}" ]; then
+            echo "docker_available=true" >> $GITHUB_OUTPUT
+            echo "✅ Docker credentials available"
+          else
+            echo "docker_available=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Docker credentials not configured - skipping Docker operations"
+          fi
+
       - name: Log in to Docker Hub
-        if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
+        if: steps.docker_check.outputs.docker_available == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push PHP image
-        if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
+        if: steps.docker_check.outputs.docker_available == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -395,7 +417,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push Apache image
-        if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
+        if: steps.docker_check.outputs.docker_available == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -409,9 +431,12 @@ jobs:
 
       - name: Docker build summary
         run: |
-          if [ -n "${{ secrets.DOCKER_USERNAME }}" ] && [ -n "${{ secrets.DOCKER_PASSWORD }}" ]; then
+          if [ "${{ steps.docker_check.outputs.docker_available }}" = "true" ]; then
             echo "✅ Docker images built and pushed successfully"
+            echo "🔗 Images available at: https://hub.docker.com/u/${{ secrets.DOCKER_USERNAME }}"
           else
             echo "ℹ️ Docker credentials not configured - skipping image push"
-            echo "ℹ️ Configure DOCKER_USERNAME and DOCKER_PASSWORD secrets for Docker Hub integration"
+            echo "💡 To enable Docker Hub integration:"
+            echo "   1. Create account at https://hub.docker.com"
+            echo "   2. Add DOCKER_USERNAME and DOCKER_PASSWORD secrets in GitHub"
           fi
