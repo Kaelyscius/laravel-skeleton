@@ -100,15 +100,6 @@ install: build up install-laravel npm-install setup-ssl ## Installation complèt
 	@echo "$(GREEN)🎉 Installation terminée !$(NC)"
 	@$(MAKE) _show_urls
 
-.PHONY: setup-full
-setup-full: install setup-watchtower setup-git-hooks ## Installation et configuration complète
-	@echo "$(GREEN)🚀 Configuration complète terminée !$(NC)"
-	@echo ""
-	@echo "$(CYAN)🎉 Votre environnement Laravel est maintenant complet avec :$(NC)"
-	@echo "  $(GREEN)✓ Laravel installé et configuré$(NC)"
-	@echo "  $(GREEN)✓ Watchtower configuré pour les mises à jour$(NC)"
-	@echo ""
-
 .PHONY: setup-quick
 setup-quick: up install-laravel ## Installation rapide
 	@echo "$(GREEN)⚡ Installation rapide terminée !$(NC)"
@@ -120,6 +111,83 @@ build: ## Construire tous les containers
 
 .PHONY: rebuild
 rebuild: down build up ## Reconstruire et redémarrer
+
+# =============================================================================
+# INSTALLATION INTERACTIVE ET PROFILS
+# =============================================================================
+
+.PHONY: fix-permissions
+fix-permissions: ## Corriger les permissions de tous les scripts
+	@echo "$(YELLOW)🔧 Correction des permissions...$(NC)"
+	@mkdir -p scripts/setup scripts/security config
+	@find scripts/ docker/ -name "*.sh" -type f -exec chmod +x {} \; 2>/dev/null || true
+	@echo "$(GREEN)✅ Permissions corrigées$(NC)"
+
+.PHONY: setup-interactive
+setup-interactive: fix-permissions ## Installation interactive avec choix de configuration
+	@echo "$(CYAN)🚀 Démarrage de l'installation interactive...$(NC)"
+	@if [ -f "./scripts/setup/interactive-setup.sh" ]; then \
+		chmod +x "./scripts/setup/interactive-setup.sh"; \
+		./scripts/setup/interactive-setup.sh; \
+	else \
+		echo "$(RED)❌ Script d'installation non trouvé$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: setup-full
+setup-full: setup-interactive ## Installation complète (alias pour setup-interactive)
+
+.PHONY: setup-minimal
+setup-minimal: ## Installation minimale (local + services essentiels)
+	@echo "$(CYAN)🚀 Installation minimale...$(NC)"
+	@if [ -f "./scripts/setup/interactive-setup.sh" ]; then \
+		chmod +x "./scripts/setup/interactive-setup.sh"; \
+		./scripts/setup/interactive-setup.sh --env local --batch; \
+	else \
+		echo "$(RED)❌ Script d'installation non trouvé$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: setup-dev
+setup-dev: ## Installation développement (development + tous outils dev)
+	@echo "$(CYAN)🚀 Installation développement...$(NC)"
+	@if [ -f "./scripts/setup/interactive-setup.sh" ]; then \
+		chmod +x "./scripts/setup/interactive-setup.sh"; \
+		./scripts/setup/interactive-setup.sh --env development --batch; \
+	else \
+		echo "$(RED)❌ Script d'installation non trouvé$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: setup-prod
+setup-prod: ## Installation production (optimisée pour la production)
+	@echo "$(CYAN)🚀 Installation production...$(NC)"
+	@if [ -f "./scripts/setup/interactive-setup.sh" ]; then \
+		chmod +x "./scripts/setup/interactive-setup.sh"; \
+		./scripts/setup/interactive-setup.sh --env production --batch; \
+	else \
+		echo "$(RED)❌ Script d'installation non trouvé$(NC)"; \
+		exit 1; \
+	fi
+
+# =============================================================================
+# CONFIGURATION MANUELLE (si besoin)
+# =============================================================================
+
+.PHONY: generate-config
+generate-config: ## Générer la configuration pour un environnement (usage: make generate-config ENV=local)
+	@if [ -z "$(ENV)" ]; then \
+		echo "$(RED)❌ Spécifiez l'environnement: make generate-config ENV=local$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)🔧 Génération de la configuration pour $(ENV)...$(NC)"
+	@if [ -f "./scripts/setup/generate-configs.sh" ]; then \
+		chmod +x "./scripts/setup/generate-configs.sh"; \
+		./scripts/setup/generate-configs.sh $(ENV); \
+	else \
+		echo "$(RED)❌ Script de génération non trouvé$(NC)"; \
+		exit 1; \
+	fi
 
 # =============================================================================
 # CONTAINER MANAGEMENT
