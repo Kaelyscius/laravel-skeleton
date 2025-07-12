@@ -1,17 +1,59 @@
-# Laravel
+# ===========================================
+# 🔐 FICHIERS SENSIBLES - SÉCURITÉ CRITIQUE
+# ===========================================
+# ATTENTION: Ces fichiers contiennent des vraies valeurs (tokens, passwords)
+
+# Tous les fichiers .env et leurs variantes
+.env
+.env.*
+!.env.example
+
+# Fichiers .env spécifiques par environnement (VRAIES VALEURS)
+.env.local
+.env.development
+.env.staging
+.env.production
+
+# Sauvegardes .env (peuvent contenir des secrets)
+.env.backup*
+.env.*.backup*
+
+# Fichiers de configuration sensibles
+config/*.key
+config/*.pem
+config/*.p12
+*.key
+*.pem
+*.p12
+
+# Tokens et clés API dans tous formats
+*token*
+*secret*
+*password*
+.secrets/
+secrets/
+auth.json
+
+# Certificats SSL (sauf .gitkeep)
+docker/apache/conf/ssl/*.crt
+docker/apache/conf/ssl/*.key
+docker/apache/conf/ssl/*.pem
+!docker/apache/conf/ssl/.gitkeep
+
+# ===========================================
+# LARAVEL SPÉCIFIQUE
+# ===========================================
 /src/node_modules
 /src/public/build
 /src/public/hot
 /src/public/storage
 /src/storage/*.key
 /src/vendor
-/src/.env
-/src/.env.backup
-/src/.env.production
+/src/.env*
+/src/.env.backup*
 /src/.phpunit.result.cache
 /src/Homestead.json
 /src/Homestead.yaml
-/src/auth.json
 /src/npm-debug.log
 /src/yarn-error.log
 /src/.fleet
@@ -22,52 +64,21 @@
 /src/.phpactor.json
 /src/.php_cs.cache
 
-# Docker
-.env
-!.env.example
+# ===========================================
+# DOCKER & LOGS
+# ===========================================
 docker/apache/logs/*
 !docker/apache/logs/.gitkeep
-docker/apache/conf/ssl/*
-!docker/apache/conf/ssl/.gitkeep
 docker/php/logs/*
 !docker/php/logs/.gitkeep
 docker/supervisor/logs/*
 !docker/supervisor/logs/.gitkeep
 
-# ===========================================
-# 🔐 FICHIERS SENSIBLES - SÉCURITÉ CRITIQUE
-# ===========================================
-# Tous les fichiers .env et leurs sauvegardes
-.env.*
-.env.backup*
-.env.local*
-.env.production*
-.env.staging*
-.env.development*
-
-# Fichiers de configuration sensibles
-config/*.key
-config/*.pem
-config/*.p12
-*.key
-*.pem
-*.p12
-
-# Tokens et clés API
-*token*
-*secret*
-*password*
-.secrets/
-secrets/
-
-# Certificats SSL (sauf .gitkeep)
-docker/apache/conf/ssl/*.crt
-docker/apache/conf/ssl/*.key
-docker/apache/conf/ssl/*.pem
-!docker/apache/conf/ssl/.gitkeep
+# Docker override générés automatiquement
+docker-compose.override.yml
 
 # ===========================================
-# IDE
+# IDE & DÉVELOPPEMENT
 # ===========================================
 .idea/
 .vscode/
@@ -78,7 +89,7 @@ docker/apache/conf/ssl/*.pem
 Thumbs.db
 
 # ===========================================
-# Tests
+# TESTS & QUALITY
 # ===========================================
 /coverage
 .phpunit.result.cache
@@ -87,14 +98,14 @@ Thumbs.db
 /phpstan.cache
 
 # ===========================================
-# Build
+# BUILD & DIST
 # ===========================================
 /build
 /dist
 *.log
 
 # ===========================================
-# OS
+# OS SPÉCIFIQUE
 # ===========================================
 .DS_Store
 .DS_Store?
@@ -106,7 +117,7 @@ Thumbs.db
 desktop.ini
 
 # ===========================================
-# Backup files (CRITIQUE)
+# FICHIERS DE SAUVEGARDE (CRITIQUE)
 # ===========================================
 *.bak
 *.backup*
@@ -115,25 +126,43 @@ desktop.ini
 *.tmp
 *.temp
 *backup*
-.env.backup.*
 
 # ===========================================
-# Monitoring
+# MONITORING & LOGS SENSIBLES
 # ===========================================
 /monitoring/data/*
 !/monitoring/data/.gitkeep
 
-# ===========================================
-# Logs sensibles
-# ===========================================
+# Logs avec potentiels secrets
 *.log
 logs/
 nightwatch.log
 nightwatch.pid
 
 # ===========================================
-# Rapports de sécurité
+# RAPPORTS DE SÉCURITÉ
 # ===========================================
 reports/security/*.json
 reports/security/*.html
 !reports/security/.gitkeep
+
+# ===========================================
+# CONFIGURATION GÉNÉRÉE AUTOMATIQUEMENT
+# ===========================================
+# Docker compose override (généré par script)
+docker-compose.override.yml.backup*
+
+# Configuration installer générée
+config/installer.yml.backup*
+
+# ===========================================
+# DÉVELOPPEMENT SPÉCIFIQUE
+# ===========================================
+# Cache des outils
+.composer/
+vendor/
+node_modules/
+
+# Configuration locale de développement
+.vscode/settings.json
+.idea/workspace.xml

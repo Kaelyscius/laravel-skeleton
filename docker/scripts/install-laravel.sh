@@ -404,7 +404,7 @@ find_root_env() {
         # Vérifier que c'est le bon fichier
         if grep -q "COMPOSE_PROJECT_NAME\|DB_HOST.*mariadb" "$root_env" 2>/dev/null; then
             log "SUCCESS" "✅ Fichier .env racine trouvé: $root_env" >&2
-            echo "$root_env"  # ← Seul ça va dans stdout
+            echo "$root_env"
             return 0
         fi
     fi
@@ -415,74 +415,105 @@ find_root_env() {
 }
 
 # Fonction CORRIGÉE SEULEMENT pour copier le .env racine vers Laravel
-copy_root_env_to_laravel() {
-    log "INFO" "📋 Copie complète du .env racine vers Laravel..."
+copy_environment_env_to_laravel() {
+    log "INFO" "📋 Copie de la configuration .env selon l'environnement..."
 
     # Diagnostic du répertoire courant
     log "DEBUG" "Répertoire de travail actuel: $(pwd)"
-    log "DEBUG" "Contenu du répertoire:"
-    ls -la . | head -10 | sed 's/^/  /' || true
 
-    # Trouver le .env racine avec la nouvelle fonction robuste
-    local root_env_file
-    if ! root_env_file=$(find_root_env 2>/dev/null | tail -1); then
-        log "ERROR" "Impossible de localiser le .env racine"
-        log "INFO" "💡 Solutions possibles:"
-        log "INFO" "  1. Vérifiez que le .env existe à la racine du projet"
-        log "INFO" "  2. Vérifiez que le .env contient COMPOSE_PROJECT_NAME"
-        log "INFO" "  3. Exécutez avec DEBUG=true pour plus de détails"
-        return 1
-    fi
+    # Détecter l'environnement cible depuis les variables d'environnement Docker
+    local target_env="${APP_ENV:-local}"
 
-    # Afficher des informations sur le fichier source
-    log "INFO" "📁 Source détectée: $root_env_file"
-    log "DEBUG" "Taille du fichier source: $(wc -l < "$root_env_file" 2>/dev/null || echo 'inconnu') lignes"
-
-    # Sauvegarder le .env Laravel existant avec timestamp
-    if [ -f ".env" ]; then
-        local backup_file=".env.laravel.backup.$(date +%Y%m%d-%H%M%S)"
-        cp .env "$backup_file"
-        log "DEBUG" "Sauvegarde de .env Laravel vers $backup_file"
-
-        # Comparer avec le fichier source pour voir s'il y a des différences
-        if diff -q "$root_env_file" .env >/dev/null 2>&1; then
-            log "INFO" "✅ Le .env Laravel est déjà identique au .env racine"
-            return 0
-        else
-            log "DEBUG" "Différences détectées entre .env racine et Laravel"
+    # Si APP_ENV pas défini, essayer de le détecter depuis le .env racine
+    if [ "$target_env" = "local" ]; then
+        local root_env_file
+        if root_env_file=$(find_root_env 2>/dev/null); then
+            local detected_env=$(grep "^APP_ENV=" "$root_env_file" 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
+            if [ -n "$detected_env" ]; then
+                target_env="$detected_env"
+            fi
         fi
     fi
 
-    # Copier avec vérification
-    log "DEBUG" "Copie de '$root_env_file' vers '$(pwd)/.env'"
-    if cp "$root_env_file" .env; then
-        log "SUCCESS" "✅ .env racine copié avec succès vers Laravel"
-        log "INFO" "📁 Source: $root_env_file"
-        log "INFO" "📁 Destination: $(pwd)/.env"
+    log "INFO" "🎯 Environnement détecté: $target_env"
 
-        # Vérifier que la copie est identique
-        if diff -q "$root_env_file" .env >/dev/null 2>&1; then
-            log "SUCCESS" "✅ Copie vérifiée - fichiers identiques"
-        else
-            log "WARN" "⚠️ Les fichiers ne sont pas identiques après copie"
-            if [ "$DEBUG" = "true" ]; then
-                log "DEBUG" "Différences détectées:"
-                diff "$root_env_file" .env | head -10 || true
+    # Localiser le fichier .env.{environnement} dans le projet racine
+    local source_env_file="/var/www/project/.env.$target_env"
+    local fallback_env_file="/var/www/project/.env"
+    local target_env_file="$(pwd)/.env"
+
+    # Vérifier que le fichier source existe
+    if [ -f "$source_env_file" ]; then
+        log "SUCCESS" "✅ Fichier source trouvé: $source_env_file"
+
+        # Afficher des informations sur le fichier source
+        log "DEBUG" "Taille du fichier source: $(wc -l < "$source_env_file" 2>/dev/null || echo 'inconnu') lignes"
+
+        # Sauvegarder le .env Laravel existant avec timestamp
+        if [ -f "$target_env_file" ]; then
+            local backup_file=".env.laravel.backup.$(date +%Y%m%d-%H%M%S)"
+            cp "$target_env_file" "$backup_file"
+            log "DEBUG" "Sauvegarde de .env Laravel vers $backup_file"
+
+            # Comparer avec le fichier source pour voir s'il y a des différences
+            if diff -q "$source_env_file" "$target_env_file" >/dev/null 2>&1; then
+                log "INFO" "✅ Le .env Laravel est déjà identique au .env.$target_env"
+                return 0
+            else
+                log "DEBUG" "Différences détectées entre .env.$target_env et Laravel"
             fi
+        fi
+
+        # Copier avec vérification
+        log "DEBUG" "Copie de '$source_env_file' vers '$target_env_file'"
+        if cp "$source_env_file" "$target_env_file"; then
+            log "SUCCESS" "✅ .env.$target_env copié avec succès vers Laravel"
+            log "INFO" "📁 Source: $source_env_file"
+            log "INFO" "📁 Destination: $target_env_file"
+
+            # Vérifier que la copie est identique
+            if diff -q "$source_env_file" "$target_env_file" >/dev/null 2>&1; then
+                log "SUCCESS" "✅ Copie vérifiée - fichiers identiques"
+            else
+                log "WARN" "⚠️ Les fichiers ne sont pas identiques après copie"
+                if [ "$DEBUG" = "true" ]; then
+                    log "DEBUG" "Différences détectées:"
+                    diff "$source_env_file" "$target_env_file" | head -10 || true
+                fi
+                return 1
+            fi
+        else
+            log "ERROR" "❌ Échec de la copie du .env.$target_env"
+            log "DEBUG" "Vérifiez les permissions du répertoire $(pwd)"
             return 1
         fi
+
+    elif [ -f "$fallback_env_file" ]; then
+        log "WARN" "⚠️ .env.$target_env non trouvé - utilisation du .env racine"
+        log "INFO" "📁 Fallback: $fallback_env_file"
+
+        if cp "$fallback_env_file" "$target_env_file"; then
+            log "SUCCESS" "✅ .env racine copié comme fallback"
+        else
+            log "ERROR" "❌ Échec de la copie du .env racine"
+            return 1
+        fi
+
     else
-        log "ERROR" "❌ Échec de la copie du .env racine"
-        log "DEBUG" "Vérifiez les permissions du répertoire $(pwd)"
+        log "ERROR" "❌ Aucun fichier .env trouvé"
+        log "INFO" "Fichiers recherchés :"
+        log "INFO" "  • Principal: $source_env_file"
+        log "INFO" "  • Fallback: $fallback_env_file"
+        log "INFO" "💡 Lancez d'abord: make setup-interactive"
         return 1
     fi
 
     # Diagnostic des variables importantes
     log "DEBUG" "Vérification des variables importantes dans le .env copié:"
 
-    local important_vars=("APP_NAME" "DB_HOST" "COMPOSE_PROJECT_NAME" "NIGHTWATCH_TOKEN" "REDIS_HOST")
+    local important_vars=("APP_NAME" "APP_ENV" "DB_HOST" "COMPOSE_PROJECT_NAME" "NIGHTWATCH_TOKEN" "REDIS_HOST")
     for var in "${important_vars[@]}"; do
-        local value=$(grep "^$var=" .env 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
+        local value=$(grep "^$var=" "$target_env_file" 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
         if [ -n "$value" ]; then
             if [[ "$var" == *"TOKEN"* ]] || [[ "$var" == *"PASSWORD"* ]]; then
                 log "DEBUG" "  $var: ${value:0:10}... (masqué)"
@@ -495,17 +526,26 @@ copy_root_env_to_laravel() {
     done
 
     # Vérification spéciale pour Nightwatch
-    local final_token=$(grep "^NIGHTWATCH_TOKEN=" .env 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
+    local final_token=$(grep "^NIGHTWATCH_TOKEN=" "$target_env_file" 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
     if [ -n "$final_token" ] && [ "$final_token" != "" ] && [ "$final_token" != "\${NIGHTWATCH_TOKEN}" ]; then
         log "SUCCESS" "✅ Token Nightwatch configuré: ${final_token:0:10}..."
-        log "SUCCESS" "✅ Toutes les valeurs du .env racine sont maintenant disponibles dans Laravel"
-        return 0
     else
         log "WARN" "⚠️ Token Nightwatch non configuré ou vide"
         log "DEBUG" "Valeur NIGHTWATCH_TOKEN: '$final_token'"
         log "INFO" "Le service fonctionnera mais Nightwatch ne sera pas actif"
-        return 0  # Ne pas faire échouer pour cette raison
     fi
+
+    # Vérification de l'environnement
+    local final_env=$(grep "^APP_ENV=" "$target_env_file" 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
+    if [ "$final_env" = "$target_env" ]; then
+        log "SUCCESS" "✅ Environnement correctement configuré: $final_env"
+    else
+        log "WARN" "⚠️ Incohérence d'environnement détectée"
+        log "DEBUG" "Attendu: $target_env, Trouvé: $final_env"
+    fi
+
+    log "SUCCESS" "✅ Configuration .env.$target_env intégrée dans Laravel"
+    return 0
 }
 
 # Fonction CORRIGÉE pour marquer une migration comme exécutée
@@ -1465,8 +1505,12 @@ main() {
     publish_migrations_if_needed
 
     # AVANT key:generate - Copier le .env racine
-    if copy_root_env_to_laravel; then
-        log "SUCCESS" "✅ .env racine copié"
+    if copy_environment_env_to_laravel; then
+       log "SUCCESS" "✅ Configuration .env.{environnement} intégrée"
+    else
+       log "ERROR" "❌ Échec de l'intégration de la configuration"
+       log "INFO" "💡 Lancez d'abord: make setup-interactive"
+       return 1
     fi
 
     # Générer la clé d'application DANS le .env racine copié
@@ -1671,22 +1715,30 @@ EOF
         log "WARN" "✗ Laravel Nightwatch non installé"
     fi
 
-    log "SUCCESS" "🎉 Installation complète terminée avec Nightwatch !"
+    log "SUCCESS" "🎉 Installation complète terminée avec configuration d'environnement !"
+        echo ""
+
+    # Afficher l'environnement configuré
+    local configured_env=$(grep "^APP_ENV=" .env 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
+    log "INFO" "🎯 Environnement configuré: ${configured_env:-local}"
+
     log "INFO" "✅ FONCTIONNALITÉS INCLUSES:"
-    log "INFO" "  • 🛡️ Migrations SANS conflit: Sanctum + Telescope (résolu définitivement)"
+    log "INFO" "  • 🛡️ Configuration .env.{environnement} intégrée"
+    log "INFO" "  • 🔄 Migrations SANS conflit: Sanctum + Telescope"
     log "INFO" "  • 🐘 PHP 8.4: Support complet et optimisations"
     log "INFO" "  • 🎯 Laravel 12: Configurations adaptées"
     log "INFO" "  • 🌙 Nightwatch: Configuration et démarrage automatique"
-    log "INFO" "  • 📈 Monitoring: Configuration parfaitement synchronisée"
+    log "INFO" "  • 📊 Services adaptés selon l'environnement"
     log "INFO" "  • 🔧 Outils qualité: ECS, PHPStan, Rector, Insights, Pest"
 
+    echo ""
     log "INFO" "Prochaines étapes :"
-    log "INFO" "1. ✅ Base de données configurée et migrée (SANS aucun conflit)"
-    log "INFO" "2. ✅ .env racine CORRECTEMENT copié vers Laravel"
-    log "INFO" "3. ✅ Agent Nightwatch démarré automatiquement en arrière-plan"
-    log "INFO" "4. ✅ Configuration synchronisée de manière fiable"
-    log "INFO" "5. Accéder à l'application : https://laravel.local"
-    log "INFO" "6. Lancer les tests : composer test:coverage"
+    log "INFO" "1. ✅ Configuration .env.$configured_env appliquée"
+    log "INFO" "2. ✅ Base de données configurée et migrée"
+    log "INFO" "3. ✅ Agent Nightwatch démarré automatiquement"
+    log "INFO" "4. Accéder à l'application : https://laravel.local"
+    log "INFO" "5. Changer d'environnement : make switch-env ENV=production"
+    log "INFO" "6. Voir le statut : make env-status"
     log "INFO" "7. Vérifier la qualité : composer quality"
     log "INFO" "8. Consulter les logs Nightwatch : tail -f nightwatch.log"
 

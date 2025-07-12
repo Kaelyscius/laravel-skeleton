@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "quality": "composer run-script quality",
+    "quality:fix": "composer run-script quality:fix",
+    "test:coverage": "php artisan test --coverage",
+    "analyse": "vendor/bin/phpstan analyse",
+    "fix:cs": "vendor/bin/ecs --fix",
+    "check:cs": "vendor/bin/ecs",
+    "refactor": "vendor/bin/rector process"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "axios": "^1.8.2",
+    "concurrently": "^9.0.1",
+    "laravel-vite-plugin": "^1.2.0",
+    "tailwindcss": "^4.0.0",
+    "vite": "^6.2.4"
+  }
+}
