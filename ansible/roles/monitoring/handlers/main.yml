@@ -1,0 +1,15 @@
+---
+# Handlers pour le rôle Monitoring
+
+- name: restart rsyslog
+  systemd:
+    name: rsyslog
+    state: restarted
+    
+- name: restart cron
+  systemd:
+    name: cron
+    state: restarted
+    
+- name: reload logrotate
+  command: logrotate -f /etc/logrotate.conf

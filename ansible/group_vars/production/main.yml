@@ -1,0 +1,123 @@
+---
+# Variables spécifiques à l'environnement de production
+
+# Configuration environnement
+environment: production
+laravel_env: production
+laravel_debug: false
+laravel_log_level: error
+
+# Configuration SSL/TLS
+ssl:
+  enabled: true
+  provider: letsencrypt
+  email: admin@votre-domaine.com
+  staging: false
+
+# Configuration sécurité (stricte en production)
+security:
+  firewall_enabled: true
+  fail2ban_enabled: true
+  ssh:
+    port: 22
+    permit_root_login: "no"
+    password_authentication: "no"
+    max_auth_tries: 3
+  ufw:
+    enabled: true
+    default_policy: deny
+    logging: "on"
+
+# Configuration monitoring
+monitoring:
+  enabled: true
+  retention_days: 90
+  log_level: error
+  alerts_enabled: true
+  
+# Configuration backup
+backup:
+  enabled: true
+  retention_days: 30
+  schedule: "0 2 * * *"
+  remote_storage: true
+  
+# Configuration des ressources
+resources:
+  php:
+    memory_limit: 512M
+    max_execution_time: 300
+    upload_max_filesize: 100M
+    post_max_size: 100M
+  mysql:
+    max_connections: 200
+    innodb_buffer_pool_size: 1G
+    query_cache_size: 128M
+  redis:
+    maxmemory: 256M
+    maxmemory_policy: allkeys-lru
+    
+# Configuration Docker
+docker:
+  restart_policy: unless-stopped
+  log_driver: json-file
+  log_opts:
+    max-size: 10m
+    max-file: "5"
+    
+# Services optionnels (désactivés en production)
+optional_services:
+  mailhog:
+    enabled: false
+  adminer:
+    enabled: false
+  it_tools:
+    enabled: false
+  dozzle:
+    enabled: false
+  watchtower:
+    enabled: true
+    schedule: "0 3 * * 0"  # Dimanche à 3h seulement
+    cleanup: true
+    
+# Configuration réseau
+network:
+  firewall:
+    allowed_ports:
+      - "22"      # SSH
+      - "80"      # HTTP
+      - "443"     # HTTPS
+    blocked_ports:
+      - "3306"    # MySQL (accès interne uniquement)
+      - "6379"    # Redis (accès interne uniquement)
+      - "8025"    # Mailhog
+      - "8080"    # Adminer
+      - "9999"    # Dozzle
+      
+# Configuration Laravel spécifique
+laravel:
+  queue_driver: redis
+  cache_driver: redis
+  session_driver: redis
+  horizon_enabled: true
+  telescope_enabled: false  # Désactivé en production
+  
+# Configuration de performance
+performance:
+  opcache_enabled: true
+  redis_cache_enabled: true
+  gzip_compression: true
+  browser_caching: true
+  
+# Configuration des notifications
+notifications:
+  slack:
+    enabled: false
+    webhook_url: ""
+  email:
+    enabled: true
+    recipients:
+      - admin@votre-domaine.com
+  discord:
+    enabled: false
+    webhook_url: ""

@@ -1,0 +1,150 @@
+---
+# Rôle Common - Configuration de base du système
+
+- name: "Mettre à jour le cache des paquets"
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: ["packages"]
+
+- name: "Installer les paquets système de base"
+  apt:
+    name: "{{ system.packages }}"
+    state: present
+    install_recommends: no
+  tags: ["packages"]
+
+- name: "Configurer le timezone"
+  timezone:
+    name: "{{ system.timezone }}"
+  notify: restart rsyslog
+  tags: ["timezone"]
+
+- name: "Configurer la locale"
+  locale_gen:
+    name: "{{ system.locale }}"
+    state: present
+  tags: ["locale"]
+
+- name: "Définir la locale par défaut"
+  lineinfile:
+    path: /etc/default/locale
+    regexp: '^LANG='
+    line: 'LANG="{{ system.locale }}"'
+    create: yes
+  tags: ["locale"]
+
+- name: "Créer un utilisateur dédié pour l'application"
+  user:
+    name: "{{ app_user | default('laravel') }}"
+    shell: /bin/bash
+    home: "/home/{{ app_user | default('laravel') }}"
+    create_home: yes
+    groups: docker
+    append: yes
+    system: no
+  tags: ["users"]
+
+- name: "Créer les répertoires nécessaires"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ app_user | default('laravel') }}"
+    group: "{{ app_user | default('laravel') }}"
+    mode: '0755'
+  loop:
+    - "{{ app_deploy_path | default('/var/www/laravel-app') }}"
+    - "{{ app_deploy_path | default('/var/www/laravel-app') }}/backups"
+    - "{{ app_deploy_path | default('/var/www/laravel-app') }}/logs"
+    - "{{ app_deploy_path | default('/var/www/laravel-app') }}/uploads"
+  tags: ["directories"]
+
+- name: "Configurer les limites système"
+  pam_limits:
+    domain: "{{ app_user | default('laravel') }}"
+    limit_type: "{{ item.type }}"
+    limit_item: "{{ item.item }}"
+    value: "{{ item.value }}"
+  loop:
+    - { type: 'soft', item: 'nofile', value: '65536' }
+    - { type: 'hard', item: 'nofile', value: '65536' }
+    - { type: 'soft', item: 'nproc', value: '32768' }
+    - { type: 'hard', item: 'nproc', value: '32768' }
+  tags: ["limits"]
+
+- name: "Configurer les paramètres du kernel"
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_set: yes
+    reload: yes
+  loop:
+    - { name: 'vm.max_map_count', value: '262144' }
+    - { name: 'fs.file-max', value: '2097152' }
+    - { name: 'net.core.somaxconn', value: '65535' }
+    - { name: 'net.ipv4.tcp_max_syn_backlog', value: '4096' }
+  tags: ["kernel"]
+
+- name: "Installer Python pip et les modules requis"
+  apt:
+    name:
+      - python3-pip
+      - python3-setuptools
+      - python3-wheel
+    state: present
+  tags: ["python"]
+
+- name: "Installer les modules Python nécessaires"
+  pip:
+    name:
+      - docker
+      - docker-compose
+      - psutil
+      - requests
+    state: present
+  tags: ["python"]
+
+- name: "Configurer le service de log système"
+  systemd:
+    name: rsyslog
+    state: started
+    enabled: yes
+  tags: ["logging"]
+
+- name: "Configurer la rotation des logs"
+  template:
+    src: logrotate.j2
+    dest: /etc/logrotate.d/laravel-app
+    owner: root
+    group: root
+    mode: '0644'
+  tags: ["logging"]
+
+- name: "Nettoyer les paquets inutiles"
+  apt:
+    autoremove: yes
+    autoclean: yes
+  tags: ["cleanup"]
+
+- name: "Vérifier l'état du système"
+  command: "{{ item }}"
+  register: system_check
+  loop:
+    - "df -h"
+    - "free -h"
+    - "uptime"
+  changed_when: false
+  tags: ["check"]
+
+- name: "Afficher les informations système"
+  debug:
+    msg: |
+      Système configuré avec succès:
+      - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      - Kernel: {{ ansible_kernel }}
+      - Architecture: {{ ansible_architecture }}
+      - Mémoire: {{ ansible_memtotal_mb }} MB
+      - Timezone: {{ system.timezone }}
+      - Locale: {{ system.locale }}
+  tags: ["info"]

@@ -1,0 +1,72 @@
+---
+# Variables par défaut pour le rôle Laravel-App
+
+# Configuration Git
+app_git_repo: ""
+app_git_branch: main
+
+# Configuration du déploiement
+app_deploy_path: /var/www/laravel-app
+app_project_name: laravel-app
+app_domain_name: laravel.local
+app_user: laravel
+
+# Configuration Laravel
+laravel_env: production
+laravel_debug: false
+laravel_log_level: error
+laravel_timezone: UTC
+
+# Configuration PHP
+php_version: "8.2"
+php_memory_limit: 256M
+php_max_execution_time: 300
+php_upload_max_filesize: 50M
+php_post_max_size: 50M
+
+# Configuration Node.js
+node_version: "18"
+npm_install_command: "npm ci"
+
+# Configuration Composer
+composer_install_dev: false
+composer_optimize_autoloader: true
+composer_no_dev: true
+
+# Configuration de la base de données
+db_host: mariadb
+db_port: 3306
+db_connection: mysql
+
+# Configuration Redis
+redis_host: redis
+redis_port: 6379
+
+# Configuration des conteneurs
+containers:
+  - apache
+  - php
+  - mariadb
+  - redis
+  - node
+
+# Configuration des permissions
+laravel_directories:
+  - storage
+  - bootstrap/cache
+  - storage/app
+  - storage/framework/cache
+  - storage/framework/sessions
+  - storage/framework/views
+  - storage/logs
+
+# Configuration des optimisations
+laravel_optimizations:
+  - config:cache
+  - route:cache
+  - view:cache
+  - event:cache
+
+# Configuration des assets
+assets_build_command: "npm run build"
+assets_dev_command: "npm run dev"

@@ -1,0 +1,242 @@
+---
+# Rôle Nginx-Proxy - Configuration du reverse proxy
+
+- name: "Installer Nginx"
+  apt:
+    name:
+      - nginx
+      - nginx-extras
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: yes
+  tags: ["nginx", "packages"]
+
+- name: "Arrêter et désactiver Apache s'il est installé"
+  systemd:
+    name: apache2
+    state: stopped
+    enabled: no
+  ignore_errors: yes
+  tags: ["nginx", "apache"]
+
+- name: "Créer les répertoires nécessaires"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/nginx/sites-available
+    - /etc/nginx/sites-enabled
+    - /etc/nginx/snippets
+    - /var/log/nginx
+    - /var/www/html
+  tags: ["nginx", "directories"]
+
+- name: "Configurer Nginx - Configuration principale"
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  notify: restart nginx
+  tags: ["nginx", "config"]
+
+- name: "Configurer Nginx - Snippets SSL"
+  template:
+    src: ssl-params.conf.j2
+    dest: /etc/nginx/snippets/ssl-params.conf
+    owner: root
+    group: root
+    mode: '0644'
+  tags: ["nginx", "ssl"]
+
+- name: "Configurer Nginx - Proxy headers"
+  template:
+    src: proxy-params.conf.j2
+    dest: /etc/nginx/snippets/proxy-params.conf
+    owner: root
+    group: root
+    mode: '0644'
+  tags: ["nginx", "proxy"]
+
+- name: "Supprimer la configuration par défaut"
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/nginx/sites-enabled/default
+    - /etc/nginx/sites-available/default
+  notify: restart nginx
+  tags: ["nginx", "cleanup"]
+
+- name: "Créer la configuration du site Laravel"
+  template:
+    src: laravel-site.conf.j2
+    dest: "/etc/nginx/sites-available/{{ app_domain_name | default('laravel.local') }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart nginx
+  tags: ["nginx", "site"]
+
+- name: "Activer le site Laravel"
+  file:
+    src: "/etc/nginx/sites-available/{{ app_domain_name | default('laravel.local') }}"
+    dest: "/etc/nginx/sites-enabled/{{ app_domain_name | default('laravel.local') }}"
+    state: link
+  notify: restart nginx
+  tags: ["nginx", "site"]
+
+- name: "Créer une page de maintenance"
+  template:
+    src: maintenance.html.j2
+    dest: /var/www/html/maintenance.html
+    owner: www-data
+    group: www-data
+    mode: '0644'
+  tags: ["nginx", "maintenance"]
+
+- name: "Tester la configuration Nginx"
+  command: nginx -t
+  register: nginx_test
+  changed_when: false
+  tags: ["nginx", "test"]
+
+- name: "Échouer si la configuration Nginx est invalide"
+  fail:
+    msg: "Configuration Nginx invalide: {{ nginx_test.stderr }}"
+  when: nginx_test.rc != 0
+  tags: ["nginx", "test"]
+
+- name: "Démarrer et activer Nginx"
+  systemd:
+    name: nginx
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  tags: ["nginx", "service"]
+
+- name: "Configurer les certificats SSL avec Let's Encrypt"
+  block:
+    - name: "Vérifier que le domaine est accessible"
+      uri:
+        url: "http://{{ app_domain_name | default('laravel.local') }}"
+        method: GET
+        status_code: [200, 301, 302]
+        timeout: 10
+      register: domain_check
+      ignore_errors: yes
+
+    - name: "Obtenir le certificat SSL"
+      command: >
+        certbot --nginx
+        --non-interactive
+        --agree-tos
+        --email {{ ssl.email | default('admin@localhost') }}
+        --domains {{ app_domain_name | default('laravel.local') }}
+        {% if ssl.staging | default(false) %}--staging{% endif %}
+      register: certbot_result
+      when: 
+        - ssl.enabled | default(false)
+        - domain_check is succeeded
+      ignore_errors: yes
+
+    - name: "Configurer le renouvellement automatique"
+      cron:
+        name: "Certbot renewal"
+        minute: "0"
+        hour: "2"
+        job: "certbot renew --quiet && systemctl reload nginx"
+        user: root
+      when: ssl.enabled | default(false)
+
+  when: ssl.enabled | default(false)
+  tags: ["nginx", "ssl"]
+
+- name: "Configurer la compression Gzip"
+  template:
+    src: gzip.conf.j2
+    dest: /etc/nginx/snippets/gzip.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart nginx
+  tags: ["nginx", "compression"]
+
+- name: "Configurer la sécurité Nginx"
+  template:
+    src: security.conf.j2
+    dest: /etc/nginx/snippets/security.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart nginx
+  tags: ["nginx", "security"]
+
+- name: "Configurer le cache statique"
+  template:
+    src: cache.conf.j2
+    dest: /etc/nginx/snippets/cache.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart nginx
+  tags: ["nginx", "cache"]
+
+- name: "Configurer la rotation des logs Nginx"
+  template:
+    src: nginx-logrotate.j2
+    dest: /etc/logrotate.d/nginx
+    owner: root
+    group: root
+    mode: '0644'
+  tags: ["nginx", "logrotate"]
+
+- name: "Créer un script de sauvegarde des configurations"
+  template:
+    src: backup-nginx.sh.j2
+    dest: /usr/local/bin/backup-nginx.sh
+    owner: root
+    group: root
+    mode: '0755'
+  tags: ["nginx", "backup"]
+
+- name: "Programmer la sauvegarde des configurations"
+  cron:
+    name: "Nginx config backup"
+    minute: "0"
+    hour: "3"
+    job: "/usr/local/bin/backup-nginx.sh"
+    user: root
+  tags: ["nginx", "backup"]
+
+- name: "Vérifier le statut final de Nginx"
+  systemd:
+    name: nginx
+    state: started
+  register: nginx_status
+  tags: ["nginx", "status"]
+
+- name: "Afficher les informations de configuration"
+  debug:
+    msg: |
+      Nginx configuré avec succès :
+      - Domaine : {{ app_domain_name | default('laravel.local') }}
+      - SSL : {{ 'Activé' if ssl.enabled | default(false) else 'Désactivé' }}
+      - Compression : Activée
+      - Cache statique : Activé
+      - Sécurité : Renforcée
+      - Logs : /var/log/nginx/
+      - Status : {{ nginx_status.state }}
+      
+      URLs disponibles :
+      - HTTP : http://{{ app_domain_name | default('laravel.local') }}
+      {% if ssl.enabled | default(false) %}
+      - HTTPS : https://{{ app_domain_name | default('laravel.local') }}
+      {% endif %}
+  tags: ["nginx", "info"]

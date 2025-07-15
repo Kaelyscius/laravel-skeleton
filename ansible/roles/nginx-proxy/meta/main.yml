@@ -1,0 +1,29 @@
+---
+# Métadonnées du rôle Nginx-Proxy
+
+galaxy_info:
+  author: Ansible Laravel Deployment
+  description: Configuration Nginx comme reverse proxy
+  company: Your Company
+  license: MIT
+  min_ansible_version: 2.9
+  
+  platforms:
+    - name: Ubuntu
+      versions:
+        - 20.04
+        - 22.04
+    - name: Debian
+      versions:
+        - 10
+        - 11
+  
+  galaxy_tags:
+    - nginx
+    - proxy
+    - ssl
+    - web
+    - reverse-proxy
+
+dependencies:
+  - role: common

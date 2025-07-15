@@ -1,0 +1,145 @@
+#!/bin/bash
+# Script de monitoring Docker
+# Généré par Ansible pour {{ environment }}
+
+LOG_FILE="/var/log/monitoring/docker.log"
+ALERT_SCRIPT="/usr/local/bin/alert-email.sh"
+PROJECT_NAME="{{ app_project_name | default('laravel-app') }}"
+
+# Fonction de log
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+}
+
+# Fonction d'alerte
+send_alert() {
+    local message="$1"
+    log_message "ALERT: $message"
+    if [[ -x "$ALERT_SCRIPT" && "{{ notifications.email.enabled | default(false) }}" == "true" ]]; then
+        echo "$message" | "$ALERT_SCRIPT" "Docker Alert - {{ inventory_hostname }}"
+    fi
+}
+
+# Vérifier que Docker est actif
+check_docker_service() {
+    if ! systemctl is-active --quiet docker; then
+        send_alert "Docker service is down on {{ inventory_hostname }}"
+        return 1
+    fi
+    log_message "Docker service: active"
+    return 0
+}
+
+# Vérifier les conteneurs du projet
+check_project_containers() {
+    local containers=("${PROJECT_NAME}_apache" "${PROJECT_NAME}_php" "${PROJECT_NAME}_mariadb" "${PROJECT_NAME}_redis")
+    local failed_containers=()
+    
+    for container in "${containers[@]}"; do
+        if ! docker ps --filter "name=$container" --filter "status=running" --quiet | grep -q .; then
+            failed_containers+=("$container")
+        else
+            log_message "Container $container: running"
+        fi
+    done
+    
+    if [[ ${#failed_containers[@]} -gt 0 ]]; then
+        send_alert "Failed containers on {{ inventory_hostname }}: ${failed_containers[*]}"
+    fi
+}
+
+# Vérifier l'utilisation des ressources par les conteneurs
+check_container_resources() {
+    local high_cpu_containers=()
+    local high_mem_containers=()
+    
+    # Vérifier l'utilisation CPU et mémoire
+    while IFS= read -r line; do
+        local container=$(echo "$line" | awk '{print $1}')
+        local cpu=$(echo "$line" | awk '{print $2}' | sed 's/%//')
+        local mem=$(echo "$line" | awk '{print $3}' | sed 's/%//')
+        
+        if [[ "$container" == *"$PROJECT_NAME"* ]]; then
+            if (( $(echo "$cpu > 80" | bc -l) )); then
+                high_cpu_containers+=("$container:${cpu}%")
+            fi
+            if (( $(echo "$mem > 80" | bc -l) )); then
+                high_mem_containers+=("$container:${mem}%")
+            fi
+            log_message "Container $container: CPU=${cpu}%, MEM=${mem}%"
+        fi
+    done < <(docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemPerc}}" | tail -n +2)
+    
+    if [[ ${#high_cpu_containers[@]} -gt 0 ]]; then
+        send_alert "High CPU usage on {{ inventory_hostname }}: ${high_cpu_containers[*]}"
+    fi
+    
+    if [[ ${#high_mem_containers[@]} -gt 0 ]]; then
+        send_alert "High memory usage on {{ inventory_hostname }}: ${high_mem_containers[*]}"
+    fi
+}
+
+# Vérifier l'espace disque utilisé par Docker
+check_docker_disk_usage() {
+    local disk_usage=$(docker system df --format "table {{.Type}}\t{{.Size}}" | grep -E "(Images|Containers|Local Volumes)" | awk '{total+=$2} END {print total}')
+    log_message "Docker disk usage: ${disk_usage:-0} bytes"
+}
+
+# Vérifier les logs des conteneurs
+check_container_logs() {
+    local containers=("${PROJECT_NAME}_apache" "${PROJECT_NAME}_php")
+    
+    for container in "${containers[@]}"; do
+        if docker ps --filter "name=$container" --quiet | grep -q .; then
+            local error_count=$(docker logs "$container" --since="5m" 2>&1 | grep -i error | wc -l)
+            if [[ $error_count -gt 10 ]]; then
+                send_alert "High error count ($error_count) in container $container on {{ inventory_hostname }}"
+            fi
+            log_message "Container $container: $error_count errors in last 5 minutes"
+        fi
+    done
+}
+
+# Vérifier la santé des conteneurs
+check_container_health() {
+    local unhealthy_containers=()
+    
+    while IFS= read -r line; do
+        local container=$(echo "$line" | awk '{print $1}')
+        local health=$(echo "$line" | awk '{print $2}')
+        
+        if [[ "$container" == *"$PROJECT_NAME"* ]]; then
+            if [[ "$health" == "unhealthy" ]]; then
+                unhealthy_containers+=("$container")
+            fi
+            log_message "Container $container: health=$health"
+        fi
+    done < <(docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(healthy|unhealthy)" | tail -n +2)
+    
+    if [[ ${#unhealthy_containers[@]} -gt 0 ]]; then
+        send_alert "Unhealthy containers on {{ inventory_hostname }}: ${unhealthy_containers[*]}"
+    fi
+}
+
+# Fonction principale
+main() {
+    # Créer le répertoire de log s'il n'existe pas
+    mkdir -p "$(dirname "$LOG_FILE")"
+    
+    log_message "=== Docker monitoring check started ==="
+    
+    if check_docker_service; then
+        check_project_containers
+        check_container_resources
+        check_docker_disk_usage
+        check_container_logs
+        check_container_health
+    fi
+    
+    log_message "=== Docker monitoring check completed ==="
+}
+
+# Exécuter si appelé directement
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

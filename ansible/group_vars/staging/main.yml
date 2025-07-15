@@ -1,0 +1,123 @@
+---
+# Variables spécifiques à l'environnement de staging
+
+# Configuration environnement
+environment: staging
+laravel_env: staging
+laravel_debug: false
+laravel_log_level: info
+
+# Configuration SSL/TLS
+ssl:
+  enabled: true
+  provider: letsencrypt
+  email: admin@votre-domaine.com
+  staging: true  # Certificats Let's Encrypt de test
+
+# Configuration sécurité (modérée en staging)
+security:
+  firewall_enabled: true
+  fail2ban_enabled: true
+  ssh:
+    port: 22
+    permit_root_login: "no"
+    password_authentication: "no"
+    max_auth_tries: 5
+  ufw:
+    enabled: true
+    default_policy: deny
+    logging: "on"
+
+# Configuration monitoring
+monitoring:
+  enabled: true
+  retention_days: 30
+  log_level: info
+  alerts_enabled: false
+  
+# Configuration backup
+backup:
+  enabled: true
+  retention_days: 7
+  schedule: "0 3 * * *"
+  remote_storage: false
+  
+# Configuration des ressources
+resources:
+  php:
+    memory_limit: 256M
+    max_execution_time: 300
+    upload_max_filesize: 50M
+    post_max_size: 50M
+  mysql:
+    max_connections: 100
+    innodb_buffer_pool_size: 512M
+    query_cache_size: 64M
+  redis:
+    maxmemory: 128M
+    maxmemory_policy: allkeys-lru
+    
+# Configuration Docker
+docker:
+  restart_policy: unless-stopped
+  log_driver: json-file
+  log_opts:
+    max-size: 5m
+    max-file: "3"
+    
+# Services optionnels (partiellement activés en staging)
+optional_services:
+  mailhog:
+    enabled: false
+  adminer:
+    enabled: false
+  it_tools:
+    enabled: false
+  dozzle:
+    enabled: true
+  watchtower:
+    enabled: true
+    schedule: "0 3 * * *"
+    cleanup: true
+    
+# Configuration réseau
+network:
+  firewall:
+    allowed_ports:
+      - "22"      # SSH
+      - "80"      # HTTP
+      - "443"     # HTTPS
+      - "9999"    # Dozzle
+    blocked_ports:
+      - "3306"    # MySQL (accès interne uniquement)
+      - "6379"    # Redis (accès interne uniquement)
+      - "8025"    # Mailhog
+      - "8080"    # Adminer
+      
+# Configuration Laravel spécifique
+laravel:
+  queue_driver: redis
+  cache_driver: redis
+  session_driver: redis
+  horizon_enabled: true
+  telescope_enabled: true
+  
+# Configuration de performance
+performance:
+  opcache_enabled: true
+  redis_cache_enabled: true
+  gzip_compression: true
+  browser_caching: true
+  
+# Configuration des notifications
+notifications:
+  slack:
+    enabled: false
+    webhook_url: ""
+  email:
+    enabled: true
+    recipients:
+      - dev@votre-domaine.com
+  discord:
+    enabled: false
+    webhook_url: ""

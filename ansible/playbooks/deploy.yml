@@ -1,0 +1,125 @@
+---
+# Playbook principal de déploiement Laravel avec Docker
+# Usage: ansible-playbook -i inventories/production/hosts.yml playbooks/deploy.yml
+
+- name: "Déploiement Laravel - Configuration initiale"
+  hosts: all
+  gather_facts: yes
+  become: yes
+  
+  vars_prompt:
+    - name: "git_repo_url"
+      prompt: "URL du repository Git (par défaut: https://github.com/votre-username/myLaravelSkeleton.git)"
+      default: "https://github.com/votre-username/myLaravelSkeleton.git"
+      private: no
+      
+    - name: "git_branch"
+      prompt: "Branche Git à déployer (par défaut: main)"
+      default: "main"
+      private: no
+      
+    - name: "deploy_path"
+      prompt: "Chemin de déploiement (par défaut: /var/www/laravel-app)"
+      default: "/var/www/laravel-app"
+      private: no
+      
+    - name: "project_name"
+      prompt: "Nom du projet (par défaut: laravel-app)"
+      default: "laravel-app"
+      private: no
+      
+    - name: "domain_name"
+      prompt: "Nom de domaine (par défaut: laravel.local)"
+      default: "laravel.local"
+      private: no
+
+  pre_tasks:
+    - name: "Afficher les informations de déploiement"
+      debug:
+        msg: |
+          ====================================
+          🚀 DÉPLOIEMENT LARAVEL AVEC DOCKER
+          ====================================
+          Repository: {{ git_repo_url }}
+          Branche: {{ git_branch }}
+          Chemin: {{ deploy_path }}
+          Projet: {{ project_name }}
+          Domaine: {{ domain_name }}
+          Environnement: {{ environment }}
+          ====================================
+          
+    - name: "Vérifier les prérequis système"
+      fail:
+        msg: "Ce playbook nécessite une distribution Ubuntu/Debian"
+      when: ansible_os_family != "Debian"
+      
+    - name: "Mettre à jour le cache des paquets"
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+  roles:
+    - role: common
+      tags: ["common", "base"]
+      
+    - role: security
+      tags: ["security", "firewall"]
+      when: firewall_enabled | default(true)
+      
+    - role: docker
+      tags: ["docker", "containers"]
+      
+    - role: laravel-app
+      tags: ["laravel", "application"]
+      vars:
+        app_git_repo: "{{ git_repo_url }}"
+        app_git_branch: "{{ git_branch }}"
+        app_deploy_path: "{{ deploy_path }}"
+        app_project_name: "{{ project_name }}"
+        app_domain_name: "{{ domain_name }}"
+        
+    - role: nginx-proxy
+      tags: ["nginx", "proxy", "ssl"]
+      when: nginx_proxy_enabled | default(true)
+      
+    - role: monitoring
+      tags: ["monitoring", "logs"]
+      when: monitoring_enabled | default(true)
+
+  post_tasks:
+    - name: "Afficher le résumé du déploiement"
+      debug:
+        msg: |
+          ✅ DÉPLOIEMENT TERMINÉ AVEC SUCCÈS !
+          
+          🌐 URL de l'application: https://{{ domain_name }}
+          📁 Chemin de déploiement: {{ deploy_path }}
+          🐳 Conteneurs Docker: {{ project_name }}_*
+          📊 Monitoring: http://{{ ansible_default_ipv4.address }}:9999 (Dozzle)
+          📧 Mailcatcher: http://{{ ansible_default_ipv4.address }}:8025
+          🗄️ Adminer: http://{{ ansible_default_ipv4.address }}:8080
+          
+          Commandes utiles:
+          - Vérifier les conteneurs: docker ps
+          - Voir les logs: docker-compose -f {{ deploy_path }}/docker-compose.yml logs -f
+          - Redémarrer: docker-compose -f {{ deploy_path }}/docker-compose.yml restart
+          
+    - name: "Vérifier que l'application répond"
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:80"
+        method: GET
+        timeout: 30
+      register: app_check
+      retries: 5
+      delay: 10
+      until: app_check.status == 200
+      ignore_errors: yes
+      
+    - name: "Afficher le statut de l'application"
+      debug:
+        msg: |
+          {% if app_check.status == 200 %}
+          ✅ L'application Laravel est accessible et fonctionne correctement !
+          {% else %}
+          ❌ L'application n'est pas accessible. Vérifiez les logs des conteneurs.
+          {% endif %}

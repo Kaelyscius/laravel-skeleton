@@ -1,0 +1,17 @@
+// Configuration des mises à jour automatiques
+// Générée par Ansible pour {{ environment }}
+
+// Mettre à jour la liste des paquets automatiquement
+APT::Periodic::Update-Package-Lists "1";
+
+// Télécharger les mises à jour automatiquement
+APT::Periodic::Download-Upgradeable-Packages "1";
+
+// Installer les mises à jour de sécurité automatiquement
+APT::Periodic::Unattended-Upgrade "1";
+
+// Nettoyer automatiquement les paquets inutiles
+APT::Periodic::AutocleanInterval "7";
+
+// Verbosité des logs
+APT::Periodic::Verbose "2";

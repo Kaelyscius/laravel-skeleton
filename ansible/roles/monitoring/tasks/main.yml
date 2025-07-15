@@ -1,0 +1,192 @@
+---
+# Rôle Monitoring - Surveillance des services
+
+- name: "Créer le répertoire de monitoring"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /var/log/monitoring
+    - /opt/monitoring
+    - /etc/monitoring
+  tags: ["monitoring", "directories"]
+
+- name: "Installer les outils de monitoring"
+  apt:
+    name:
+      - htop
+      - iotop
+      - netstat-nat
+      - lsof
+      - strace
+      - tcpdump
+      - rsyslog
+      - logrotate
+    state: present
+    update_cache: yes
+  tags: ["monitoring", "packages"]
+
+- name: "Configurer rsyslog pour les logs centralisés"
+  template:
+    src: rsyslog.conf.j2
+    dest: /etc/rsyslog.d/50-laravel.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart rsyslog
+  tags: ["monitoring", "logging"]
+
+- name: "Créer un script de monitoring système"
+  template:
+    src: system-monitor.sh.j2
+    dest: /usr/local/bin/system-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  tags: ["monitoring", "scripts"]
+
+- name: "Programmer le monitoring système"
+  cron:
+    name: "System monitoring"
+    minute: "*/5"
+    job: "/usr/local/bin/system-monitor.sh"
+    user: root
+  tags: ["monitoring", "cron"]
+
+- name: "Créer un script de surveillance des conteneurs Docker"
+  template:
+    src: docker-monitor.sh.j2
+    dest: /usr/local/bin/docker-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  tags: ["monitoring", "docker"]
+
+- name: "Programmer la surveillance Docker"
+  cron:
+    name: "Docker monitoring"
+    minute: "*/2"
+    job: "/usr/local/bin/docker-monitor.sh"
+    user: root
+  tags: ["monitoring", "docker"]
+
+- name: "Créer un script de surveillance des logs Laravel"
+  template:
+    src: laravel-monitor.sh.j2
+    dest: /usr/local/bin/laravel-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  tags: ["monitoring", "laravel"]
+
+- name: "Programmer la surveillance Laravel"
+  cron:
+    name: "Laravel monitoring"
+    minute: "*/1"
+    job: "/usr/local/bin/laravel-monitor.sh"
+    user: root
+  tags: ["monitoring", "laravel"]
+
+- name: "Configurer les alertes par email"
+  template:
+    src: alert-email.sh.j2
+    dest: /usr/local/bin/alert-email.sh
+    owner: root
+    group: root
+    mode: '0755'
+  when: notifications.email.enabled | default(false)
+  tags: ["monitoring", "alerts"]
+
+- name: "Créer un script de rapport quotidien"
+  template:
+    src: daily-report.sh.j2
+    dest: /usr/local/bin/daily-report.sh
+    owner: root
+    group: root
+    mode: '0755'
+  tags: ["monitoring", "reports"]
+
+- name: "Programmer le rapport quotidien"
+  cron:
+    name: "Daily report"
+    minute: "0"
+    hour: "8"
+    job: "/usr/local/bin/daily-report.sh"
+    user: root
+  tags: ["monitoring", "reports"]
+
+- name: "Configurer la rotation des logs de monitoring"
+  template:
+    src: monitoring-logrotate.j2
+    dest: /etc/logrotate.d/monitoring
+    owner: root
+    group: root
+    mode: '0644'
+  tags: ["monitoring", "logrotate"]
+
+- name: "Créer un script de nettoyage des logs"
+  template:
+    src: log-cleanup.sh.j2
+    dest: /usr/local/bin/log-cleanup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  tags: ["monitoring", "cleanup"]
+
+- name: "Programmer le nettoyage des logs"
+  cron:
+    name: "Log cleanup"
+    minute: "0"
+    hour: "1"
+    job: "/usr/local/bin/log-cleanup.sh"
+    user: root
+  tags: ["monitoring", "cleanup"]
+
+- name: "Vérifier que les services de monitoring sont actifs"
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - rsyslog
+    - cron
+  tags: ["monitoring", "services"]
+
+- name: "Créer un fichier de configuration pour Dozzle"
+  template:
+    src: dozzle.yml.j2
+    dest: "{{ app_deploy_path | default('/var/www/laravel-app') }}/dozzle.yml"
+    owner: "{{ app_user | default('laravel') }}"
+    group: "{{ app_user | default('laravel') }}"
+    mode: '0644'
+  when: optional_services.dozzle.enabled | default(true)
+  tags: ["monitoring", "dozzle"]
+
+- name: "Tester les scripts de monitoring"
+  command: "{{ item }}"
+  loop:
+    - /usr/local/bin/system-monitor.sh
+    - /usr/local/bin/docker-monitor.sh
+  register: monitoring_test
+  changed_when: false
+  ignore_errors: yes
+  tags: ["monitoring", "test"]
+
+- name: "Afficher le statut du monitoring"
+  debug:
+    msg: |
+      Monitoring configuré avec succès :
+      - Scripts système : ✅
+      - Surveillance Docker : ✅
+      - Surveillance Laravel : ✅
+      - Logs centralisés : ✅
+      - Rotation des logs : ✅
+      - Rapports quotidiens : ✅
+      - Nettoyage automatique : ✅
+      {% if optional_services.dozzle.enabled | default(true) %}
+      - Dozzle (interface web) : http://{{ ansible_default_ipv4.address }}:9999
+      {% endif %}
+  tags: ["monitoring", "info"]

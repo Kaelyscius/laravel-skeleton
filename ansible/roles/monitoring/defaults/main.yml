@@ -1,0 +1,127 @@
+---
+# Variables par défaut pour le rôle Monitoring
+
+# Configuration générale
+monitoring_enabled: true
+monitoring_retention_days: 30
+monitoring_log_level: info
+
+# Répertoires de monitoring
+monitoring_directories:
+  - /var/log/monitoring
+  - /opt/monitoring
+  - /etc/monitoring
+
+# Services à surveiller
+monitored_services:
+  - docker
+  - nginx
+  - apache2
+  - mysql
+  - mariadb
+  - redis
+  - php-fpm
+  - ssh
+  - rsyslog
+
+# Configuration des alertes
+alerts:
+  disk_usage_threshold: 85
+  memory_usage_threshold: 90
+  cpu_load_threshold: 4
+  error_count_threshold: 10
+  container_health_check: true
+
+# Configuration des seuils
+thresholds:
+  disk:
+    warning: 80
+    critical: 90
+  memory:
+    warning: 85
+    critical: 95
+  cpu:
+    warning: 70
+    critical: 90
+  load:
+    warning: 2
+    critical: 4
+
+# Configuration des scripts de monitoring
+monitoring_scripts:
+  system_monitor:
+    enabled: true
+    interval: "*/5"  # Toutes les 5 minutes
+    script: /usr/local/bin/system-monitor.sh
+    
+  docker_monitor:
+    enabled: true
+    interval: "*/2"  # Toutes les 2 minutes
+    script: /usr/local/bin/docker-monitor.sh
+    
+  laravel_monitor:
+    enabled: true
+    interval: "*/1"  # Toutes les 1 minute
+    script: /usr/local/bin/laravel-monitor.sh
+    
+  daily_report:
+    enabled: true
+    schedule: "0 8 * * *"  # 8h du matin
+    script: /usr/local/bin/daily-report.sh
+    
+  log_cleanup:
+    enabled: true
+    schedule: "0 1 * * *"  # 1h du matin
+    script: /usr/local/bin/log-cleanup.sh
+
+# Configuration de la rotation des logs
+log_rotation:
+  enabled: true
+  frequency: daily
+  rotate_count: 7
+  compress: true
+  delay_compress: true
+  
+# Configuration des notifications
+notifications:
+  email:
+    enabled: false
+    recipients: []
+    smtp_server: localhost
+    smtp_port: 25
+    
+  slack:
+    enabled: false
+    webhook_url: ""
+    channel: "#alerts"
+    
+  discord:
+    enabled: false
+    webhook_url: ""
+
+# Configuration Dozzle
+dozzle:
+  enabled: true
+  port: 9999
+  level: info
+  tail_size: 300
+  
+# Configuration rsyslog
+rsyslog:
+  enabled: true
+  remote_logging: false
+  remote_server: ""
+  remote_port: 514
+  
+# Paquets de monitoring requis
+monitoring_packages:
+  - htop
+  - iotop
+  - netstat-nat
+  - lsof
+  - strace
+  - tcpdump
+  - rsyslog
+  - logrotate
+  - bc
+  - mailutils

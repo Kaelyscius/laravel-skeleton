@@ -1,0 +1,127 @@
+---
+# Variables par défaut pour le rôle Nginx-Proxy
+
+# Configuration générale
+nginx_enabled: true
+nginx_user: www-data
+nginx_group: www-data
+
+# Configuration du domaine
+default_domain: laravel.local
+server_name: "{{ app_domain_name | default(default_domain) }}"
+
+# Configuration des ports
+nginx_http_port: 80
+nginx_https_port: 443
+
+# Configuration SSL
+ssl_enabled: false
+ssl_provider: letsencrypt
+ssl_email: admin@localhost
+ssl_staging: false
+ssl_protocols: 
+  - TLSv1.2
+  - TLSv1.3
+ssl_ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
+ssl_session_timeout: 1d
+ssl_session_cache_size: 50m
+ssl_stapling: true
+ssl_stapling_verify: true
+
+# Configuration du backend
+backend_host: 127.0.0.1
+backend_port: 80
+backend_keepalive: 32
+
+# Configuration du cache
+cache_enabled: true
+cache_path: /var/cache/nginx
+cache_levels: "1:2"
+cache_keys_zone: "my_cache:10m"
+cache_max_size: 1g
+cache_inactive: 60m
+
+# Configuration de la compression
+gzip_enabled: true
+gzip_vary: true
+gzip_proxied: any
+gzip_comp_level: 6
+gzip_types:
+  - text/plain
+  - text/css
+  - text/xml
+  - text/javascript
+  - application/javascript
+  - application/xml+rss
+  - application/json
+  - image/svg+xml
+
+# Configuration de la sécurité
+security_headers:
+  x_frame_options: "DENY"
+  x_content_type_options: "nosniff"
+  x_xss_protection: "1; mode=block"
+  referrer_policy: "strict-origin-when-cross-origin"
+  content_security_policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
+
+# Configuration des rate limits
+rate_limits:
+  login:
+    zone: "login:10m"
+    rate: "1r/s"
+    burst: 5
+    
+  api:
+    zone: "api:10m"
+    rate: "10r/s"
+    burst: 20
+    
+  static:
+    zone: "static:10m"
+    rate: "50r/s"
+    burst: 100
+
+# Configuration des timeouts
+timeouts:
+  client_body_timeout: "3m"
+  client_header_timeout: "3m"
+  send_timeout: "3m"
+  keepalive_timeout: "65"
+  proxy_connect_timeout: "60s"
+  proxy_send_timeout: "60s"
+  proxy_read_timeout: "60s"
+
+# Configuration des buffers
+buffers:
+  client_body_buffer_size: "128k"
+  client_max_body_size: "100m"
+  client_header_buffer_size: "1k"
+  large_client_header_buffers: "4 4k"
+  output_buffers: "1 32k"
+  postpone_output: "1460"
+
+# Configuration des logs
+log_format: 'main'
+access_log_enabled: true
+error_log_enabled: true
+access_log_path: "/var/log/nginx/{{ server_name }}.access.log"
+error_log_path: "/var/log/nginx/{{ server_name }}.error.log"
+
+# Configuration de la maintenance
+maintenance_enabled: false
+maintenance_file: /var/www/html/maintenance.html
+
+# Configuration des certificats
+certbot_enabled: true
+certbot_email: "{{ ssl_email }}"
+certbot_domains: "{{ server_name }}"
+certbot_renewal_cron: "0 2 * * *"
+
+# Répertoires Nginx
+nginx_directories:
+  - /etc/nginx/sites-available
+  - /etc/nginx/sites-enabled
+  - /etc/nginx/snippets
+  - /var/log/nginx
+  - /var/www/html
+  - /var/cache/nginx

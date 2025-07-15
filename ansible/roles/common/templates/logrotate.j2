@@ -1,0 +1,24 @@
+# Configuration de rotation des logs pour Laravel
+{{ app_deploy_path | default('/var/www/laravel-app') }}/logs/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    sharedscripts
+    postrotate
+        /bin/kill -USR1 `cat /var/run/rsyslogd.pid 2>/dev/null` 2>/dev/null || true
+    endscript
+}
+
+# Logs Docker
+/var/lib/docker/containers/*/*.log {
+    daily
+    missingok
+    rotate 3
+    compress
+    delaycompress
+    notifempty
+    copytruncate
+}

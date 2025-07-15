@@ -1,0 +1,137 @@
+---
+# Variables spécifiques à l'environnement de développement
+
+# Configuration environnement
+environment: development
+laravel_env: local
+laravel_debug: true
+laravel_log_level: debug
+
+# Configuration SSL/TLS (désactivé en développement)
+ssl:
+  enabled: false
+  provider: self-signed
+  email: dev@localhost
+  staging: true
+
+# Configuration sécurité (relaxée en développement)
+security:
+  firewall_enabled: false
+  fail2ban_enabled: false
+  ssh:
+    port: 22
+    permit_root_login: "yes"
+    password_authentication: "yes"
+    max_auth_tries: 10
+  ufw:
+    enabled: false
+    default_policy: allow
+    logging: "off"
+
+# Configuration monitoring
+monitoring:
+  enabled: true
+  retention_days: 3
+  log_level: debug
+  alerts_enabled: false
+  
+# Configuration backup
+backup:
+  enabled: false
+  retention_days: 1
+  schedule: "0 4 * * *"
+  remote_storage: false
+  
+# Configuration des ressources
+resources:
+  php:
+    memory_limit: 512M
+    max_execution_time: 600
+    upload_max_filesize: 100M
+    post_max_size: 100M
+  mysql:
+    max_connections: 50
+    innodb_buffer_pool_size: 256M
+    query_cache_size: 32M
+  redis:
+    maxmemory: 64M
+    maxmemory_policy: allkeys-lru
+    
+# Configuration Docker
+docker:
+  restart_policy: "no"
+  log_driver: json-file
+  log_opts:
+    max-size: 10m
+    max-file: "2"
+    
+# Services optionnels (tous activés en développement)
+optional_services:
+  mailhog:
+    enabled: true
+  adminer:
+    enabled: true
+  it_tools:
+    enabled: true
+  dozzle:
+    enabled: true
+  watchtower:
+    enabled: false  # Pas de mise à jour auto en dev
+    schedule: "0 4 * * *"
+    cleanup: true
+    
+# Configuration réseau (tous les ports ouverts)
+network:
+  firewall:
+    allowed_ports:
+      - "22"      # SSH
+      - "80"      # HTTP
+      - "443"     # HTTPS
+      - "3306"    # MySQL
+      - "6379"    # Redis
+      - "8025"    # Mailhog
+      - "8080"    # Adminer
+      - "8081"    # IT-Tools
+      - "9999"    # Dozzle
+    blocked_ports: []
+      
+# Configuration Laravel spécifique
+laravel:
+  queue_driver: sync
+  cache_driver: array
+  session_driver: file
+  horizon_enabled: true
+  telescope_enabled: true
+  
+# Configuration de performance (désactivée en développement)
+performance:
+  opcache_enabled: false
+  redis_cache_enabled: false
+  gzip_compression: false
+  browser_caching: false
+  
+# Configuration des notifications (désactivées)
+notifications:
+  slack:
+    enabled: false
+    webhook_url: ""
+  email:
+    enabled: false
+    recipients: []
+  discord:
+    enabled: false
+    webhook_url: ""
+    
+# Configuration spécifique au développement
+development:
+  xdebug_enabled: true
+  profiling_enabled: true
+  query_log_enabled: true
+  hot_reload_enabled: true
+  test_data_enabled: true
+  
+# Configuration des volumes (pour le développement local)
+volumes:
+  app_sync: delegated
+  node_modules_volume: true
+  vendor_volume: true

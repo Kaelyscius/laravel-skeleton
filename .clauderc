@@ -1,0 +1,204 @@
+{
+  "version": "1.0",
+  "project": {
+    "name": "Laravel Template Industrialisé",
+    "type": "laravel-docker-template",
+    "description": "Template base pour créer rapidement des applications Laravel 12 + PHP 8.4 avec Docker"
+  },
+
+  "instructions": [
+    "Ce projet est un TEMPLATE Laravel industrialisé, pas une application finale.",
+    "L'objectif est de créer une base réutilisable pour démarrer rapidement des projets Laravel.",
+    "Toujours séparer la logique de configuration des variables spécifiques au projet.",
+    "Utiliser config/installer.yml comme source de vérité pour toute configuration.",
+    "Proposer des solutions modulaires et maintenables.",
+    "Éviter le code en dur - tout doit être configurable.",
+    "Faciliter les mises à jour des versions (images Docker, dépendances, etc.).",
+    "Toujours poser des questions avant de générer du code complexe.",
+    "Découper les grosses générations en étapes claires."
+  ],
+
+  "contexts": {
+    "template-core": {
+      "description": "Configuration centrale du template",
+      "include": [
+        "config/installer.yml*",
+        "scripts/setup/**",
+        "Makefile",
+        "docker-compose*.yml",
+        ".env.example",
+        "README.md"
+      ]
+    },
+
+    "docker-infrastructure": {
+      "description": "Infrastructure Docker et scripts d'installation",
+      "include": [
+        "docker/**",
+        "docker-compose*.yml",
+        "scripts/**/*.sh"
+      ],
+      "exclude": [
+        "docker/*/logs/**",
+        "docker/apache/conf/ssl/*.crt",
+        "docker/apache/conf/ssl/*.key"
+      ]
+    },
+
+    "laravel-base": {
+      "description": "Code Laravel de base du template",
+      "include": [
+        "src/**/*.php",
+        "src/config/**",
+        "src/routes/**",
+        "src/database/**",
+        "src/composer.json",
+        "src/package.json"
+      ],
+      "exclude": [
+        "src/vendor/**",
+        "src/node_modules/**",
+        "src/storage/logs/**",
+        "src/bootstrap/cache/**",
+        "src/.phpstorm.meta.php"
+      ]
+    },
+
+    "automation-scripts": {
+      "description": "Scripts d'automatisation et d'industrialisation",
+      "include": [
+        "scripts/**",
+        "docker/scripts/**",
+        "Makefile"
+      ]
+    },
+
+    "configuration-management": {
+      "description": "Gestion centralisée des configurations",
+      "include": [
+        "config/**",
+        ".env.example",
+        "docker/*/conf/**",
+        "src/config/**"
+      ],
+      "exclude": [
+        "docker/*/conf/ssl/*.crt",
+        "docker/*/conf/ssl/*.key"
+      ]
+    }
+  },
+
+  "include": [
+    "config/**",
+    "scripts/**",
+    "docker/**",
+    "src/**/*.php",
+    "src/config/**",
+    "src/routes/**",
+    "src/database/**",
+    "src/composer.json",
+    "src/package.json",
+    "*.yml",
+    "*.yaml",
+    "docker-compose*.yml",
+    "Makefile",
+    "*.md",
+    ".env.example"
+  ],
+
+  "exclude": [
+    "src/vendor/**",
+    "src/node_modules/**",
+    "src/storage/logs/**",
+    "src/storage/framework/cache/**",
+    "src/storage/framework/sessions/**",
+    "src/storage/framework/views/**",
+    "src/bootstrap/cache/**",
+    "docker/*/logs/**",
+    "docker/apache/conf/ssl/*.crt",
+    "docker/apache/conf/ssl/*.key",
+    "src/.phpstorm.meta.php",
+    "*.log",
+    "*.cache",
+    "tmp/**",
+    ".git/**",
+    ".idea/**",
+    ".vscode/**",
+    "node_modules/**",
+    "vendor/**"
+  ],
+
+  "priority_files": [
+    "config/installer.yml",
+    "README.md",
+    "Makefile",
+    "docker-compose.yml",
+    "docker/scripts/install-laravel.sh",
+    "scripts/setup/generate-configs.sh",
+    ".env.example"
+  ],
+
+  "file_patterns": {
+    "config_files": {
+      "pattern": "**/{config,conf}/**/*.{yml,yaml,ini,conf}",
+      "description": "Fichiers de configuration centralisée"
+    },
+    "docker_files": {
+      "pattern": "**/docker/**/*.{yml,sh,conf,ini,Dockerfile}",
+      "description": "Infrastructure Docker"
+    },
+    "scripts": {
+      "pattern": "**/scripts/**/*.sh",
+      "description": "Scripts d'automatisation"
+    },
+    "laravel_core": {
+      "pattern": "src/**/*.php",
+      "description": "Code Laravel de base"
+    }
+  },
+
+  "key_concepts": {
+    "config_centralization": "Toute configuration doit passer par config/installer.yml",
+    "modularity": "Scripts et fonctionnalités doivent être modulaires et réutilisables",
+    "version_management": "Versions des images et dépendances centralisées et facilement mises à jour",
+    "environment_separation": "Séparation claire entre développement, test et production",
+    "industrialization": "Processus automatisés pour création, déploiement et maintenance",
+    "template_philosophy": "Ce n'est pas une app finale mais une base réutilisable"
+  },
+
+  "common_tasks": [
+    "Refactoriser les scripts d'installation modulaires",
+    "Améliorer la configuration centralisée",
+    "Optimiser les workflows Docker",
+    "Simplifier la création de nouveaux projets",
+    "Faciliter les mises à jour de versions",
+    "Améliorer la séparation des préoccupations"
+  ],
+
+  "architecture_patterns": [
+    "Configuration centralisée via YAML",
+    "Scripts modulaires dans docker/scripts/",
+    "Séparation infrastructure/application",
+    "Environnements Docker multiples (dev/prod)",
+    "Automatisation via Makefile",
+    "Template réutilisable et maintenable"
+  ],
+
+  "questions_to_ask": [
+    "Cette modification affecte-t-elle la réutilisabilité du template ?",
+    "Faut-il ajouter une option de configuration dans installer.yml ?",
+    "Comment séparer la logique métier de la configuration ?",
+    "Cette fonctionnalité doit-elle être modulaire ?",
+    "Comment faciliter la maintenance et les mises à jour ?",
+    "Y a-t-il des variables à externaliser ?"
+  ],
+
+  "analysis_focus": [
+    "Identifier les éléments configurables",
+    "Proposer des améliorations modulaires",
+    "Détecter les dépendances en dur",
+    "Suggérer des optimisations Docker",
+    "Améliorer l'expérience développeur",
+    "Faciliter l'industrialisation"
+  ]
+}

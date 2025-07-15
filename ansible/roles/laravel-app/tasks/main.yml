@@ -1,0 +1,244 @@
+---
+# Rôle Laravel-App - Déploiement de l'application Laravel
+
+- name: "Vérifier les variables requises"
+  fail:
+    msg: "La variable {{ item }} est requise"
+  when: vars[item] is not defined or vars[item] == ""
+  loop:
+    - app_git_repo
+    - app_deploy_path
+    - app_project_name
+  tags: ["validation"]
+
+- name: "Créer le répertoire de déploiement"
+  file:
+    path: "{{ app_deploy_path }}"
+    state: directory
+    owner: "{{ app_user | default('laravel') }}"
+    group: "{{ app_user | default('laravel') }}"
+    mode: '0755'
+  tags: ["deploy", "directories"]
+
+- name: "Cloner le repository Git"
+  git:
+    repo: "{{ app_git_repo }}"
+    dest: "{{ app_deploy_path }}"
+    version: "{{ app_git_branch | default('main') }}"
+    force: yes
+    update: yes
+  become_user: "{{ app_user | default('laravel') }}"
+  tags: ["deploy", "git"]
+
+- name: "Vérifier la présence du fichier docker-compose.yml"
+  stat:
+    path: "{{ app_deploy_path }}/docker-compose.yml"
+  register: docker_compose_file
+  tags: ["deploy", "validation"]
+
+- name: "Échouer si docker-compose.yml n'existe pas"
+  fail:
+    msg: "Le fichier docker-compose.yml n'existe pas dans {{ app_deploy_path }}"
+  when: not docker_compose_file.stat.exists
+  tags: ["deploy", "validation"]
+
+- name: "Créer le fichier .env depuis le template"
+  template:
+    src: env.j2
+    dest: "{{ app_deploy_path }}/.env"
+    owner: "{{ app_user | default('laravel') }}"
+    group: "{{ app_user | default('laravel') }}"
+    mode: '0640'
+  tags: ["deploy", "config"]
+
+- name: "Copier les fichiers de configuration si nécessaire"
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ app_deploy_path }}/{{ item.dest }}"
+    owner: "{{ app_user | default('laravel') }}"
+    group: "{{ app_user | default('laravel') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - { src: "config/installer.yml", dest: "config/installer.yml", mode: "0644" }
+  when: item.src is defined
+  tags: ["deploy", "config"]
+
+- name: "Créer les répertoires nécessaires pour les volumes"
+  file:
+    path: "{{ app_deploy_path }}/{{ item }}"
+    state: directory
+    owner: "{{ app_user | default('laravel') }}"
+    group: "{{ app_user | default('laravel') }}"
+    mode: '0755'
+  loop:
+    - "storage/app"
+    - "storage/framework/cache"
+    - "storage/framework/sessions"
+    - "storage/framework/views"
+    - "storage/logs"
+    - "bootstrap/cache"
+  tags: ["deploy", "directories"]
+
+- name: "Configurer les permissions des répertoires Laravel"
+  file:
+    path: "{{ app_deploy_path }}/{{ item }}"
+    state: directory
+    owner: "{{ app_user | default('laravel') }}"
+    group: "{{ app_user | default('laravel') }}"
+    mode: '0775'
+    recurse: yes
+  loop:
+    - "storage"
+    - "bootstrap/cache"
+  tags: ["deploy", "permissions"]
+
+- name: "Arrêter les conteneurs existants"
+  docker_compose:
+    project_src: "{{ app_deploy_path }}"
+    state: absent
+  ignore_errors: yes
+  tags: ["deploy", "docker"]
+
+- name: "Construire et démarrer les conteneurs"
+  docker_compose:
+    project_src: "{{ app_deploy_path }}"
+    build: yes
+    state: present
+    recreate: always
+    pull: yes
+  environment:
+    COMPOSE_PROJECT_NAME: "{{ app_project_name }}"
+  tags: ["deploy", "docker"]
+
+- name: "Attendre que les conteneurs soient en cours d'exécution"
+  docker_container_info:
+    name: "{{ app_project_name }}_apache"
+  register: container_info
+  until: container_info.exists and container_info.container.State.Running
+  retries: 30
+  delay: 10
+  tags: ["deploy", "docker"]
+
+- name: "Installer les dépendances Composer"
+  docker_container:
+    name: "{{ app_project_name }}_php"
+    command: "composer install --no-dev --optimize-autoloader"
+    working_dir: /var/www/html
+    detach: false
+  when: laravel_env == "production"
+  tags: ["deploy", "composer"]
+
+- name: "Installer les dépendances Composer (développement)"
+  docker_container:
+    name: "{{ app_project_name }}_php"
+    command: "composer install"
+    working_dir: /var/www/html
+    detach: false
+  when: laravel_env != "production"
+  tags: ["deploy", "composer"]
+
+- name: "Générer la clé d'application Laravel"
+  docker_container:
+    name: "{{ app_project_name }}_php"
+    command: "php artisan key:generate --force"
+    working_dir: /var/www/html
+    detach: false
+  tags: ["deploy", "laravel"]
+
+- name: "Exécuter les migrations de base de données"
+  docker_container:
+    name: "{{ app_project_name }}_php"
+    command: "php artisan migrate --force"
+    working_dir: /var/www/html
+    detach: false
+  tags: ["deploy", "database"]
+
+- name: "Optimiser Laravel (production)"
+  docker_container:
+    name: "{{ app_project_name }}_php"
+    command: "{{ item }}"
+    working_dir: /var/www/html
+    detach: false
+  loop:
+    - "php artisan config:cache"
+    - "php artisan route:cache"
+    - "php artisan view:cache"
+    - "php artisan event:cache"
+  when: laravel_env == "production"
+  tags: ["deploy", "optimization"]
+
+- name: "Installer les dépendances Node.js"
+  docker_container:
+    name: "{{ app_project_name }}_node"
+    command: "npm ci"
+    working_dir: /var/www/html
+    detach: false
+  tags: ["deploy", "nodejs"]
+
+- name: "Construire les assets (production)"
+  docker_container:
+    name: "{{ app_project_name }}_node"
+    command: "npm run build"
+    working_dir: /var/www/html
+    detach: false
+  when: laravel_env == "production"
+  tags: ["deploy", "assets"]
+
+- name: "Construire les assets (développement)"
+  docker_container:
+    name: "{{ app_project_name }}_node"
+    command: "npm run dev"
+    working_dir: /var/www/html
+    detach: false
+  when: laravel_env != "production"
+  tags: ["deploy", "assets"]
+
+- name: "Configurer les permissions finales"
+  file:
+    path: "{{ app_deploy_path }}/{{ item }}"
+    state: directory
+    owner: "{{ app_user | default('laravel') }}"
+    group: "{{ app_user | default('laravel') }}"
+    mode: '0775'
+    recurse: yes
+  loop:
+    - "storage"
+    - "bootstrap/cache"
+  tags: ["deploy", "permissions"]
+
+- name: "Créer un script de déploiement rapide"
+  template:
+    src: quick-deploy.sh.j2
+    dest: "{{ app_deploy_path }}/quick-deploy.sh"
+    owner: "{{ app_user | default('laravel') }}"
+    group: "{{ app_user | default('laravel') }}"
+    mode: '0755'
+  tags: ["deploy", "scripts"]
+
+- name: "Vérifier l'état des conteneurs"
+  docker_container_info:
+    name: "{{ app_project_name }}_{{ item }}"
+  register: container_status
+  loop:
+    - apache
+    - php
+    - mariadb
+    - redis
+  tags: ["deploy", "health"]
+
+- name: "Afficher le statut du déploiement"
+  debug:
+    msg: |
+      🚀 Déploiement terminé avec succès !
+      
+      📁 Projet: {{ app_project_name }}
+      🌐 Chemin: {{ app_deploy_path }}
+      🔗 Repository: {{ app_git_repo }}
+      🌿 Branche: {{ app_git_branch | default('main') }}
+      🏷️ Environnement: {{ laravel_env }}
+      
+      Conteneurs actifs:
+      {% for container in container_status.results %}
+      - {{ container.item }}: {{ 'Running' if container.exists and container.container.State.Running else 'Stopped' }}
+      {% endfor %}
+  tags: ["deploy", "info"]

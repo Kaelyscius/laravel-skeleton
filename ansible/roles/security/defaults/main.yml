@@ -1,0 +1,78 @@
+---
+# Variables par défaut pour le rôle Security
+
+# Configuration UFW (Firewall)
+ufw_enabled: true
+ufw_default_policy: deny
+ufw_logging: "on"
+
+# Configuration SSH
+ssh_port: 22
+ssh_protocol: 2
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+ssh_pubkey_authentication: "yes"
+ssh_max_auth_tries: 3
+ssh_max_sessions: 10
+ssh_x11_forwarding: "no"
+ssh_allow_agent_forwarding: "no"
+ssh_allow_tcp_forwarding: "no"
+ssh_permit_tunnel: "no"
+
+# Configuration Fail2ban
+fail2ban_enabled: true
+fail2ban_bantime: 3600
+fail2ban_maxretry: 5
+fail2ban_findtime: 600
+
+# Ports autorisés par défaut
+allowed_ports:
+  - "22"      # SSH
+  - "80"      # HTTP
+  - "443"     # HTTPS
+
+# Ports bloqués par défaut
+blocked_ports:
+  - "3306"    # MySQL
+  - "6379"    # Redis
+  - "5432"    # PostgreSQL
+
+# Services à désactiver
+disabled_services:
+  - avahi-daemon
+  - cups
+  - bluetooth
+
+# Configuration des mises à jour automatiques
+unattended_upgrades:
+  enabled: true
+  automatic_reboot: false
+  automatic_reboot_time: "02:00"
+  mail_on_error: true
+  remove_unused_dependencies: true
+  
+# Configuration des limites de sécurité
+security_limits:
+  core_dumps: false
+  max_logins: 10
+  
+# Configuration logwatch
+logwatch_enabled: true
+logwatch_detail: "Med"
+logwatch_range: "Yesterday"
+logwatch_format: "text"
+logwatch_output: "mail"
+
+# Fichiers sensibles à sécuriser
+sensitive_files:
+  - /etc/ssh/sshd_config
+  - /etc/shadow
+  - /etc/gshadow
+  - /etc/passwd
+  - /etc/group
+
+# Configuration des permissions
+file_permissions:
+  /etc/ssh/sshd_config: "600"
+  /etc/shadow: "600"
+  /etc/gshadow: "600"
