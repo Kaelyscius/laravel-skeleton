@@ -88,12 +88,16 @@ fi
 # 3. Test Composer + diagnostic
 log "STEP" "Étape 3: Test Composer et corrections"
 
-# Lancer le script de correction
-if [ -f "./scripts/fix-composer-issues.sh" ]; then
-    log "INFO" "Lancement des corrections Composer..."
+# Lancer les corrections Composer (intégrées dans le module)
+log "INFO" "Lancement des corrections Composer..."
+if [ -f "./scripts/install/05-composer-setup.sh" ]; then
+    log "INFO" "Utilisation du module Composer intégré..."
+    ./scripts/install/05-composer-setup.sh
+elif [ -f "./scripts/fix-composer-issues.sh" ]; then
+    log "INFO" "Utilisation du script de correction legacy..."
     ./scripts/fix-composer-issues.sh
 else
-    log "WARN" "Script fix-composer-issues.sh non trouvé - continuons"
+    log "WARN" "Aucun script de correction Composer trouvé - continuons"
 fi
 
 # 4. Test résolution packages PHP 8.4

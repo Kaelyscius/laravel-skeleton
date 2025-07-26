@@ -31,6 +31,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make test-unit` - Run unit tests only
 - `make test-coverage` - Run tests with coverage report
 
+### Diagnostics & Troubleshooting
+- `make diagnostic` - Run complete diagnostic suite (PHP 8.4 + Laravel 12)
+- `make quick-check` - Quick test of Laravel + PHP 8.4 compatibility
+- `make check-extensions` - Verify PHP 8.4 extensions installation
+- `make test-packages` - Test package compatibility with Laravel 12
+- `make fix-composer` - Fix Composer configuration and cache issues
+
 ### Code Quality
 - `make ecs` - Check code style (Easy Coding Standard)
 - `make ecs-fix` - Fix code style issues

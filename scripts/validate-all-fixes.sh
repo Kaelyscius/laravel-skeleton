@@ -123,9 +123,11 @@ log "STEP" "🎵 Tests Composer et configurations"
 check "Composer fonctionnel" "docker-compose exec -T php composer --version" true
 check "Configuration Composer" "docker-compose exec -T php test -f /var/composer/config.json" false
 
-# Script de correction Composer
-if [ -f "./scripts/fix-composer-issues.sh" ]; then
-    check "Script fix-composer-issues.sh" "test -x ./scripts/fix-composer-issues.sh" false
+# Module de configuration Composer (remplace fix-composer-issues.sh)
+if [ -f "./scripts/install/05-composer-setup.sh" ]; then
+    check "Module Composer 05-composer-setup.sh" "test -x ./scripts/install/05-composer-setup.sh" false
+elif [ -f "./scripts/fix-composer-issues.sh" ]; then
+    check "Script fix-composer-issues.sh (legacy)" "test -x ./scripts/fix-composer-issues.sh" false
 fi
 
 # 6. TESTS COMPATIBILITÉ PACKAGES PHP 8.4
@@ -180,12 +182,12 @@ fi
 # 9. TESTS SCRIPTS ET OUTILS
 log "STEP" "⚙️ Tests scripts et outils"
 
-# Scripts créés/modifiés
+# Scripts créés/modifiés (après simplification)
 scripts_to_check=(
-    "./scripts/check-php84-extensions.sh"
-    "./scripts/quick-laravel-test.sh"
+    "./scripts/diagnostic-tools.sh"
     "./scripts/test-installation-complete.sh"
     "./scripts/validate-all-fixes.sh"
+    "./scripts/install/05-composer-setup.sh"
 )
 
 for script in "${scripts_to_check[@]}"; do

@@ -126,11 +126,11 @@ fix-scripts-permissions: ## Corriger les permissions de tous les scripts
 .PHONY: fix-composer
 fix-composer: ## Corriger les problèmes Composer (cache, config, PHP 8.4)
 	@echo "$(YELLOW)🔧 Correction des problèmes Composer pour PHP 8.4...$(NC)"
-	@if [ -f "./scripts/fix-composer-issues.sh" ]; then \
-		chmod +x "./scripts/fix-composer-issues.sh"; \
-		./scripts/fix-composer-issues.sh; \
+	@if [ -f "./scripts/install/05-composer-setup.sh" ]; then \
+		chmod +x "./scripts/install/05-composer-setup.sh"; \
+		./scripts/install/05-composer-setup.sh; \
 	else \
-		echo "$(RED)❌ Script de correction Composer non trouvé$(NC)"; \
+		echo "$(RED)❌ Module de configuration Composer non trouvé$(NC)"; \
 		exit 1; \
 	fi
 
@@ -247,14 +247,14 @@ install-laravel-php84: ## Installation Laravel optimisée pour PHP 8.4 avec corr
 	$(call check_container,$(PHP_CONTAINER_NAME))
 	@echo "$(CYAN)🚀 Installation Laravel optimisée PHP 8.4...$(NC)"
 	@echo "$(BLUE)→ Étape 1: Diagnostic et correction Composer$(NC)"
-	@if [ -f "./scripts/fix-composer-issues.sh" ]; then \
-		chmod +x "./scripts/fix-composer-issues.sh"; \
-		./scripts/fix-composer-issues.sh; \
+	@if [ -f "./scripts/install/05-composer-setup.sh" ]; then \
+		chmod +x "./scripts/install/05-composer-setup.sh"; \
+		./scripts/install/05-composer-setup.sh; \
 	fi
 	@echo "$(BLUE)→ Étape 2: Test rapide compatibilité$(NC)"
-	@if [ -f "./scripts/quick-laravel-test.sh" ]; then \
-		chmod +x "./scripts/quick-laravel-test.sh"; \
-		./scripts/quick-laravel-test.sh; \
+	@if [ -f "./scripts/diagnostic-tools.sh" ]; then \
+		chmod +x "./scripts/diagnostic-tools.sh"; \
+		./scripts/diagnostic-tools.sh --quick-test; \
 	fi
 	@echo "$(BLUE)→ Étape 3: Installation Laravel avec scripts refactorisés$(NC)"
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh"
@@ -273,11 +273,41 @@ validate-fixes: ## Valider toutes les corrections implémentées
 .PHONY: test-packages
 test-packages: ## Tester compatibilité des packages
 	@echo "$(YELLOW)🧪 Test compatibilité packages...$(NC)"
-	@if [ -f "./scripts/test-package-compatibility.sh" ]; then \
-		chmod +x "./scripts/test-package-compatibility.sh"; \
-		./scripts/test-package-compatibility.sh; \
+	@if [ -f "./scripts/diagnostic-tools.sh" ]; then \
+		chmod +x "./scripts/diagnostic-tools.sh"; \
+		./scripts/diagnostic-tools.sh --packages; \
 	else \
-		echo "$(RED)❌ Script de test packages non trouvé$(NC)"; \
+		echo "$(RED)❌ Script d'outils diagnostic non trouvé$(NC)"; \
+	fi
+
+.PHONY: diagnostic
+diagnostic: ## Outils de diagnostic unifiés (--all)
+	@echo "$(CYAN)🔧 Diagnostic complet PHP 8.4 + Laravel 12...$(NC)"
+	@if [ -f "./scripts/diagnostic-tools.sh" ]; then \
+		chmod +x "./scripts/diagnostic-tools.sh"; \
+		./scripts/diagnostic-tools.sh --all; \
+	else \
+		echo "$(RED)❌ Script d'outils diagnostic non trouvé$(NC)"; \
+	fi
+
+.PHONY: check-extensions
+check-extensions: ## Vérifier les extensions PHP 8.4
+	@echo "$(YELLOW)🔍 Vérification extensions PHP...$(NC)"
+	@if [ -f "./scripts/diagnostic-tools.sh" ]; then \
+		chmod +x "./scripts/diagnostic-tools.sh"; \
+		./scripts/diagnostic-tools.sh --extensions; \
+	else \
+		echo "$(RED)❌ Script d'outils diagnostic non trouvé$(NC)"; \
+	fi
+
+.PHONY: quick-check
+quick-check: ## Test rapide Laravel + PHP 8.4
+	@echo "$(YELLOW)⚡ Test rapide Laravel + PHP 8.4...$(NC)"
+	@if [ -f "./scripts/diagnostic-tools.sh" ]; then \
+		chmod +x "./scripts/diagnostic-tools.sh"; \
+		./scripts/diagnostic-tools.sh --quick-test; \
+	else \
+		echo "$(RED)❌ Script d'outils diagnostic non trouvé$(NC)"; \
 	fi
 
 .PHONY: artisan

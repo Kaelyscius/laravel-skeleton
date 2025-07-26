@@ -61,6 +61,162 @@ readonly COMPOSER_CONFIG_OPTIMIZATIONS=(
 # =============================================================================
 
 #
+# Vérifier les extensions PHP critiques pour PHP 8.4 + Laravel 12
+#
+check_critical_php_extensions() {
+    log_info "🔍 Vérification des extensions PHP critiques..."
+    
+    # Extensions requises pour les packages de qualité
+    local required_extensions=(
+        "mbstring"
+        "xml"
+        "dom"
+        "json"
+        "tokenizer"
+        "iconv"
+        "ctype"
+        "fileinfo"
+    )
+    
+    local missing_extensions=()
+    local available_count=0
+    
+    for ext in "${required_extensions[@]}"; do
+        if php -m | grep -q "^$ext$"; then
+            log_debug "✓ Extension $ext: installée"
+            available_count=$((available_count + 1))
+        else
+            missing_extensions+=("$ext")
+            log_warn "✗ Extension $ext: manquante"
+        fi
+    done
+    
+    if [ ${#missing_extensions[@]} -gt 0 ]; then
+        log_warn "Extensions manquantes: ${missing_extensions[*]}"
+        log_info "Ces extensions peuvent être nécessaires pour certains packages"
+        return 1
+    else
+        log_success "✅ Toutes les $available_count extensions requises sont installées"
+        return 0
+    fi
+}
+
+#
+# Tester la résolution des dépendances pour PHP 8.4 + Laravel 12
+#
+test_php84_dependency_resolution() {
+    log_info "🧪 Test de résolution des dépendances PHP 8.4..."
+    
+    local test_file="/tmp/composer-test-php84.json"
+    
+    # Créer un composer.json temporaire pour tester PHP 8.4 + Laravel 12
+    cat > "$test_file" << 'EOF'
+{
+    "name": "test/php84-laravel12-compatibility",
+    "require": {
+        "php": "^8.4"
+    },
+    "require-dev": {
+        "symplify/easy-coding-standard": "^12.5",
+        "rector/rector": "^2.1",
+        "nunomaduro/phpinsights": "^2.13",
+        "pestphp/pest": "^3.0"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "platform-check": false,
+        "optimize-autoloader": true
+    }
+}
+EOF
+    
+    local validation_ok=false
+    local resolution_ok=false
+    
+    # Test de validation JSON
+    if composer validate "$test_file" --quiet 2>/dev/null; then
+        log_debug "✓ Configuration JSON valide"
+        validation_ok=true
+    else
+        log_error "✗ Problème avec la configuration JSON"
+    fi
+    
+    # Test de résolution (dry-run avec timeout)
+    if timeout 30 composer install --dry-run --working-dir="/tmp" --file="$test_file" --no-interaction --quiet 2>/dev/null; then
+        log_debug "✓ Résolution des dépendances OK"
+        resolution_ok=true
+    else
+        log_warn "⚠ Problèmes potentiels de résolution détectés"
+    fi
+    
+    # Nettoyage
+    rm -f "$test_file"
+    
+    if [ "$validation_ok" = true ] && [ "$resolution_ok" = true ]; then
+        log_success "✅ Test de compatibilité PHP 8.4 réussi"
+        return 0
+    else
+        log_warn "⚠ Des problèmes de compatibilité ont été détectés"
+        return 1
+    fi
+}
+
+#
+# Configuration optimisée spécifique à PHP 8.4 + Laravel 12
+#
+configure_php84_optimizations() {
+    log_info "⚡ Configuration optimisée pour PHP 8.4 + Laravel 12..."
+    
+    # Créer une configuration JSON optimisée (fusion des deux scripts)
+    local config_file="$COMPOSER_HOME/config.json"
+    
+    cat > "$config_file" << 'EOF'
+{
+    "config": {
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "optimize-autoloader": true,
+        "classmap-authoritative": true,
+        "apcu-autoloader": true,
+        "platform-check": false,
+        "process-timeout": 3600,
+        "cache-timeout": 86400,
+        "cache-ttl": 86400,
+        "prefer-stable": true,
+        "minimum-stability": "stable",
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true,
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "bamarni/composer-bin-plugin": true,
+            "ergebnis/composer-normalize": true,
+            "infection/extension-installer": true,
+            "phpstan/extension-installer": true,
+            "rector/extension-installer": true,
+            "enlightn/enlightn": true,
+            "spatie/laravel-ignition": true
+        }
+    },
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://packagist.org"
+        }
+    ]
+}
+EOF
+    
+    if [ -f "$config_file" ] && python3 -m json.tool "$config_file" >/dev/null 2>&1; then
+        log_success "✅ Configuration PHP 8.4 + Laravel 12 appliquée"
+        return 0
+    else
+        log_error "❌ Échec de la configuration optimisée"
+        return 1
+    fi
+}
+
+#
 # Fonction principale de réparation Composer (EXACTE DE L'ORIGINAL)
 #
 fix_composer_config() {
@@ -93,14 +249,23 @@ fix_composer_config() {
         echo '{"config":{},"repositories":{"packagist.org":{"type":"composer","url":"https://packagist.org"}}}' > "$COMPOSER_HOME/config.json"
     fi
     
+    # Vérifier les extensions PHP critiques
+    check_critical_php_extensions || log_warn "Extensions PHP manquantes détectées"
+    
+    # Configuration optimisée pour PHP 8.4 + Laravel 12
+    configure_php84_optimizations
+    
     # Configuration des plugins autorisés
     configure_composer_plugins
     
-    # Configuration des optimisations
+    # Configuration des optimisations (héritage)
     configure_composer_optimizations
     
     # Définir les variables d'environnement critiques
     setup_composer_environment_variables
+    
+    # Test de résolution des dépendances PHP 8.4
+    test_php84_dependency_resolution || log_warn "Problèmes de résolution détectés"
     
     # Vérifier la configuration finale
     if validate_composer_configuration; then
@@ -175,11 +340,19 @@ setup_composer_environment_variables() {
     export COMPOSER_NO_INTERACTION=1
     export COMPOSER_PREFER_STABLE=1
     
-    # Configuration pour Docker si applicable
-    if is_docker_environment; then
+    # Configuration pour Docker si applicable (améliorations intégrées)
+    if is_docker_environment || [ -f "/.dockerenv" ] || [ -n "${DOCKER_CONTAINER:-}" ]; then
         export COMPOSER_CACHE_DIR="/tmp/composer-cache"
         mkdir -p "$COMPOSER_CACHE_DIR"
+        
+        # Variables d'environnement optimisées pour Docker (de fix-composer-issues.sh)
+        export COMPOSER_MEMORY_LIMIT=-1
+        export COMPOSER_PROCESS_TIMEOUT=3600
+        export COMPOSER_ALLOW_SUPERUSER=1
+        export COMPOSER_NO_INTERACTION=1
+        
         log_debug "Cache Composer Docker: $COMPOSER_CACHE_DIR"
+        log_debug "Variables Docker optimisées configurées"
     fi
     
     # Afficher les variables configurées
