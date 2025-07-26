@@ -116,15 +116,26 @@ rebuild: down build up ## Reconstruire et redémarrer
 # INSTALLATION INTERACTIVE ET PROFILS
 # =============================================================================
 
-.PHONY: fix-permissions
-fix-permissions: ## Corriger les permissions de tous les scripts
-	@echo "$(YELLOW)🔧 Correction des permissions...$(NC)"
+.PHONY: fix-scripts-permissions
+fix-scripts-permissions: ## Corriger les permissions de tous les scripts
+	@echo "$(YELLOW)🔧 Correction des permissions des scripts...$(NC)"
 	@mkdir -p scripts/setup scripts/security config
 	@find scripts/ docker/ -name "*.sh" -type f -exec chmod +x {} \; 2>/dev/null || true
-	@echo "$(GREEN)✅ Permissions corrigées$(NC)"
+	@echo "$(GREEN)✅ Permissions des scripts corrigées$(NC)"
+
+.PHONY: fix-composer
+fix-composer: ## Corriger les problèmes Composer (cache, config, PHP 8.4)
+	@echo "$(YELLOW)🔧 Correction des problèmes Composer pour PHP 8.4...$(NC)"
+	@if [ -f "./scripts/fix-composer-issues.sh" ]; then \
+		chmod +x "./scripts/fix-composer-issues.sh"; \
+		./scripts/fix-composer-issues.sh; \
+	else \
+		echo "$(RED)❌ Script de correction Composer non trouvé$(NC)"; \
+		exit 1; \
+	fi
 
 .PHONY: setup-interactive
-setup-interactive: fix-permissions ## Installation interactive avec choix de configuration
+setup-interactive: fix-scripts-permissions ## Installation interactive avec choix de configuration
 	@echo "$(CYAN)🚀 Démarrage de l'installation interactive...$(NC)"
 	@if [ -f "./scripts/setup/interactive-setup.sh" ]; then \
 		chmod +x "./scripts/setup/interactive-setup.sh"; \
@@ -225,11 +236,49 @@ logs: ## Afficher les logs (usage: make logs service=php)
 # =============================================================================
 
 .PHONY: install-laravel
-install-laravel: ## Installer Laravel avec outils qualité
+install-laravel: ## Installer Laravel avec outils qualité (version refactorisée)
 	$(call check_container,$(PHP_CONTAINER_NAME))
-	@echo "$(YELLOW)Installing Laravel...$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /docker/scripts/install-laravel.sh"
+	@echo "$(YELLOW)Installing Laravel (refactored)...$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh"
 	@echo "$(GREEN)✓ Laravel installed$(NC)"
+
+.PHONY: install-laravel-php84
+install-laravel-php84: ## Installation Laravel optimisée pour PHP 8.4 avec corrections
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	@echo "$(CYAN)🚀 Installation Laravel optimisée PHP 8.4...$(NC)"
+	@echo "$(BLUE)→ Étape 1: Diagnostic et correction Composer$(NC)"
+	@if [ -f "./scripts/fix-composer-issues.sh" ]; then \
+		chmod +x "./scripts/fix-composer-issues.sh"; \
+		./scripts/fix-composer-issues.sh; \
+	fi
+	@echo "$(BLUE)→ Étape 2: Test rapide compatibilité$(NC)"
+	@if [ -f "./scripts/quick-laravel-test.sh" ]; then \
+		chmod +x "./scripts/quick-laravel-test.sh"; \
+		./scripts/quick-laravel-test.sh; \
+	fi
+	@echo "$(BLUE)→ Étape 3: Installation Laravel avec scripts refactorisés$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh"
+	@echo "$(GREEN)✅ Installation Laravel PHP 8.4 terminée !$(NC)"
+
+.PHONY: validate-fixes
+validate-fixes: ## Valider toutes les corrections implémentées
+	@echo "$(CYAN)🔍 Validation complète des corrections...$(NC)"
+	@if [ -f "./scripts/validate-all-fixes.sh" ]; then \
+		chmod +x "./scripts/validate-all-fixes.sh"; \
+		./scripts/validate-all-fixes.sh; \
+	else \
+		echo "$(RED)❌ Script de validation non trouvé$(NC)"; \
+	fi
+
+.PHONY: test-packages
+test-packages: ## Tester compatibilité des packages
+	@echo "$(YELLOW)🧪 Test compatibilité packages...$(NC)"
+	@if [ -f "./scripts/test-package-compatibility.sh" ]; then \
+		chmod +x "./scripts/test-package-compatibility.sh"; \
+		./scripts/test-package-compatibility.sh; \
+	else \
+		echo "$(RED)❌ Script de test packages non trouvé$(NC)"; \
+	fi
 
 .PHONY: artisan
 artisan: ## Exécuter artisan (usage: make artisan cmd="migrate")
@@ -439,6 +488,17 @@ shell-node: ## Shell Node
 .PHONY: shell-db
 shell-db: ## Console MariaDB
 	@$(DOCKER) exec -it $(MARIADB_CONTAINER_NAME) mysql -u root -p
+
+.PHONY: fix-permissions
+fix-permissions: ## Corriger les permissions pour PhpStorm (containers doivent être démarrés)
+	@echo "$(CYAN)🔧 Correction des permissions Docker pour PhpStorm$(NC)"
+	@if docker ps --format "{{.Names}}" | grep -q "$(PHP_CONTAINER_NAME)"; then \
+		$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) /var/www/project/scripts/fix-permissions.sh; \
+		echo "$(GREEN)✅ Permissions corrigées - redémarrez PhpStorm si nécessaire$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠️ Containers non démarrés - lancement direct du script$(NC)"; \
+		/var/www/html/myLaravelSkeleton/scripts/fix-permissions.sh; \
+	fi
 
 # =============================================================================
 # MAINTENANCE & CLEANUP
@@ -734,8 +794,8 @@ security-auth: ## Authentifier Snyk avec le token du .env
 		echo "$(BLUE)→ Ajoutez SNYK_TOKEN=votre_token dans votre .env$(NC)"; \
 	fi
 
-.PHONY: security-check
-security-check: ## Vérifier la configuration Snyk
+.PHONY: security-setup-check
+security-setup-check: ## Vérifier la configuration Snyk
 	@echo "$(CYAN)🔧 Vérification de la configuration Snyk$(NC)"
 	@if command -v snyk >/dev/null 2>&1; then \
 		echo "$(GREEN)✓ Snyk CLI installé (version: $$(snyk --version))$(NC)"; \
@@ -857,7 +917,7 @@ security-setup: ## Configuration complète de Snyk
 	@echo ""
 	@$(MAKE) security-auth
 	@echo ""
-	@$(MAKE) security-check
+	@$(MAKE) security-setup-check
 	@echo ""
 	@echo "$(GREEN)✅ Configuration Snyk terminée !$(NC)"
 	@echo ""
@@ -884,7 +944,7 @@ help-security: ## Aide pour les commandes de sécurité Snyk
 	@echo "  $(GREEN)make security-setup$(NC)         - Configuration complète (install + auth + check)"
 	@echo "  $(GREEN)make security-install$(NC)       - Installer Snyk CLI"
 	@echo "  $(GREEN)make security-auth$(NC)          - Authentifier avec le token .env"
-	@echo "  $(GREEN)make security-check$(NC)         - Vérifier la configuration"
+	@echo "  $(GREEN)make security-setup-check$(NC)   - Vérifier la configuration Snyk"
 	@echo ""
 	@echo "$(YELLOW)🔍 Scans de sécurité :$(NC)"
 	@echo "  $(GREEN)make security-scan$(NC)          - Scan complet (PHP + Node.js + Docker)"

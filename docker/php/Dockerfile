@@ -4,7 +4,7 @@ FROM php:8.4-fpm-alpine AS base
 ARG UID=1000
 ARG GID=1000
 
-# Dépendances système
+# Dépendances système + Node.js pour compatibilité frontend
 RUN apk add --no-cache \
     bash \
     git \
@@ -22,9 +22,16 @@ RUN apk add --no-cache \
     libxml2-dev \
     postgresql-dev \
     linux-headers \
+    nodejs \
+    npm \
     $PHPIZE_DEPS
 
-# Extensions PHP
+# Installer yq pour la lecture des configurations YAML
+RUN curl -L "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -o /usr/local/bin/yq \
+    && chmod +x /usr/local/bin/yq
+
+# Extensions PHP - séparées selon disponibilité dans PHP 8.4
+# Extensions à compiler
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
         gd \
@@ -36,14 +43,22 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
         opcache \
         bcmath \
         xml \
+        dom \
+        xmlwriter \
+        xmlreader \
+        simplexml \
         mbstring \
         exif \
         pcntl \
         sockets
 
-# PECL: Redis, APCu, Xdebug
-RUN pecl install redis apcu xdebug \
-    && docker-php-ext-enable redis apcu xdebug \
+# Note: tokenizer, ctype, fileinfo, iconv sont incluses par défaut dans PHP 8.4
+# Vérifier leur présence se fera au runtime
+
+# PECL: Redis, APCu, Xdebug, Imagick
+RUN apk add --no-cache imagemagick-dev \
+    && pecl install redis apcu xdebug imagick \
+    && docker-php-ext-enable redis apcu xdebug imagick \
     && mv "$PHP_INI_DIR/conf.d/docker-php-ext-xdebug.ini" "$PHP_INI_DIR/conf.d/xdebug.ini.disabled"
 
 # Ajuster UID et GID de www-data si besoin
@@ -113,14 +128,16 @@ COPY --from=dependencies /usr/bin/composer /usr/bin/composer
 COPY --from=dependencies /var/composer /var/composer
 COPY --from=dependencies /tmp/composer-cache /tmp/composer-cache
 
-# Variables d'environnement Composer optimisées
+# Variables d'environnement Composer optimisées + Docker
 ENV COMPOSER_MEMORY_LIMIT=-1 \
     COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_NO_INTERACTION=1 \
     COMPOSER_HOME=/var/composer \
     COMPOSER_CACHE_DIR=/tmp/composer-cache \
     COMPOSER_PROCESS_TIMEOUT=3600 \
-    COMPOSER_OPTIMIZE_AUTOLOADER=1
+    COMPOSER_OPTIMIZE_AUTOLOADER=1 \
+    DOCKER_CONTAINER=1 \
+    CONTAINER_TYPE=php
 
 # Configuration PHP optimisée pour Composer
 RUN { \
