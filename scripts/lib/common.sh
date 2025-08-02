@@ -767,6 +767,114 @@ version_compare() {
 # EXPORT DES FONCTIONS
 # =============================================================================
 
+#
+# Vérifier automatiquement si les packages incompatibles sont devenus compatibles Laravel 12
+#
+# Arguments:
+#   $1: Nom du package
+#
+# Retourne:
+#   0 si compatible maintenant, 1 sinon
+#
+check_package_laravel12_compatibility() {
+    local package_name="$1"
+    
+    # Utiliser Composer pour vérifier la compatibilité en ligne
+    if command -v composer &> /dev/null; then
+        # Test avec Laravel 12 simulé
+        local temp_dir="/tmp/laravel12-compat-test"
+        local test_file="$temp_dir/composer.json"
+        
+        # Créer un projet test temporaire
+        mkdir -p "$temp_dir"
+        cat > "$test_file" << EOF
+{
+    "name": "test/laravel12-compatibility",
+    "require": {
+        "laravel/framework": "^12.0",
+        "$package_name": "*"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
+EOF
+        
+        # Tester la résolution (sans installation)
+        if composer validate "$test_file" --quiet 2>/dev/null && \
+           timeout 30 composer install --dry-run --working-dir="$temp_dir" --no-interaction --quiet 2>/dev/null; then
+            rm -rf "$temp_dir"
+            return 0  # Compatible
+        fi
+        
+        rm -rf "$temp_dir"
+    fi
+    
+    return 1  # Pas compatible ou test impossible
+}
+
+#
+# Mettre à jour automatiquement les packages devenus compatibles
+#
+# Arguments:
+#   $1: Liste des packages à vérifier (séparés par des espaces)
+#
+update_compatible_packages() {
+    local packages=($1)
+    local updated_packages=()
+    
+    log_info "🔄 Vérification automatique compatibilité Laravel 12..."
+    
+    for package in "${packages[@]}"; do
+        log_debug "Test: $package"
+        
+        if check_package_laravel12_compatibility "$package"; then
+            log_success "✅ $package est maintenant compatible avec Laravel 12!"
+            
+            # Tenter l'installation
+            if composer require --dev "$package" --no-interaction 2>/dev/null; then
+                updated_packages+=("$package")
+                log_success "📦 $package installé avec succès"
+            else
+                log_warn "⚠️ $package compatible mais installation échouée"
+            fi
+        else
+            log_debug "⏳ $package pas encore compatible"
+        fi
+    done
+    
+    if [ ${#updated_packages[@]} -gt 0 ]; then
+        log_success "🎉 Packages mis à jour: ${updated_packages[*]}"
+        
+        # Mettre à jour la liste des packages incompatibles
+        update_incompatible_packages_list "${updated_packages[@]}"
+    else
+        log_info "ℹ️ Aucun nouveau package compatible trouvé"
+    fi
+}
+
+#
+# Mettre à jour la liste des packages incompatibles après installation réussie
+#
+update_incompatible_packages_list() {
+    local installed_packages=("$@")
+    local config_file="config/installer.yml"
+    
+    if [ ! -f "$config_file" ]; then
+        return 0
+    fi
+    
+    # Marquer les packages comme compatibles dans la config
+    for package in "${installed_packages[@]}"; do
+        # Commenter ou supprimer la contrainte max_laravel_version
+        if command -v yq &> /dev/null; then
+            # Utiliser yq si disponible
+            yq eval ".development[] |= select(.name == \"$package\").laravel_12_compatible = true" -i "$config_file" 2>/dev/null || true
+        fi
+    done
+    
+    log_info "📝 Configuration mise à jour pour: ${installed_packages[*]}"
+}
+
 # Rendre les fonctions disponibles pour les scripts qui sourcent ce fichier
 export -f get_config_value config_exists
 export -f detect_working_directory is_docker_environment get_current_environment
@@ -778,6 +886,7 @@ export -f find_root_env calculate_duration backup_file
 export -f get_packages_from_config is_package_required get_package_version
 export -f get_package_php_version is_package_php_compatible
 export -f get_package_max_laravel_version is_package_laravel_compatible
+export -f check_package_laravel12_compatibility update_compatible_packages update_incompatible_packages_list
 export -f version_compare
 
 # Variables globales exportées

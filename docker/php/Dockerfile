@@ -97,20 +97,8 @@ RUN composer config --global process-timeout 3600 \
     && composer config --global repos.packagist composer https://packagist.org
 
 # Créer un fichier de config Composer global optimisé
-RUN mkdir -p /var/composer && \
-    echo '{\n\
-    "config": {\n\
-        "process-timeout": 3600,\n\
-        "preferred-install": "dist",\n\
-        "sort-packages": true,\n\
-        "optimize-autoloader": true,\n\
-        "classmap-authoritative": true,\n\
-        "apcu-autoloader": true,\n\
-        "platform-check": false\n\
-    },\n\
-    "minimum-stability": "stable",\n\
-    "prefer-stable": true\n\
-}' > /var/composer/config.json
+# Note: minimum-stability et prefer-stable sont des paramètres par projet, pas globaux  
+# Note: Suppression du config.json global car problématique - configuration via variables d'env
 
 # Pre-télécharger les métadonnées des packages populaires Laravel (cache warming)
 USER www-data
@@ -210,7 +198,9 @@ ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 FROM production AS development
 
 # Activer Xdebug pour le développement
-RUN mv "$PHP_INI_DIR/conf.d/xdebug.ini.disabled" "$PHP_INI_DIR/conf.d/xdebug.ini"
+# Remplacer l'ancienne config par la nouvelle config PHPStorm
+RUN rm -f "$PHP_INI_DIR/conf.d/xdebug.ini" && \
+    mv "$PHP_INI_DIR/conf.d/xdebug.ini.disabled" "$PHP_INI_DIR/conf.d/xdebug.ini"
 
 # Ajuster la limite mémoire pour le dev
 RUN sed -i 's/memory_limit=2G/memory_limit=4G/' /usr/local/etc/php/conf.d/composer-optimizations.ini

@@ -112,6 +112,17 @@ build: ## Construire tous les containers
 .PHONY: rebuild
 rebuild: down build up ## Reconstruire et redémarrer
 
+.PHONY: enable-xdebug
+enable-xdebug: rebuild ## Activer xdebug (reconstruction Docker requise)
+	@echo "$(CYAN)🐛 Vérification de l'activation de Xdebug...$(NC)"
+	@if docker exec $(PHP_CONTAINER_NAME) php -m | grep -q xdebug; then \
+		echo "$(GREEN)✅ Xdebug activé avec succès$(NC)"; \
+		echo "$(BLUE)ℹ️  Configuration Xdebug:$(NC)"; \
+		docker exec $(PHP_CONTAINER_NAME) php -r "if (extension_loaded('xdebug')) { echo 'Mode: ' . ini_get('xdebug.mode') . PHP_EOL; echo 'Client Host: ' . ini_get('xdebug.client_host') . PHP_EOL; echo 'Client Port: ' . ini_get('xdebug.client_port') . PHP_EOL; }"; \
+	else \
+		echo "$(RED)❌ Xdebug non activé - vérifiez la configuration Docker$(NC)"; \
+	fi
+
 # =============================================================================
 # INSTALLATION INTERACTIVE ET PROFILS
 # =============================================================================
@@ -308,6 +319,26 @@ quick-check: ## Test rapide Laravel + PHP 8.4
 		./scripts/diagnostic-tools.sh --quick-test; \
 	else \
 		echo "$(RED)❌ Script d'outils diagnostic non trouvé$(NC)"; \
+	fi
+
+.PHONY: check-compatibility
+check-compatibility: ## Vérifier compatibilité packages Laravel 12
+	@echo "$(YELLOW)🔍 Vérification compatibilité packages Laravel 12...$(NC)"
+	@if [ -f "./scripts/check-package-compatibility.sh" ]; then \
+		chmod +x "./scripts/check-package-compatibility.sh"; \
+		./scripts/check-package-compatibility.sh; \
+	else \
+		echo "$(RED)❌ Script de vérification compatibilité non trouvé$(NC)"; \
+	fi
+
+.PHONY: update-packages
+update-packages: ## Vérifier et installer packages devenus compatibles
+	@echo "$(YELLOW)📦 Installation packages devenus compatibles Laravel 12...$(NC)"
+	@if [ -f "./scripts/check-package-compatibility.sh" ]; then \
+		chmod +x "./scripts/check-package-compatibility.sh"; \
+		./scripts/check-package-compatibility.sh --auto-install; \
+	else \
+		echo "$(RED)❌ Script de vérification compatibilité non trouvé$(NC)"; \
 	fi
 
 .PHONY: artisan

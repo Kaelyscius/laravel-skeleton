@@ -33,6 +33,7 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+      target: development
       args:
         UID: 1000
         GID: 1000

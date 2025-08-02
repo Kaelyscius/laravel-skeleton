@@ -37,6 +37,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make check-extensions` - Verify PHP 8.4 extensions installation
 - `make test-packages` - Test package compatibility with Laravel 12
 - `make fix-composer` - Fix Composer configuration and cache issues
+- `make check-compatibility` - Check if incompatible packages became Laravel 12 compatible
+- `make update-packages` - Auto-install packages that became Laravel 12 compatible
+- `make enable-xdebug` - Enable Xdebug for development (rebuilds containers)
 
 ### Code Quality
 - `make ecs` - Check code style (Easy Coding Standard)

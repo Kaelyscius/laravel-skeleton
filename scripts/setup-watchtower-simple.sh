@@ -63,21 +63,27 @@ configure_notifications() {
         echo -e "${YELLOW}Mode non-interactif: choix par défaut (1 - Aucune notification)${NC}"
     fi
 
+    # Afficher le choix sélectionné
+    echo ""
     case $choice in
         1)
+            echo -e "${CYAN}➤ Choix sélectionné: ${YELLOW}Aucune notification${NC}"
             configure_no_notifications
             ;;
         2)
+            echo -e "${CYAN}➤ Choix sélectionné: ${YELLOW}Email simple${NC}"
             configure_email_notifications
             ;;
         3)
+            echo -e "${CYAN}➤ Choix sélectionné: ${YELLOW}Webhook générique${NC}"
             configure_webhook_notifications
             ;;
         4)
+            echo -e "${CYAN}➤ Choix sélectionné: ${YELLOW}Configuration manuelle${NC}"
             configure_manual_notifications
             ;;
         *)
-            echo -e "${YELLOW}Choix invalide, configuration sans notifications${NC}"
+            echo -e "${CYAN}➤ Choix invalide (${choice}), utilisation par défaut: ${YELLOW}Aucune notification${NC}"
             configure_no_notifications
             ;;
     esac
@@ -93,6 +99,16 @@ configure_no_notifications() {
 
     echo -e "${GREEN}✓ Watchtower configuré sans notifications${NC}"
     echo -e "${BLUE}→ Les mises à jour seront visibles dans les logs uniquement${NC}"
+    echo ""
+    
+    # Ajouter une petite pause pour que l'utilisateur puisse lire
+    if [ -t 0 ]; then
+        echo -e "${CYAN}Appuyez sur Entrée pour continuer...${NC}"
+        read -r
+    else
+        echo -e "${YELLOW}Configuration en mode non-interactif - continuation automatique${NC}"
+        sleep 2
+    fi
 }
 
 # Configuration email simple

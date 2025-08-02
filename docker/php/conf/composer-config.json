@@ -1,0 +1,1 @@
+{"config":{"process-timeout":3600,"preferred-install":"dist","sort-packages":true,"optimize-autoloader":true,"classmap-authoritative":true,"apcu-autoloader":true,"platform-check":false}}
