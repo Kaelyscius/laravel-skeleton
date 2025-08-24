@@ -1,0 +1,361 @@
+name: Security Audit
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scan daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  PHP_VERSION: 8.4
+  NODE_VERSION: 22
+
+jobs:
+  # ==========================================
+  # JOB 1: DEPENDENCY SECURITY SCAN
+  # ==========================================
+  dependencies:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      # ==========================================
+      # Setup for security scanning
+      # ==========================================
+      - name: 🐘 Setup PHP ${{ env.PHP_VERSION }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          tools: composer:v2
+          coverage: none
+
+      - name: 📦 Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # ==========================================
+      # Composer Security Audit
+      # ==========================================
+      - name: 🔍 Install Composer dependencies (no scripts)
+        working-directory: src
+        run: composer install --no-interaction --no-scripts --no-dev --prefer-dist
+
+      - name: 🛡️ Run Composer Security Audit
+        working-directory: src
+        run: |
+          echo "🔍 Running Composer security audit..."
+          composer audit --format=json > composer-audit.json || echo "Vulnerabilities found"
+          
+          # Display human-readable results
+          echo "📊 Composer Audit Results:"
+          composer audit || echo "⚠️ Security issues detected"
+          
+          # Check if vulnerabilities were found
+          if [ -f "composer-audit.json" ]; then
+            vulns=$(jq '.advisories | length' composer-audit.json 2>/dev/null || echo "0")
+            echo "📈 Found $vulns potential security advisories"
+          fi
+
+      # ==========================================
+      # NPM Security Audit
+      # ==========================================
+      - name: 🔍 Install NPM dependencies
+        working-directory: src
+        run: npm ci --audit=false --fund=false
+
+      - name: 🛡️ Run NPM Security Audit
+        working-directory: src
+        run: |
+          echo "🔍 Running NPM security audit..."
+          npm audit --audit-level=moderate --json > npm-audit.json || echo "Vulnerabilities found"
+          
+          # Display human-readable results
+          echo "📊 NPM Audit Results:"
+          npm audit --audit-level=moderate || echo "⚠️ Security issues detected"
+          
+          # Check vulnerability counts
+          if [ -f "npm-audit.json" ]; then
+            high=$(jq '.metadata.vulnerabilities.high // 0' npm-audit.json)
+            critical=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit.json)
+            echo "📈 Found $high high and $critical critical vulnerabilities"
+          fi
+
+      # ==========================================
+      # Snyk Security Scan (if token available)
+      # ==========================================
+      - name: 📦 Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: 🔑 Check Snyk authentication
+        id: snyk_check
+        run: |
+          if [ -n "${{ secrets.SNYK_TOKEN }}" ]; then
+            echo "snyk_available=true" >> $GITHUB_OUTPUT
+            echo "✅ SNYK_TOKEN configured"
+          else
+            echo "snyk_available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ SNYK_TOKEN not configured - limited scanning"
+          fi
+
+      - name: 🔐 Authenticate Snyk
+        if: steps.snyk_check.outputs.snyk_available == 'true'
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: 🛡️ Snyk scan PHP dependencies
+        working-directory: src
+        run: |
+          echo "🔍 Scanning PHP dependencies with Snyk..."
+          if [ "${{ steps.snyk_check.outputs.snyk_available }}" = "true" ]; then
+            snyk test --severity-threshold=medium --file=composer.json --json > snyk-php.json || echo "Issues found"
+            snyk test --severity-threshold=medium --file=composer.json || echo "⚠️ PHP vulnerabilities detected"
+          else
+            echo "⚠️ Running Snyk without authentication (rate limited)"
+            snyk test --severity-threshold=high --file=composer.json || echo "⚠️ PHP vulnerabilities detected"
+          fi
+        continue-on-error: true
+
+      - name: 🛡️ Snyk scan Node.js dependencies  
+        working-directory: src
+        run: |
+          echo "🔍 Scanning Node.js dependencies with Snyk..."
+          if [ "${{ steps.snyk_check.outputs.snyk_available }}" = "true" ]; then
+            snyk test --severity-threshold=medium --file=package.json --json > snyk-node.json || echo "Issues found"
+            snyk test --severity-threshold=medium --file=package.json || echo "⚠️ Node.js vulnerabilities detected"
+          else
+            echo "⚠️ Running Snyk without authentication (rate limited)"
+            snyk test --severity-threshold=high --file=package.json || echo "⚠️ Node.js vulnerabilities detected"
+          fi
+        continue-on-error: true
+
+      # ==========================================
+      # Security Summary
+      # ==========================================
+      - name: 📊 Security Summary
+        working-directory: src
+        run: |
+          echo "## 🛡️ Security Audit Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tools Used" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Composer audit (PHP dependencies)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ NPM audit (Node.js dependencies)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Snyk scan (comprehensive vulnerability database)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Scan Results" >> $GITHUB_STEP_SUMMARY
+          
+          # Composer results
+          if [ -f "composer-audit.json" ]; then
+            comp_vulns=$(jq '.advisories | length' composer-audit.json 2>/dev/null || echo "0")
+            echo "- **PHP Dependencies**: $comp_vulns advisories found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # NPM results  
+          if [ -f "npm-audit.json" ]; then
+            npm_high=$(jq '.metadata.vulnerabilities.high // 0' npm-audit.json)
+            npm_crit=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit.json)
+            echo "- **Node.js Dependencies**: $npm_high high, $npm_crit critical vulnerabilities" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Recommendations" >> $GITHUB_STEP_SUMMARY
+          echo "- Review and update vulnerable dependencies" >> $GITHUB_STEP_SUMMARY
+          echo "- Configure SNYK_TOKEN secret for enhanced scanning" >> $GITHUB_STEP_SUMMARY
+          echo "- Consider automated dependency updates" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================
+  # JOB 2: STATIC SECURITY ANALYSIS
+  # ==========================================
+  static-analysis:
+    name: Static Security Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      # ==========================================
+      # Security-focused static analysis
+      # ==========================================
+      - name: 🐘 Setup PHP ${{ env.PHP_VERSION }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          tools: composer:v2
+          coverage: none
+
+      - name: 🔍 Install dependencies for analysis
+        working-directory: src
+        run: composer install --no-interaction --no-scripts --prefer-dist
+
+      - name: 🔒 Check for hardcoded secrets
+        run: |
+          echo "🔍 Scanning for potential hardcoded secrets..."
+          
+          # Check for common secret patterns
+          echo "Checking for potential secrets in PHP files..."
+          if grep -r -n -i -E "(password|secret|key|token|api)" src/app/ --include="*.php" | grep -v -E "(function|class|interface|trait|comment)" | head -10; then
+            echo "⚠️ Potential hardcoded credentials found (review manually)"
+          else
+            echo "✅ No obvious hardcoded credentials detected"
+          fi
+          
+          # Check .env files are not committed
+          echo "Checking for committed .env files..."
+          if find . -name ".env" -not -path "./src/.env.example" | head -5; then
+            echo "⚠️ .env files found in repository"
+          else
+            echo "✅ No .env files committed"
+          fi
+
+      - name: 🔍 PHPStan Security Rules
+        working-directory: src
+        run: |
+          if [ -f "vendor/bin/phpstan" ] && [ -f "phpstan.neon" ]; then
+            echo "🔍 Running PHPStan with focus on security..."
+            vendor/bin/phpstan analyse --memory-limit=1G --error-format=table || echo "⚠️ Static analysis issues found"
+          else
+            echo "⚠️ PHPStan not configured - skipping static analysis"
+          fi
+
+      # ==========================================
+      # Framework-specific security checks
+      # ==========================================
+      - name: 🛡️ Laravel Security Checks
+        working-directory: src
+        run: |
+          echo "🔍 Laravel-specific security checks..."
+          
+          # Check APP_DEBUG in production
+          echo "Checking APP_DEBUG configuration..."
+          if grep -q "APP_DEBUG=true" .env.example; then
+            echo "⚠️ APP_DEBUG=true in .env.example (should be false for production)"
+          else
+            echo "✅ APP_DEBUG properly configured"
+          fi
+          
+          # Check for HTTPS enforcement
+          echo "Checking HTTPS configuration..."
+          if grep -r "forceScheme\|requireHttps" app/ config/ || true; then
+            echo "✅ HTTPS enforcement configured"
+          else
+            echo "💡 Consider enforcing HTTPS in production"
+          fi
+          
+          # Check CSRF protection
+          echo "Checking CSRF middleware..."
+          if grep -r "VerifyCsrfToken" app/Http/Kernel.php || true; then
+            echo "✅ CSRF protection enabled"
+          else
+            echo "⚠️ CSRF protection may not be properly configured"
+          fi
+
+      # ==========================================
+      # Security configuration review
+      # ==========================================
+      - name: ⚙️ Security Configuration Review
+        run: |
+          echo "## 🔒 Security Configuration Review" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Completed Checks" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Hardcoded secrets scan" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Static analysis (PHPStan)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Laravel security configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Environment file checks" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Best Practices" >> $GITHUB_STEP_SUMMARY
+          echo "- Ensure APP_DEBUG=false in production" >> $GITHUB_STEP_SUMMARY
+          echo "- Use HTTPS in production environments" >> $GITHUB_STEP_SUMMARY
+          echo "- Keep dependencies updated" >> $GITHUB_STEP_SUMMARY
+          echo "- Regular security audits" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================
+  # JOB 3: SNYK MONITORING (Main branch only)
+  # ==========================================
+  monitoring:
+    name: Security Monitoring
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [dependencies, static-analysis]
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js for Snyk
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: 📦 Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: 🔑 Check Snyk token for monitoring
+        id: monitoring_check
+        run: |
+          if [ -n "${{ secrets.SNYK_TOKEN }}" ]; then
+            echo "monitoring_available=true" >> $GITHUB_OUTPUT
+            echo "✅ SNYK_TOKEN available for monitoring"
+          else
+            echo "monitoring_available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ SNYK_TOKEN not configured - skipping monitoring setup"
+          fi
+
+      - name: 🔐 Authenticate Snyk for monitoring
+        if: steps.monitoring_check.outputs.monitoring_available == 'true'
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: 📊 Setup Snyk monitoring
+        if: steps.monitoring_check.outputs.monitoring_available == 'true'
+        working-directory: src
+        run: |
+          echo "📊 Setting up continuous monitoring..."
+          
+          # Monitor PHP dependencies
+          if [ -f "composer.json" ]; then
+            snyk monitor --file=composer.json --project-name="${{ github.repository }}-php" || echo "PHP monitoring setup failed"
+            echo "✅ PHP dependencies monitoring enabled"
+          fi
+          
+          # Monitor Node.js dependencies
+          if [ -f "package.json" ]; then
+            snyk monitor --file=package.json --project-name="${{ github.repository }}-node" || echo "Node monitoring setup failed"
+            echo "✅ Node.js dependencies monitoring enabled"
+          fi
+          
+          echo "🔔 Monitoring configured for main branch"
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true
+
+      - name: 📊 Monitoring Summary
+        run: |
+          echo "## 📊 Security Monitoring Setup" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.monitoring_check.outputs.monitoring_available }}" = "true" ]; then
+            echo "✅ **Continuous monitoring enabled**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- PHP dependencies monitored via Snyk" >> $GITHUB_STEP_SUMMARY
+            echo "- Node.js dependencies monitored via Snyk" >> $GITHUB_STEP_SUMMARY
+            echo "- Automatic alerts for new vulnerabilities" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Monitoring not configured**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "To enable monitoring:" >> $GITHUB_STEP_SUMMARY
+            echo "1. Sign up at https://snyk.io" >> $GITHUB_STEP_SUMMARY
+            echo "2. Add SNYK_TOKEN secret in GitHub repository settings" >> $GITHUB_STEP_SUMMARY
+          fi

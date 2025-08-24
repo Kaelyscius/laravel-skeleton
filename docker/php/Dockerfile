@@ -139,6 +139,8 @@ RUN { \
         echo 'opcache.revalidate_freq=0'; \
         echo 'opcache.fast_shutdown=1'; \
         echo 'opcache.enable_cli=1'; \
+        echo 'opcache.jit=1255'; \
+        echo 'opcache.jit_buffer_size=128M'; \
     } > /usr/local/etc/php/conf.d/composer-optimizations.ini
 
 # Configuration PHP

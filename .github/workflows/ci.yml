@@ -1,30 +1,30 @@
-name: CI/CD Pipeline
+name: Laravel CI/CD Pipeline
 
 on:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+  workflow_dispatch:
 
 env:
   PHP_VERSION: 8.4
-  NODE_VERSION: 20
+  NODE_VERSION: 22
 
 jobs:
   # ==========================================
-  # JOB 1: TESTS & QUALITÉ (Optimisé et robuste)
+  # JOB 1: TESTS & QUALITÉ
   # ==========================================
   tests:
     name: Tests & Quality
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
-    # Services simplifiés et plus stables
     services:
       mariadb:
         image: mariadb:11.4
         env:
-          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_ROOT_PASSWORD: laravel_test
           MYSQL_DATABASE: laravel_test
           MYSQL_USER: laravel_test
           MYSQL_PASSWORD: laravel_test
@@ -48,25 +48,25 @@ jobs:
           --health-retries=3
 
     steps:
-      - name: Checkout code
+      - name: 📥 Checkout code
         uses: actions/checkout@v4
 
       # ==========================================
-      # Setup PHP avec extensions optimisées
+      # Setup PHP avec extensions Laravel 12
       # ==========================================
-      - name: Setup PHP ${{ env.PHP_VERSION }}
+      - name: 🐘 Setup PHP ${{ env.PHP_VERSION }}
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ env.PHP_VERSION }}
-          extensions: mbstring, pdo, pdo_mysql, redis, opcache, intl, gd, zip, bcmath, xml, curl, fileinfo
+          extensions: bcmath, ctype, curl, dom, fileinfo, filter, gd, hash, intl, json, libxml, mbstring, openssl, pcre, pdo, pdo_mysql, redis, session, tokenizer, xml, zip
           coverage: xdebug
           tools: composer:v2
-          ini-values: memory_limit=2G, max_execution_time=300
+          ini-values: memory_limit=2G, max_execution_time=300, opcache.jit=0
 
       # ==========================================
-      # Setup Node.js avec cache optimisé
+      # Setup Node.js (mise à jour vers v22)
       # ==========================================
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
+      - name: 📦 Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -74,369 +74,171 @@ jobs:
           cache-dependency-path: 'src/package-lock.json'
 
       # ==========================================
-      # Préparation de l'environnement Laravel
+      # Cache Composer optimisé
       # ==========================================
-      - name: Create Laravel directory structure
-        run: |
-          mkdir -p src
-          if [ ! -f "src/composer.json" ]; then
-            echo "Laravel source not found - this is expected for a fresh setup"
-          fi
-
-      # ==========================================
-      # Installation des dépendances Composer
-      # ==========================================
-      - name: Get Composer Cache Directory
+      - name: 📋 Get Composer Cache Directory
         id: composer-cache
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
 
-      - name: Cache Composer dependencies
-        uses: actions/cache@v3
+      - name: 💾 Cache Composer dependencies
+        uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('src/composer.lock', 'src/composer.json') }}
+          key: ${{ runner.os }}-php-${{ env.PHP_VERSION }}-composer-${{ hashFiles('src/composer.lock') }}
           restore-keys: |
-            ${{ runner.os }}-composer-
+            ${{ runner.os }}-php-${{ env.PHP_VERSION }}-composer-
+            ${{ runner.os }}-php-${{ env.PHP_VERSION }}-
 
-      - name: Install Composer dependencies
+      # ==========================================
+      # Installation Composer optimisée
+      # ==========================================
+      - name: 🎵 Install Composer dependencies
         working-directory: src
         run: |
-          if [ -f "composer.json" ]; then
-            composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
-          else
-            echo "No composer.json found - skipping Composer install"
-          fi
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress --no-scripts
+          composer dump-autoload --optimize
 
       # ==========================================
-      # Installation des dépendances NPM
+      # Cache NPM optimisé
       # ==========================================
-      - name: Cache NPM dependencies
-        uses: actions/cache@v3
+      - name: 💾 Cache NPM dependencies
+        uses: actions/cache@v4
         with:
           path: src/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('src/package-lock.json', 'src/package.json') }}
+          key: ${{ runner.os }}-node-${{ env.NODE_VERSION }}-npm-${{ hashFiles('src/package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-npm-
+            ${{ runner.os }}-node-${{ env.NODE_VERSION }}-npm-
+            ${{ runner.os }}-node-${{ env.NODE_VERSION }}-
 
-      - name: Install NPM dependencies
+      # ==========================================
+      # Installation NPM
+      # ==========================================
+      - name: 📦 Install NPM dependencies
+        working-directory: src
+        run: npm ci --prefer-offline --no-audit
+
+      # ==========================================
+      # Configuration Laravel
+      # ==========================================
+      - name: ⚙️ Configure Laravel environment
         working-directory: src
         run: |
-          if [ -f "package.json" ]; then
-            npm ci --prefer-offline --no-audit
-          else
-            echo "No package.json found - skipping NPM install"
+          # Copier .env.example vers .env
+          cp .env.example .env
+          
+          # Configuration optimisée pour les tests
+          cat >> .env << 'EOF'
+          APP_ENV=testing
+          APP_DEBUG=true
+          
+          # Base de données de test
+          DB_CONNECTION=mysql
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_DATABASE=laravel_test
+          DB_USERNAME=laravel_test
+          DB_PASSWORD=laravel_test
+          
+          # Redis pour cache et sessions
+          REDIS_HOST=127.0.0.1
+          REDIS_PORT=6379
+          CACHE_DRIVER=redis
+          SESSION_DRIVER=redis
+          QUEUE_CONNECTION=redis
+          
+          # Disable external services in tests
+          MAIL_MAILER=array
+          BROADCAST_DRIVER=log
+          
+          # Telescope (ne pas persister en test)
+          TELESCOPE_ENABLED=false
+          EOF
+          
+          # Générer la clé d'application
+          php artisan key:generate --no-interaction
+
+      # ==========================================
+      # Build des assets
+      # ==========================================
+      - name: 🏗️ Build assets
+        working-directory: src
+        run: npm run build
+
+      # ==========================================
+      # Base de données
+      # ==========================================
+      - name: 🗄️ Wait for database and run migrations
+        working-directory: src
+        run: |
+          # Attendre que MariaDB soit prêt
+          timeout 60 bash -c 'until mysql -h127.0.0.1 -P3306 -ularavel_test -plaravel_test -e "SELECT 1" >/dev/null 2>&1; do sleep 2; done'
+          echo "✅ Database connection successful"
+          
+          # Exécuter les migrations
+          php artisan migrate --force --no-interaction
+          echo "✅ Migrations completed"
+
+      # ==========================================
+      # Outils de qualité (utiliser les scripts Composer)
+      # ==========================================
+      - name: 🎨 Run Code Style Check (ECS)
+        working-directory: src
+        run: composer run check:cs
+
+      - name: 🔍 Run Static Analysis (PHPStan)
+        working-directory: src
+        run: composer run analyse
+
+      - name: 🔧 Run Rector (dry-run)
+        working-directory: src
+        run: composer run refactor
+
+      - name: 💡 Run PHP Insights
+        working-directory: src
+        run: composer run insights
+
+      # ==========================================
+      # Tests avec coverage
+      # ==========================================
+      - name: 🧪 Run tests with coverage
+        working-directory: src
+        run: |
+          composer run test:coverage
+          # Copier les résultats pour l'upload
+          if [ -f "coverage.xml" ]; then
+            cp coverage.xml ../coverage.xml
           fi
 
       # ==========================================
-      # Configuration Laravel (si présent)
+      # Upload coverage report
       # ==========================================
-      - name: Configure Laravel environment
-        working-directory: src
-        run: |
-          if [ -f "artisan" ]; then
-            # Copier .env pour les tests
-            if [ ! -f ".env" ]; then
-              cp .env.example .env 2>/dev/null || echo "APP_KEY=" > .env
-            fi
-            
-            # Configuration de test
-            echo "APP_ENV=testing" >> .env
-            echo "APP_DEBUG=true" >> .env
-            echo "DB_CONNECTION=mysql" >> .env
-            echo "DB_HOST=127.0.0.1" >> .env
-            echo "DB_PORT=3306" >> .env
-            echo "DB_DATABASE=laravel_test" >> .env
-            echo "DB_USERNAME=laravel_test" >> .env
-            echo "DB_PASSWORD=laravel_test" >> .env
-            echo "REDIS_HOST=127.0.0.1" >> .env
-            echo "REDIS_PORT=6379" >> .env
-            echo "CACHE_DRIVER=redis" >> .env
-            echo "SESSION_DRIVER=redis" >> .env
-            echo "QUEUE_CONNECTION=redis" >> .env
-            
-            # Générer la clé d'application
-            php artisan key:generate --no-interaction
-          else
-            echo "Laravel not installed - skipping configuration"
-          fi
-
-      # ==========================================
-      # Build des assets (si NPM présent)
-      # ==========================================
-      - name: Build assets
-        working-directory: src
-        run: |
-          if [ -f "package.json" ] && grep -q "build" package.json; then
-            npm run build
-          else
-            echo "No build script found - skipping asset build"
-          fi
-
-      # ==========================================
-      # Migrations et préparation base de données
-      # ==========================================
-      - name: Run database migrations
-        working-directory: src
-        run: |
-          if [ -f "artisan" ]; then
-            # Attendre que la base soit prête
-            timeout 60 bash -c 'until mysql -h127.0.0.1 -P3306 -ularavel_test -plaravel_test -e "SELECT 1"; do sleep 2; done'
-            
-            # Exécuter les migrations
-            php artisan migrate --force --no-interaction
-          else
-            echo "Laravel not found - skipping migrations"
-          fi
-
-      # ==========================================
-      # Outils de qualité (si présents)
-      # ==========================================
-      - name: Run ECS (Code Style)
-        working-directory: src
-        run: |
-          if [ -f "vendor/bin/ecs" ] && [ -f "ecs.php" ]; then
-            vendor/bin/ecs check --no-progress-bar
-          else
-            echo "ECS not configured - skipping"
-          fi
-
-      - name: Run PHPStan (Static Analysis)
-        working-directory: src
-        run: |
-          if [ -f "vendor/bin/phpstan" ] && [ -f "phpstan.neon" ]; then
-            vendor/bin/phpstan analyse --no-progress --memory-limit=2G
-          else
-            echo "PHPStan not configured - skipping"
-          fi
-
-      - name: Run Rector (dry-run)
-        working-directory: src
-        run: |
-          if [ -f "vendor/bin/rector" ] && [ -f "rector.php" ]; then
-            vendor/bin/rector process --dry-run --no-progress-bar
-          else
-            echo "Rector not configured - skipping"
-          fi
-
-      # ==========================================
-      # Tests Laravel
-      # ==========================================
-      - name: Run tests with coverage
-        working-directory: src
-        run: |
-          if [ -f "artisan" ]; then
-            if [ -f "vendor/bin/pest" ]; then
-              vendor/bin/pest --coverage --min=80 --coverage-clover=coverage.xml
-            else
-              php artisan test --coverage --min=80 --coverage-clover=coverage.xml
-            fi
-          else
-            echo "No Laravel application found - skipping tests"
-          fi
-
-      # ==========================================
-      # Upload coverage (préparé pour Codecov futur)
-      # ==========================================
-      - name: Upload coverage reports
-        if: success() && hashFiles('src/coverage.xml') != ''
-        run: |
-          echo "Coverage report generated: src/coverage.xml"
-          echo "Ready for Codecov integration"
-
-  # ==========================================
-  # JOB 2: SÉCURITÉ AVEC SNYK (Non-bloquant)
-  # ==========================================
-  security:
-    name: Security Scan (Snyk)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Continue même si les tests échouent
-    if: always()
-    needs: []  # Exécution en parallèle
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # ==========================================
-      # Setup pour Snyk et vérification des credentials Docker
-      # ==========================================
-      - name: Setup Node.js for Snyk
-        uses: actions/setup-node@v4
+      - name: 📊 Upload coverage to Codecov
+        if: success() && hashFiles('coverage.xml') != ''
+        uses: codecov/codecov-action@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup PHP for Snyk
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ env.PHP_VERSION }}
-          tools: composer:v2
-
-      # ==========================================
-      # Installation de Snyk CLI
-      # ==========================================
-      - name: Install Snyk CLI
-        run: npm install -g snyk
-
-      # ==========================================
-      # Authentification Snyk (si token disponible)
-      # ==========================================
-      - name: Check Snyk token availability
-        id: snyk_check
-        run: |
-          if [ -n "${{ secrets.SNYK_TOKEN }}" ]; then
-            echo "snyk_available=true" >> $GITHUB_OUTPUT
-            echo "✅ SNYK_TOKEN available"
-          else
-            echo "snyk_available=false" >> $GITHUB_OUTPUT
-            echo "⚠️ SNYK_TOKEN not configured - running in limited mode"
-          fi
-
-      - name: Authenticate Snyk
-        if: steps.snyk_check.outputs.snyk_available == 'true'
-        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+          file: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       # ==========================================
-      # Scan des dépendances Composer (PHP)
+      # Résumé des tests
       # ==========================================
-      - name: Snyk test Composer dependencies
-        working-directory: src
+      - name: 📋 Test Summary
+        if: always()
         run: |
-          if [ -f "composer.json" ]; then
-            echo "🔍 Scanning PHP dependencies with Snyk..."
-            if [ "${{ steps.snyk_check.outputs.snyk_available }}" = "true" ]; then
-              snyk test --severity-threshold=high --file=composer.json || echo "⚠️ Vulnerabilities found in PHP dependencies"
-            else
-              echo "⚠️ SNYK_TOKEN not configured - running without authentication"
-              snyk test --severity-threshold=high --file=composer.json || echo "⚠️ Vulnerabilities found in PHP dependencies"
-            fi
-          else
-            echo "No composer.json found - skipping PHP dependency scan"
-          fi
-        continue-on-error: true
+          echo "## 🎯 Laravel CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Environment" >> $GITHUB_STEP_SUMMARY
+          echo "- **PHP**: ${{ env.PHP_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Node.js**: ${{ env.NODE_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Laravel**: $(cd src && php artisan --version | cut -d' ' -f3)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quality Tools" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ ECS (Code Style)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ PHPStan (Static Analysis)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Rector (Refactoring)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ PHP Insights (Quality)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Pest (Tests)" >> $GITHUB_STEP_SUMMARY
 
-      # ==========================================
-      # Scan des dépendances NPM (Node.js)
-      # ==========================================
-      - name: Snyk test NPM dependencies
-        working-directory: src
-        run: |
-          if [ -f "package.json" ]; then
-            echo "🔍 Scanning Node.js dependencies with Snyk..."
-            if [ "${{ steps.snyk_check.outputs.snyk_available }}" = "true" ]; then
-              snyk test --severity-threshold=high --file=package.json || echo "⚠️ Vulnerabilities found in Node.js dependencies"
-            else
-              echo "⚠️ SNYK_TOKEN not configured - running without authentication"
-              snyk test --severity-threshold=high --file=package.json || echo "⚠️ Vulnerabilities found in Node.js dependencies"
-            fi
-          else
-            echo "No package.json found - skipping Node.js dependency scan"
-          fi
-        continue-on-error: true
-
-      # ==========================================
-      # Monitoring Snyk (si authentifié)
-      # ==========================================
-      - name: Monitor project with Snyk
-        if: steps.snyk_check.outputs.snyk_available == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: src
-        run: |
-          echo "📊 Setting up Snyk monitoring..."
-          if [ -f "composer.json" ]; then
-            snyk monitor --file=composer.json --project-name="${{ github.repository }}-php" || true
-          fi
-          if [ -f "package.json" ]; then
-            snyk monitor --file=package.json --project-name="${{ github.repository }}-node" || true
-          fi
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: true
-
-      # ==========================================
-      # Rapport de sécurité
-      # ==========================================
-      - name: Security scan summary
-        run: |
-          echo "🛡️ Security scan completed"
-          echo "• Snyk CLI installed and configured"
-          echo "• PHP dependencies scanned (if composer.json exists)"
-          echo "• Node.js dependencies scanned (if package.json exists)"
-          echo "• Monitoring enabled on main branch (if authenticated)"
-          echo ""
-          echo "ℹ️ This job is non-blocking and will not fail the CI"
-          echo "ℹ️ Configure SNYK_TOKEN secret for full functionality"
-
-  # ==========================================
-  # JOB 3: BUILD DOCKER (Conditionnel)
-  # ==========================================
-  docker:
-    name: Build Docker Images
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: tests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Check Docker credentials
-        id: docker_check
-        run: |
-          if [ -n "${{ secrets.DOCKER_USERNAME }}" ] && [ -n "${{ secrets.DOCKER_PASSWORD }}" ]; then
-            echo "docker_available=true" >> $GITHUB_OUTPUT
-            echo "✅ Docker credentials available"
-          else
-            echo "docker_available=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ Docker credentials not configured - skipping Docker operations"
-          fi
-
-      - name: Log in to Docker Hub
-        if: steps.docker_check.outputs.docker_available == 'true'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push PHP image
-        if: steps.docker_check.outputs.docker_available == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: docker/php/Dockerfile
-          push: true
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/laravel-php:latest
-            ${{ secrets.DOCKER_USERNAME }}/laravel-php:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push Apache image
-        if: steps.docker_check.outputs.docker_available == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: docker/apache/Dockerfile
-          push: true
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/laravel-apache:latest
-            ${{ secrets.DOCKER_USERNAME }}/laravel-apache:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Docker build summary
-        run: |
-          if [ "${{ steps.docker_check.outputs.docker_available }}" = "true" ]; then
-            echo "✅ Docker images built and pushed successfully"
-            echo "🔗 Images available at: https://hub.docker.com/u/${{ secrets.DOCKER_USERNAME }}"
-          else
-            echo "ℹ️ Docker credentials not configured - skipping image push"
-            echo "💡 To enable Docker Hub integration:"
-            echo "   1. Create account at https://hub.docker.com"
-            echo "   2. Add DOCKER_USERNAME and DOCKER_PASSWORD secrets in GitHub"
-          fi

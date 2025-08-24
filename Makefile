@@ -6,6 +6,7 @@
 DOCKER_COMPOSE = docker-compose
 DOCKER = docker
 COMPOSE_PROJECT_NAME ?= laravel-app
+SCRIPT_DIR = ./scripts
 
 # Containers dynamiques
 PHP_CONTAINER = $$(docker ps -qf "name=$(COMPOSE_PROJECT_NAME)_php")
@@ -1036,3 +1037,47 @@ help-security: ## Aide pour les commandes de sécurité Snyk
 	@echo "  • Dashboard: https://app.snyk.io/projects"
 	@echo "  • Token API: https://app.snyk.io/account"
 	@echo "  • Documentation: https://docs.snyk.io/"
+# =============================================================================
+# GESTION DES IMAGES DOCKER CUSTOM
+# =============================================================================
+
+# Mise à jour des images custom (alternative à Watchtower)
+update-images:
+	@echo "$(YELLOW)🔄 Mise à jour des images Docker custom...$(NC)"
+	@bash $(SCRIPT_DIR)/update-custom-images.sh
+
+# Vérification des mises à jour disponibles
+check-image-updates:
+	@echo "$(BLUE)🔍 Vérification des mises à jour disponibles...$(NC)"
+	@bash $(SCRIPT_DIR)/update-custom-images.sh --check-only
+
+# Configuration de la mise à jour automatique
+setup-auto-update:
+	@echo "$(YELLOW)⚙️ Configuration de la mise à jour automatique...$(NC)"
+	@bash $(SCRIPT_DIR)/setup-auto-update.sh
+
+# Rebuild force de toutes les images custom
+rebuild-all-images:
+	@echo "$(YELLOW)🔨 Reconstruction forcée de toutes les images...$(NC)"
+	@$(DOCKER_COMPOSE) build --pull --no-cache php apache node
+	@$(DOCKER_COMPOSE) up -d
+
+# Nettoyage des anciennes images
+clean-images:
+	@echo "$(YELLOW)🧹 Nettoyage des anciennes images...$(NC)"
+	@docker image prune -f
+	@docker builder prune -f
+
+# Status des images et conteneurs
+images-status:
+	@echo "$(BLUE)📊 Status des images Docker :$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Images custom :$(NC)"
+	@docker images | grep -E "(laravel-app|php|apache|node)" | head -10 || echo "Aucune image custom trouvée"
+	@echo ""
+	@echo "$(YELLOW)Conteneurs actifs :$(NC)" 
+	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+	@echo ""
+	@echo "$(YELLOW)Utilisation disque :$(NC)"
+	@docker system df
+
