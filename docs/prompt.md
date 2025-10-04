@@ -1,8 +1,20 @@
 # 🔧 PROMPT POUR REFACTORISER install-laravel.sh
 
-## CONTEXTE DU PROJET
+> **✅ REFACTORISATION TERMINÉE** (4 octobre 2025)
+>
+> Ce document est conservé pour **référence historique**.
+> Le système d'installation est maintenant **modulaire** :
+> - Orchestrateur : `scripts/install.sh`
+> - Modules : `scripts/install/*.sh`
+> - Configuration : `config/installer.yml`
+>
+> Voir `INSTALLATION-FLOW.md` pour la documentation actuelle.
 
-Je travaille sur un template Laravel industrialisé avec Docker. Le script `docker/scripts/install-laravel.sh` fait actuellement **2300+ lignes** et doit être refactorisé en modules.
+---
+
+## CONTEXTE DU PROJET (HISTORIQUE)
+
+Je travaille sur un template Laravel industrialisé avec Docker. Le script `docker/scripts/install-laravel.sh` faisait **2300+ lignes** et devait être refactorisé en modules.
 
 ### ARCHITECTURE ACTUELLE
 - **Projet** : Template Laravel 12 + PHP 8.4 + Docker

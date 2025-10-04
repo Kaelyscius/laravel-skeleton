@@ -101,24 +101,35 @@ EOF
 
 create_rector_config() {
     log_info "Création de la configuration Rector..."
-    
+
     # Détecter les versions pour adapter la configuration
     local laravel_version=$(get_laravel_version | cut -d. -f1)
     local php_version=$(get_php_version | cut -d. -f1-2)
-    
+
     log_debug "Configuration Rector pour Laravel $laravel_version, PHP $php_version"
-    
-    # Adapter selon la version Laravel
+
+    # Détecter si driftingly/rector-laravel est installé
+    local use_rector_laravel=false
+    local rector_namespace="Rector\\Laravel\\Set\\LaravelSetList"
     local rector_laravel_set="LaravelSetList::LARAVEL_110"  # Laravel 11 par défaut
-    
-    if [ "$laravel_version" -ge 12 ] && is_package_installed "driftingly/rector-laravel"; then
-        rector_laravel_set="RectorLaravel\\Set\\LaravelSetList::LARAVEL_120"
-        log_debug "Utilisation du set Laravel 12 via driftingly/rector-laravel"
-    elif [ "$laravel_version" -ge 12 ]; then
-        rector_laravel_set="LaravelSetList::LARAVEL_110"  # Fallback
-        log_debug "Laravel 12 détecté mais driftingly/rector-laravel non installé - utilisation du set 11.0"
+
+    if is_package_installed "driftingly/rector-laravel"; then
+        use_rector_laravel=true
+        rector_namespace="RectorLaravel\\Set\\LaravelSetList"
+        log_debug "Package driftingly/rector-laravel détecté - utilisation du namespace RectorLaravel"
+
+        if [ "$laravel_version" -ge 12 ]; then
+            rector_laravel_set="LaravelSetList::LARAVEL_120"
+            log_debug "Utilisation du set Laravel 12"
+        else
+            rector_laravel_set="LaravelSetList::LARAVEL_110"
+            log_debug "Utilisation du set Laravel 11"
+        fi
+    else
+        log_warn "⚠️ Package driftingly/rector-laravel non installé - les règles Laravel pour Rector seront limitées"
+        rector_laravel_set="LaravelSetList::LARAVEL_110"  # Fallback si jamais installé manuellement
     fi
-    
+
     cat > rector.php << EOF
 <?php
 
@@ -127,7 +138,7 @@ declare(strict_types=1);
 use Rector\Config\RectorConfig;
 use Rector\Set\ValueObject\LevelSetList;
 use Rector\Set\ValueObject\SetList;
-use Rector\Laravel\Set\LaravelSetList;
+use ${rector_namespace};
 use Rector\TypeDeclaration\Rector\ClassMethod\AddVoidReturnTypeWhereNoReturnRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\AddReturnTypeDeclarationRector;
 

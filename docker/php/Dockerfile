@@ -42,17 +42,12 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
         intl \
         opcache \
         bcmath \
-        xml \
-        dom \
-        xmlwriter \
-        xmlreader \
-        simplexml \
-        mbstring \
         exif \
         pcntl \
         sockets
 
-# Note: tokenizer, ctype, fileinfo, iconv sont incluses par défaut dans PHP 8.4
+# Note: Les extensions XML (dom, xml, xmlwriter, xmlreader, simplexml) sont incluses par défaut dans PHP 8.4
+# Note: tokenizer, ctype, fileinfo, iconv, mbstring sont également incluses par défaut dans PHP 8.4
 # Vérifier leur présence se fera au runtime
 
 # PECL: Redis, APCu, Xdebug, Imagick

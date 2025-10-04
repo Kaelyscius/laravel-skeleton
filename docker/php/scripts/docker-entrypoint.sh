@@ -40,6 +40,32 @@ wait_for_service() {
 wait_for_service mariadb 3306
 wait_for_service redis 6379
 
+# Corriger les permissions pour le développement (compatibilité PHPStorm/IDE)
+# www-data dans le container = UID 1000 = même que l'utilisateur hôte
+if [ -d "/var/www/html" ]; then
+    echo -e "${YELLOW}Correction des permissions pour le développement...${NC}"
+
+    # Corriger le propriétaire si nécessaire (www-data = UID 1000)
+    find /var/www/html -not -user www-data -not -path "*/vendor/*" -not -path "*/node_modules/*" -exec chown www-data:www-data {} + 2>/dev/null || true
+
+    # S'assurer que les répertoires critiques ont les bonnes permissions
+    if [ -d "/var/www/html/storage" ]; then
+        chmod -R 775 /var/www/html/storage 2>/dev/null || true
+        chown -R www-data:www-data /var/www/html/storage 2>/dev/null || true
+    fi
+
+    if [ -d "/var/www/html/bootstrap/cache" ]; then
+        chmod -R 775 /var/www/html/bootstrap/cache 2>/dev/null || true
+        chown -R www-data:www-data /var/www/html/bootstrap/cache 2>/dev/null || true
+    fi
+
+    # Fichiers spécifiques
+    [ -f "/var/www/html/.env" ] && chmod 664 /var/www/html/.env 2>/dev/null || true
+    [ -f "/var/www/html/artisan" ] && chmod 775 /var/www/html/artisan 2>/dev/null || true
+
+    echo -e "${GREEN}✓ Permissions corrigées${NC}"
+fi
+
 # Vérifier si Laravel est installé
 if [ -f "/var/www/html/artisan" ]; then
    echo -e "${YELLOW}Configuration de Laravel...${NC}"

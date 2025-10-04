@@ -12,6 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make shell` - Access PHP container shell
 - `make logs` - View container logs
 - `make status` - Check container status
+- `make fix-permissions` - Fix file permissions for PhpStorm/IDE (after clean-all)
 
 ### Laravel Development
 - `make install-laravel` - Install Laravel with dependencies
@@ -139,3 +140,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Security scanning is integrated with Snyk
 - Watchtower handles automatic updates for standard Docker images
 - Custom images (PHP, Apache, Node) are excluded from auto-updates
+
+## PhpStorm + WSL2 Configuration
+
+**⚠️ IMPORTANT**: If using PhpStorm on Windows with WSL2:
+
+- Files may appear as "read-only" in PhpStorm even with correct Linux permissions
+- **Quick Fix**: Run `./FIX-PHPSTORM-WSL.sh` and follow instructions
+- **Full Guide**: See `WSL-PHPSTORM.md` for detailed solutions
+- **Best Solution**: Use JetBrains Gateway / Remote Development for optimal experience
+
+Required PhpStorm Settings:
+1. Disable "Use safe write" in Settings > System Settings > Synchronization
+2. Disable "Protect changes with read-only status" in Version Control > Confirmation
+3. Right-click `src/` folder → Mark Directory as → Unmark as Read-Only

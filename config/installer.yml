@@ -97,14 +97,13 @@ packages:
       php_version: ">=7.4"
     - name: "larastan/larastan"
       version: "^3.0"
-      required: falsee
+      required: false
       php_version: ">=8.1"
     - name: "driftingly/rector-laravel"
-      version: "^1.0"
+      version: "^2.0"
       required: false
       php_version: ">=8.0"
-      max_laravel_version: 11
-      description: "Problèmes compatibilité Laravel 12"
+      description: "Règles Rector pour Laravel - v2.0 compatible Laravel 12"
     - name: "nunomaduro/phpinsights"
       version: "^2.13"
       required: false
