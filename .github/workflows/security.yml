@@ -117,26 +117,24 @@ jobs:
         run: |
           echo "🔍 Scanning PHP dependencies with Snyk..."
           if [ "${{ steps.snyk_check.outputs.snyk_available }}" = "true" ]; then
-            snyk test --severity-threshold=medium --file=composer.json --json > snyk-php.json || echo "Issues found"
-            snyk test --severity-threshold=medium --file=composer.json || echo "⚠️ PHP vulnerabilities detected"
+            snyk test --severity-threshold=high --file=composer.lock --json > snyk-php.json || true
+            snyk test --severity-threshold=high --file=composer.lock
           else
-            echo "⚠️ Running Snyk without authentication (rate limited)"
-            snyk test --severity-threshold=high --file=composer.json || echo "⚠️ PHP vulnerabilities detected"
+            echo "⚠️ Snyk token not configured - skipping detailed scan"
+            echo "💡 Configure SNYK_TOKEN secret for vulnerability scanning"
           fi
-        continue-on-error: true
 
-      - name: 🛡️ Snyk scan Node.js dependencies  
+      - name: 🛡️ Snyk scan Node.js dependencies
         working-directory: src
         run: |
           echo "🔍 Scanning Node.js dependencies with Snyk..."
           if [ "${{ steps.snyk_check.outputs.snyk_available }}" = "true" ]; then
-            snyk test --severity-threshold=medium --file=package.json --json > snyk-node.json || echo "Issues found"
-            snyk test --severity-threshold=medium --file=package.json || echo "⚠️ Node.js vulnerabilities detected"
+            snyk test --severity-threshold=high --file=package-lock.json --json > snyk-node.json || true
+            snyk test --severity-threshold=high --file=package-lock.json
           else
-            echo "⚠️ Running Snyk without authentication (rate limited)"
-            snyk test --severity-threshold=high --file=package.json || echo "⚠️ Node.js vulnerabilities detected"
+            echo "⚠️ Snyk token not configured - skipping detailed scan"
+            echo "💡 Configure SNYK_TOKEN secret for vulnerability scanning"
           fi
-        continue-on-error: true
 
       # ==========================================
       # Security Summary
@@ -326,14 +324,14 @@ jobs:
           echo "📊 Setting up continuous monitoring..."
           
           # Monitor PHP dependencies
-          if [ -f "composer.json" ]; then
-            snyk monitor --file=composer.json --project-name="${{ github.repository }}-php" || echo "PHP monitoring setup failed"
+          if [ -f "composer.lock" ]; then
+            snyk monitor --file=composer.lock --project-name="${{ github.repository }}-php" || echo "PHP monitoring setup failed"
             echo "✅ PHP dependencies monitoring enabled"
           fi
-          
+
           # Monitor Node.js dependencies
-          if [ -f "package.json" ]; then
-            snyk monitor --file=package.json --project-name="${{ github.repository }}-node" || echo "Node monitoring setup failed"
+          if [ -f "package-lock.json" ]; then
+            snyk monitor --file=package-lock.json --project-name="${{ github.repository }}-node" || echo "Node monitoring setup failed"
             echo "✅ Node.js dependencies monitoring enabled"
           fi
           
