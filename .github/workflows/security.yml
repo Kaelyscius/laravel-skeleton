@@ -255,7 +255,7 @@ jobs:
           
           # Check CSRF protection
           echo "Checking CSRF middleware..."
-          if grep -r "VerifyCsrfToken" app/Http/Kernel.php || true; then
+          if grep -r "VerifyCsrfToken" app/Http/Middleware/ bootstrap/app.php || true; then
             echo "✅ CSRF protection enabled"
           else
             echo "⚠️ CSRF protection may not be properly configured"

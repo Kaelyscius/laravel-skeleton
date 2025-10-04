@@ -49,25 +49,25 @@ jobs:
       - name: 🔍 Validate docker-compose files
         run: |
           echo "🔍 Validating docker-compose configuration..."
-          
+
           # Check main docker-compose.yml
-          if docker-compose config >/dev/null 2>&1; then
+          if docker compose config >/dev/null 2>&1; then
             echo "✅ docker-compose.yml is valid"
           else
             echo "❌ docker-compose.yml validation failed"
-            docker-compose config
+            docker compose config
             exit 1
           fi
-          
+
           # Check override files
           for override in docker-compose.*.yml; do
             if [ -f "$override" ]; then
               echo "Checking $override..."
-              if docker-compose -f docker-compose.yml -f "$override" config >/dev/null 2>&1; then
+              if docker compose -f docker-compose.yml -f "$override" config >/dev/null 2>&1; then
                 echo "✅ $override is valid"
               else
                 echo "❌ $override validation failed"
-                docker-compose -f docker-compose.yml -f "$override" config
+                docker compose -f docker-compose.yml -f "$override" config
               fi
             fi
           done
@@ -261,20 +261,20 @@ jobs:
           
           # Start services
           echo "Starting Docker services..."
-          docker-compose up -d --build
-          
+          docker compose up -d --build
+
           # Wait for services to be ready
           echo "Waiting for services to start..."
           sleep 30
-          
+
           # Check service health
           echo "Checking service health..."
-          docker-compose ps
-          
+          docker compose ps
+
           # Test database connectivity
           echo "Testing database connectivity..."
-          docker-compose exec -T php php artisan migrate --force --no-interaction || echo "Migration failed (expected for fresh setup)"
-          
+          docker compose exec -T php php artisan migrate --force --no-interaction || echo "Migration failed (expected for fresh setup)"
+
           # Test web server
           echo "Testing web server..."
           if curl -f http://localhost || true; then
@@ -282,10 +282,10 @@ jobs:
           else
             echo "⚠️ Web server not responding (may be expected)"
           fi
-          
+
           # Cleanup
           echo "Cleaning up..."
-          docker-compose down -v
+          docker compose down -v
           
           echo "✅ Integration test completed"
 

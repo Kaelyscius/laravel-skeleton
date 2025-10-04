@@ -95,7 +95,7 @@ jobs:
       - name: 🎵 Install Composer dependencies
         working-directory: src
         run: |
-          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress --no-scripts
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
           composer dump-autoload --optimize
 
       # ==========================================
