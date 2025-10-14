@@ -1,5 +1,5 @@
 # Stage 1: Base avec toutes les extensions
-FROM php:8.4-fpm-alpine AS base
+FROM php:8.5.0RC2-fpm-alpine AS base
 
 ARG UID=1000
 ARG GID=1000
