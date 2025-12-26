@@ -70,11 +70,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Architecture
 
 ### Docker-based Development Environment
-- **PHP 8.4** container with FPM, Supervisor, and OPcache
+- **PHP 8.5.1** container with FPM, Supervisor, and OPcache
 - **Apache 2.4** with HTTPS/HTTP2 support
 - **MariaDB** for database
 - **Redis** for caching and sessions
-- **Node.js 20** for frontend builds
+- **Node.js 24** for frontend builds (LTS "Krypton")
 - **Watchtower** for automatic container updates
 
 ### Laravel 12 Application Structure

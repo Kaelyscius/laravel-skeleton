@@ -93,10 +93,10 @@ packages:
       max_laravel_version: 11
       description: "Non compatible Laravel 12 - utiliser Debugbar à la place"
     - name: "pestphp/pest"
-      version: "^3.0"
+      version: "^4.0"
       required: true
     - name: "pestphp/pest-plugin-laravel"
-      version: "^3.0"
+      version: "^4.0"
       required: true
     - name: "pestphp/pest-plugin-drift"
       version: "^3.0"
@@ -105,13 +105,15 @@ packages:
       description: "Détecte le code non couvert par les tests et mutation testing"
     # Quality tools (optional - PHP 8.4 compatible versions)
     - name: "symplify/easy-coding-standard"
-      version: "^12.5"
+      version: "^13.0"
       required: false
-      php_version: ">=8.1"
+      php_version: ">=7.2"
+      description: "PHP 8.5 compatible"
     - name: "rector/rector"
-      version: "^2.1"
+      version: "^2.3"
       required: false
-      php_version: ">=7.4"
+      php_version: ">=8.2"
+      description: "Latest version with PHPStan 2.x support"
     - name: "larastan/larastan"
       version: "^3.0"
       required: false
