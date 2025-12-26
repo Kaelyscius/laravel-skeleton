@@ -63,6 +63,18 @@ packages:
     - name: "predis/predis"
       version: "*"
       required: true
+    - name: "spatie/laravel-csp"
+      version: "^2.0"
+      required: false
+      description: "Content Security Policy headers pour sécurité XSS"
+    - name: "spatie/laravel-health"
+      version: "^1.0"
+      required: false
+      description: "Health checks application (DB, Cache, Queue, etc.)"
+    - name: "spatie/laravel-schedule-monitor"
+      version: "^3.0"
+      required: false
+      description: "Monitoring des tâches cron et scheduled jobs"
   development:
     # Core packages first (required)
     - name: "nunomaduro/collision"
@@ -86,6 +98,11 @@ packages:
     - name: "pestphp/pest-plugin-laravel"
       version: "^3.0"
       required: true
+    - name: "pestphp/pest-plugin-drift"
+      version: "^3.0"
+      required: false
+      php_version: ">=8.1"
+      description: "Détecte le code non couvert par les tests et mutation testing"
     # Quality tools (optional - PHP 8.4 compatible versions)
     - name: "symplify/easy-coding-standard"
       version: "^12.5"
