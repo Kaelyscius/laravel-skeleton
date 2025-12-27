@@ -1,5 +1,5 @@
 # Stage 1: Base avec toutes les extensions
-FROM php:8.4-fpm-alpine AS base
+FROM php:8.5.1-fpm-alpine AS base
 
 ARG UID=1000
 ARG GID=1000
@@ -30,25 +30,31 @@ RUN apk add --no-cache \
 RUN curl -L "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -o /usr/local/bin/yq \
     && chmod +x /usr/local/bin/yq
 
-# Extensions PHP - séparées selon disponibilité dans PHP 8.4
-# Extensions à compiler
+# Extensions PHP pour PHP 8.5.1
+# Extensions à compiler - compilées séparément pour compatibilité
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
-        gd \
+    && docker-php-ext-install -j$(nproc) gd
+
+RUN docker-php-ext-install -j$(nproc) \
         pdo \
         pdo_mysql \
-        mysqli \
+        mysqli
+
+RUN docker-php-ext-install -j$(nproc) \
         zip \
-        intl \
-        opcache \
+        intl
+
+RUN docker-php-ext-install -j$(nproc) \
         bcmath \
         exif \
         pcntl \
         sockets
 
-# Note: Les extensions XML (dom, xml, xmlwriter, xmlreader, simplexml) sont incluses par défaut dans PHP 8.4
-# Note: tokenizer, ctype, fileinfo, iconv, mbstring sont également incluses par défaut dans PHP 8.4
-# Vérifier leur présence se fera au runtime
+# Note: opcache est déjà compilé DANS PHP 8.5 (extension Zend intégrée)
+# Il est configuré via /usr/local/etc/php/conf.d/opcache.ini
+
+# Note: Les extensions XML (dom, xml, xmlwriter, xmlreader, simplexml) sont incluses par défaut dans PHP 8.5
+# Note: tokenizer, ctype, fileinfo, iconv, mbstring sont également incluses par défaut dans PHP 8.5
 
 # PECL: Redis, APCu, Xdebug, Imagick
 RUN apk add --no-cache imagemagick-dev \

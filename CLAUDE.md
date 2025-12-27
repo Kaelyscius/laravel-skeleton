@@ -30,7 +30,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Testing
 - `make test` - Run all tests (using Pest framework)
 - `make test-unit` - Run unit tests only
+- `make test-feature` - Run feature tests only
 - `make test-coverage` - Run tests with coverage report
+- `make test-drift` - Run tests with Drift (detect uncovered code)
 
 ### Diagnostics & Troubleshooting
 - `make diagnostic` - Run complete diagnostic suite (PHP 8.4 + Laravel 12)
@@ -51,11 +53,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make insights` - Run PHP Insights analysis
 - `make quality-all` - Run complete quality audit
 
-### Security
+### Security & Monitoring
 - `make security-setup` - Setup Snyk security scanning
 - `make security-scan` - Run security vulnerability scan
 - `make nightwatch-start` - Start Laravel Nightwatch agent
 - `make nightwatch-status` - Check Nightwatch status
+- `make health` - Run Laravel health checks (DB, Cache, Queue, etc.)
+- `make schedule-monitor-sync` - Sync schedule monitor
+- `make schedule-monitor-list` - List monitored scheduled tasks
 
 ### Deployment
 - `make setup-interactive` - Interactive environment setup
@@ -65,11 +70,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Architecture
 
 ### Docker-based Development Environment
-- **PHP 8.4** container with FPM, Supervisor, and OPcache
+- **PHP 8.5.1** container with FPM, Supervisor, and OPcache
 - **Apache 2.4** with HTTPS/HTTP2 support
 - **MariaDB** for database
 - **Redis** for caching and sessions
-- **Node.js 20** for frontend builds
+- **Node.js 24** for frontend builds (LTS "Krypton")
 - **Watchtower** for automatic container updates
 
 ### Laravel 12 Application Structure
@@ -105,10 +110,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Automated SSL certificate generation
 
 ### Testing Setup
-- Pest framework for modern PHP testing
+- **Pest framework** for modern PHP testing
+- **Pest Plugin Drift** for detecting uncovered code and mutation testing
 - Separate test suites for Unit and Feature tests
-- SQLite in-memory database for testing
+- MariaDB test database (`laravel_test`) for testing
 - Coverage reporting available
+- Test configuration in `src/phpunit.xml` and `src/tests/Pest.php`
 
 ### Development Workflow
 1. Use `make setup-interactive` for initial setup
@@ -124,12 +131,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - IT-Tools for development utilities (port 8081)
 - Laravel Horizon for queue monitoring
 - Laravel Telescope for application debugging
+- **Spatie Laravel Health** for application health checks
+- **Spatie Laravel Schedule Monitor** for cron job monitoring
+- **Spatie Laravel CSP** for Content Security Policy headers
 
 ### Deployment
 - Ansible playbooks for infrastructure management
 - Docker-based deployment with health checks
 - Automated updates via Watchtower
 - Support for development, staging, and production environments
+
+## Installed Packages & Features
+
+### Testing Packages
+- **pestphp/pest** (v3.0) - Modern testing framework
+- **pestphp/pest-plugin-laravel** (v3.0) - Laravel integration for Pest
+- **pestphp/pest-plugin-drift** (v3.0) - Detect uncovered code and mutation testing
+
+### Security & Monitoring Packages
+- **spatie/laravel-csp** (v2.0) - Content Security Policy headers for XSS protection
+- **spatie/laravel-health** (v1.0) - Application health checks (DB, Cache, Queue, Disk, etc.)
+- **spatie/laravel-schedule-monitor** (v3.0) - Monitor scheduled tasks and cron jobs
+- **spatie/laravel-permission** - Role and permission management
+- **spatie/laravel-activitylog** - Activity logging
+
+### Laravel Core Packages
+- **laravel/horizon** - Queue monitoring and management
+- **laravel/telescope** - Application debugging and insights
+- **laravel/sanctum** - API authentication
+- **laravel/nightwatch** - Error monitoring and reporting
 
 ## Important Notes
 
@@ -140,6 +170,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Security scanning is integrated with Snyk
 - Watchtower handles automatic updates for standard Docker images
 - Custom images (PHP, Apache, Node) are excluded from auto-updates
+- Database: MariaDB for both development and testing (no SQLite)
+- Queue: Redis for job processing, MariaDB for job batching and failed jobs
 
 ## PhpStorm + WSL2 Configuration
 

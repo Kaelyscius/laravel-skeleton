@@ -31,8 +31,8 @@ init_logging "10-laravel-core"
 # VARIABLES DE CONFIGURATION
 # =============================================================================
 
-# Version Laravel par défaut
-readonly DEFAULT_LARAVEL_VERSION="12.21.0"
+# Version Laravel par défaut (version flexible pour auto-update vers dernière 12.x)
+readonly DEFAULT_LARAVEL_VERSION="^12.0"
 
 # Fichiers Laravel critiques pour la validation
 readonly LARAVEL_CORE_FILES=(

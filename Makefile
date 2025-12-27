@@ -97,21 +97,52 @@ help: ## Afficher l'aide principale
 # =============================================================================
 
 .PHONY: install
-install: build up install-laravel npm-install setup-ssl ## Installation complète
+install: build up install-laravel npm-install setup-ssl ## Installation complète (séquentielle)
 	@echo "$(GREEN)🎉 Installation terminée !$(NC)"
 	@$(MAKE) _show_urls
 
+.PHONY: install-fast
+install-fast: build-fast up install-laravel npm-install-fast setup-ssl ## Installation optimisée avec cache (recommandé)
+	@echo "$(GREEN)🎉 Installation rapide terminée !$(NC)"
+	@$(MAKE) _show_urls
+
+.PHONY: install-incremental
+install-incremental: ## Mise à jour incrémentale (si déjà installé)
+	@if [ -f "src/vendor/autoload.php" ]; then \
+		echo "$(CYAN)✓ Vendor exists, updating dependencies...$(NC)"; \
+		$(DOCKER) exec -u www-data $(PHP_CONTAINER_NAME) composer update --no-interaction --optimize-autoloader --no-progress; \
+	else \
+		echo "$(YELLOW)→ Vendor not found, running full install...$(NC)"; \
+		$(MAKE) install-laravel; \
+	fi
+	@if [ -f "src/node_modules/.package-lock.json" ]; then \
+		echo "$(CYAN)✓ node_modules exists, updating...$(NC)"; \
+		$(MAKE) npm-install-fast; \
+	else \
+		echo "$(YELLOW)→ node_modules not found, running full install...$(NC)"; \
+		$(MAKE) npm-install; \
+	fi
+	@echo "$(GREEN)✓ Incremental update complete$(NC)"
+
 .PHONY: setup-quick
-setup-quick: up install-laravel ## Installation rapide
+setup-quick: up install-laravel ## Installation rapide sans SSL
 	@echo "$(GREEN)⚡ Installation rapide terminée !$(NC)"
 
 .PHONY: build
-build: ## Construire tous les containers
+build: ## Construire tous les containers (sans cache)
 	@echo "$(YELLOW)Building containers...$(NC)"
 	@$(DOCKER_COMPOSE) build --no-cache
 
+.PHONY: build-fast
+build-fast: ## Construire avec cache BuildKit (recommandé)
+	@echo "$(CYAN)⚡ Building containers with cache...$(NC)"
+	@DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 $(DOCKER_COMPOSE) build
+
 .PHONY: rebuild
-rebuild: down build up ## Reconstruire et redémarrer
+rebuild: down build up ## Reconstruire et redémarrer (sans cache)
+
+.PHONY: rebuild-fast
+rebuild-fast: down build-fast up ## Reconstruire avec cache (rapide)
 
 .PHONY: enable-xdebug
 enable-xdebug: rebuild ## Activer xdebug (reconstruction Docker requise)
@@ -369,6 +400,13 @@ npm-install: ## Installer les dépendances NPM
 	$(call run_npm_command,install)
 	@echo "$(GREEN)✓ NPM dependencies installed$(NC)"
 
+.PHONY: npm-install-fast
+npm-install-fast: ## Installer avec npm ci (plus rapide)
+	$(call check_container,$(NODE_CONTAINER_NAME))
+	@echo "$(CYAN)⚡ Installing NPM with ci (optimized)...$(NC)"
+	$(call run_npm_command,ci --prefer-offline --no-audit --no-fund)
+	@echo "$(GREEN)✓ NPM dependencies installed (fast)$(NC)"
+
 .PHONY: npm-build
 npm-build: npm-install ## Builder les assets
 	@echo "$(YELLOW)Building assets...$(NC)"
@@ -399,6 +437,15 @@ test-unit: ## Tests unitaires
 .PHONY: test-coverage
 test-coverage: ## Tests avec couverture
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan test --coverage-html coverage
+
+.PHONY: test-drift
+test-drift: ## Tests avec détection de code non couvert (Drift)
+	@echo "$(CYAN)🎯 Exécution des tests avec Drift...$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan test --drift
+
+.PHONY: test-feature
+test-feature: ## Tests fonctionnels
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan test --testsuite=Feature
 
 # =============================================================================
 # CODE QUALITY
@@ -577,6 +624,30 @@ clean-all: clean ## Nettoyage complet
 	@$(DOCKER) system prune -af
 	@echo "$(GREEN)✓ Deep clean completed$(NC)"
 
+.PHONY: clean-cache
+clean-cache: ## Nettoyer tous les caches (Composer, NPM, Laravel)
+	@echo "$(YELLOW)🧹 Cleaning all caches...$(NC)"
+	@if [ -d "$$HOME/.cache/composer" ]; then \
+		echo "$(CYAN)→ Cleaning Composer cache...$(NC)"; \
+		rm -rf $$HOME/.cache/composer/*; \
+	fi
+	@if [ -d "$$HOME/.composer/cache" ]; then \
+		echo "$(CYAN)→ Cleaning Composer cache (old location)...$(NC)"; \
+		rm -rf $$HOME/.composer/cache/*; \
+	fi
+	@if docker ps -q -f name=$(PHP_CONTAINER_NAME) >/dev/null 2>&1; then \
+		echo "$(CYAN)→ Cleaning Laravel cache...$(NC)"; \
+		$(DOCKER) exec $(PHP_CONTAINER_NAME) php artisan cache:clear 2>/dev/null || true; \
+		$(DOCKER) exec $(PHP_CONTAINER_NAME) php artisan config:clear 2>/dev/null || true; \
+		$(DOCKER) exec $(PHP_CONTAINER_NAME) php artisan route:clear 2>/dev/null || true; \
+		$(DOCKER) exec $(PHP_CONTAINER_NAME) php artisan view:clear 2>/dev/null || true; \
+	fi
+	@if [ -d "src/node_modules/.cache" ]; then \
+		echo "$(CYAN)→ Cleaning NPM cache...$(NC)"; \
+		rm -rf src/node_modules/.cache; \
+	fi
+	@echo "$(GREEN)✅ All caches cleaned$(NC)"
+
 .PHONY: update-deps
 update-deps: ## Mettre à jour les dépendances
 	@echo "$(YELLOW)Updating dependencies...$(NC)"
@@ -624,6 +695,21 @@ diagnose: ## Diagnostic complet
 .PHONY: healthcheck
 healthcheck: ## Vérifier la santé des services
 	@$(DOCKER_COMPOSE) ps --format "table {{.Name}}\t{{.Status}}"
+
+.PHONY: health
+health: ## Health check Laravel (spatie/laravel-health)
+	@echo "$(CYAN)🏥 Exécution des health checks Laravel...$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan health:check
+
+.PHONY: schedule-monitor-sync
+schedule-monitor-sync: ## Synchroniser les moniteurs de tâches planifiées
+	@echo "$(CYAN)⏰ Synchronisation des moniteurs de tâches...$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan schedule-monitor:sync
+
+.PHONY: schedule-monitor-list
+schedule-monitor-list: ## Lister les tâches planifiées monitorées
+	@echo "$(CYAN)📋 Liste des tâches monitorées:$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan schedule-monitor:list
 
 .PHONY: metrics
 metrics: ## Métriques système
