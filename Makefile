@@ -103,9 +103,9 @@ help: ## Afficher l'aide principale
 install: install-dev ## Alias pour install-dev (par défaut en développement)
 
 .PHONY: install-dev
-install-dev: build up-dev install-laravel npm-install setup-ssl ## Installation complète DÉVELOPPEMENT (avec Node, MailHog, Adminer, etc.)
+install-dev: build up-dev install-laravel npm-install setup-ssl ## Installation complète DÉVELOPPEMENT (avec Node, Mailpit, Adminer, etc.)
 	@echo "$(GREEN)🎉 Installation DÉVELOPPEMENT terminée !$(NC)"
-	@echo "$(CYAN)📦 Services actifs: PHP, Apache, MariaDB, Redis, Node, MailHog, Adminer$(NC)"
+	@echo "$(CYAN)📦 Services actifs: PHP, Apache, MariaDB, Redis, Node, Mailpit, Adminer$(NC)"
 	@$(MAKE) _show_urls
 
 .PHONY: install-dev-full
@@ -119,7 +119,7 @@ install-dev-full: build up-dev-full install-laravel npm-install setup-ssl ## Ins
 install-prod: build up install-laravel-prod setup-ssl ## Installation PRODUCTION (services essentiels uniquement)
 	@echo "$(GREEN)🎉 Installation PRODUCTION terminée !$(NC)"
 	@echo "$(CYAN)📦 Services actifs: PHP, Apache, MariaDB, Redis$(NC)"
-	@echo "$(YELLOW)⚠️  Node, MailHog, Adminer NON démarrés (profil dev désactivé)$(NC)"
+	@echo "$(YELLOW)⚠️  Node, Mailpit, Adminer NON démarrés (profil dev désactivé)$(NC)"
 	@$(MAKE) _show_urls
 
 # Versions rapides avec cache
@@ -309,7 +309,7 @@ logs: ## Afficher les logs (usage: make logs service=php)
 # =============================================================================
 # Profiles disponibles:
 #   - AUCUN       : Production (apache, php, mariadb, redis)
-#   - dev         : Outils développement (node, mailhog, adminer)
+#   - dev         : Outils développement (node, mailpit, adminer)
 #   - tools       : Utilitaires (dozzle, it-tools, watchtower)
 #   - dev-extra   : Outils additionnels (phpmyadmin, redis-commander)
 # =============================================================================
@@ -322,7 +322,7 @@ up-prod: ## Production - Services essentiels uniquement (apache, php, mariadb, r
 	@$(MAKE) _show-active-services
 
 .PHONY: up-dev
-up-dev: ## Développement - Essentiels + dev tools (+ node, mailhog, adminer)
+up-dev: ## Développement - Essentiels + dev tools (+ node, mailpit, adminer)
 	@echo "$(CYAN)🚀 Démarrage en mode DÉVELOPPEMENT (services + dev tools)$(NC)"
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile dev up -d
 	@echo "$(GREEN)✓ Services développement démarrés$(NC)"
@@ -359,7 +359,7 @@ ps-profiles: ## Afficher les services actifs avec leurs profiles
 	@$(DOCKER_COMPOSE) ps --filter "name=apache" --filter "name=php" --filter "name=mariadb" --filter "name=redis" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
 	@echo ""
 	@echo "$(YELLOW)🛠️  DEV (profile: dev):$(NC)"
-	@$(DOCKER_COMPOSE) ps --filter "name=node" --filter "name=mailhog" --filter "name=adminer" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
+	@$(DOCKER_COMPOSE) ps --filter "name=node" --filter "name=mailpit" --filter "name=adminer" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
 	@echo ""
 	@echo "$(YELLOW)🔧 TOOLS (profile: tools):$(NC)"
 	@$(DOCKER_COMPOSE) ps --filter "name=dozzle" --filter "name=it-tools" --filter "name=watchtower" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
@@ -423,15 +423,6 @@ install-laravel-prod: ## Installer Laravel PRODUCTION (sans packages dev)
 	@echo "$(GREEN)✅ Installation Laravel PRODUCTION terminée (sans outils dev) !$(NC)"
 	@echo "$(YELLOW)⚠️  PHPStan, ECS, Rector, Pest NON installés (environnement production)$(NC)"
 
-.PHONY: validate-fixes
-validate-fixes: ## Valider toutes les corrections implémentées
-	@echo "$(CYAN)🔍 Validation complète des corrections...$(NC)"
-	@if [ -f "./scripts/validate-all-fixes.sh" ]; then \
-		chmod +x "./scripts/validate-all-fixes.sh"; \
-		./scripts/validate-all-fixes.sh; \
-	else \
-		echo "$(RED)❌ Script de validation non trouvé$(NC)"; \
-	fi
 
 .PHONY: test-packages
 test-packages: ## Tester compatibilité des packages
@@ -605,8 +596,9 @@ insights: ## PHP Insights
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan insights
 
 .PHONY: enlightn
-enlightn: ## Audit sécurité
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan enlightn
+enlightn: ## Audit sécurité (PHPStan - Enlightn supprimé, non compatible Laravel 12)
+	@echo "$(YELLOW)ℹ️  Enlightn retiré du projet (fork communautaire non maintenu).$(NC)"
+	@echo "$(CYAN)→ Utilisez 'make phpstan' pour l'analyse statique et 'make security-scan' pour la sécurité.$(NC)"
 
 # =============================================================================
 # GIT HOOKS
@@ -661,7 +653,7 @@ setup-watchtower: ## Configuration Watchtower
 	else \
 		echo "$(YELLOW)⚠ Script Watchtower non trouvé - Watchtower fonctionne automatiquement$(NC)"; \
 		echo "$(BLUE)→ Planification: Tous les jours à 3h du matin$(NC)"; \
-		echo "$(BLUE)→ Containers surveillés: MariaDB, Redis, MailHog, Adminer, IT-Tools, Dozzle$(NC)"; \
+		echo "$(BLUE)→ Containers surveillés: MariaDB, Redis, Mailpit, Adminer, IT-Tools, Dozzle$(NC)"; \
 		echo "$(BLUE)→ Containers exclus: PHP, Apache, Node (images custom)$(NC)"; \
 	fi
 
@@ -892,7 +884,7 @@ help-profiles: ## Aide pour l'architecture modulaire (profiles)
 	@echo "    • Usage: Services essentiels uniquement"
 	@echo ""
 	@echo "  $(PURPLE)dev$(NC) (Développement)"
-	@echo "    • Services: node, mailhog, adminer"
+	@echo "    • Services: node, mailpit, adminer"
 	@echo "    • Usage: Outils de développement"
 	@echo ""
 	@echo "  $(PURPLE)tools$(NC) (Utilitaires)"
@@ -957,7 +949,7 @@ help-watchtower: ## Aide Watchtower (mises à jour auto)
 	@echo ""
 	@echo "$(YELLOW)⚙️ Fonctionnement:$(NC)"
 	@echo "  • Planification: Tous les jours à 3h du matin"
-	@echo "  • Containers surveillés: MariaDB, Redis, MailHog, Adminer, IT-Tools, Dozzle"
+	@echo "  • Containers surveillés: MariaDB, Redis, Mailpit, Adminer, IT-Tools, Dozzle"
 	@echo "  • Containers exclus: PHP, Apache, Node (images custom)"
 	@echo "  • Nettoyage automatique des anciennes images"
 	@echo "  • Rollback automatique en cas de problème"
@@ -981,8 +973,8 @@ _show_urls:
 	@if docker ps --format "{{.Names}}" | grep -q "adminer"; then \
 		echo "  • Adminer: http://localhost:8080"; \
 	fi
-	@if docker ps --format "{{.Names}}" | grep -q "mailhog"; then \
-		echo "  • MailHog: http://localhost:8025"; \
+	@if docker ps --format "{{.Names}}" | grep -q "mailpit"; then \
+		echo "  • Mailpit: http://localhost:8025"; \
 	fi
 	@if docker ps --format "{{.Names}}" | grep -q "it-tools"; then \
 		echo "  • IT-Tools: http://localhost:8081"; \

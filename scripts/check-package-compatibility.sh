@@ -48,10 +48,8 @@ log() {
 }
 
 # Packages incompatibles connus avec Laravel 12
-readonly INCOMPATIBLE_PACKAGES=(
-    "beyondcode/laravel-query-detector"
-    "driftingly/rector-laravel"
-)
+# Note: driftingly/rector-laravel v2.0+ est compatible Laravel 12
+readonly INCOMPATIBLE_PACKAGES=()
 
 # Fonction d'aide
 show_help() {

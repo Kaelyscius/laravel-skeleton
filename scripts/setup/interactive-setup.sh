@@ -146,7 +146,7 @@ project:
 
 services:
   optional:
-    mailhog:
+    mailpit:
       enabled: true
       environments: ["local", "development"]
     adminer:
@@ -336,7 +336,7 @@ ask_optional_services() {
         if [ "$SELECTED_ENV" = "production" ]; then
             SELECTED_SERVICES=("dozzle")  # Seulement Dozzle en prod
         else
-            SELECTED_SERVICES=("mailhog" "adminer" "dozzle")  # Services de dev
+            SELECTED_SERVICES=("mailpit" "adminer" "dozzle")  # Services de dev
         fi
         log "INFO" "Services par défaut pour $SELECTED_ENV: ${SELECTED_SERVICES[*]}"
         return 0
@@ -353,7 +353,7 @@ ask_optional_services() {
     fi
     
     local services_config=(
-        "mailhog:Capture des emails de développement:dev"
+        "mailpit:Capture des emails de développement:dev"
         "adminer:Interface web pour les bases de données:dev"
         "it-tools:Boîte à outils pour développeurs (encodeurs, générateurs):optional"
         "dozzle:Monitoring des logs en temps réel:all"
@@ -371,7 +371,7 @@ ask_optional_services() {
         
         local default_choice
         case $service_name in
-            "mailhog"|"adminer"|"dozzle")
+            "mailpit"|"adminer"|"dozzle")
                 default_choice="y"
                 ;;
             "it-tools")
@@ -446,7 +446,7 @@ update_installer_config() {
     fi
     
     # Mettre à jour les services optionnels
-    for service in mailhog adminer it-tools dozzle; do
+    for service in mailpit adminer it-tools dozzle; do
         local enabled="false"
         if [[ " ${SELECTED_SERVICES[*]} " =~ " $service " ]]; then
             enabled="true"
@@ -536,8 +536,8 @@ show_summary() {
     echo -e "  • Horizon : ${GREEN}https://laravel.local/horizon${NC}"
     echo -e "  • Telescope : ${GREEN}https://laravel.local/telescope${NC}"
     
-    if [[ " ${SELECTED_SERVICES[*]} " =~ " mailhog " ]]; then
-        echo -e "  • MailHog : ${GREEN}http://localhost:8025${NC}"
+    if [[ " ${SELECTED_SERVICES[*]} " =~  mailpit  ]]; then
+        echo -e "  • Mailpit : ${GREEN}http://localhost:8025${NC}"
     fi
     if [[ " ${SELECTED_SERVICES[*]} " =~ " adminer " ]]; then
         echo -e "  • Adminer : ${GREEN}http://localhost:8080${NC}"

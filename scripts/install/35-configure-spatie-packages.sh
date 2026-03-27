@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # =============================================================================
-# MODULE DE CONFIGURATION DES PACKAGES SPATIE
+# MODULE DE CONFIGURATION DES PACKAGES SPATIE + LARAVEL PULSE
 # =============================================================================
 #
-# Ce module configure les packages Spatie additionnels :
+# Ce module configure les packages additionnels :
 # - laravel-csp (Content Security Policy)
 # - laravel-health (Health checks)
 # - laravel-schedule-monitor (Monitoring cron)
+# - laravel/pulse (Monitoring temps réel)
 #
 # =============================================================================
 
@@ -37,9 +38,10 @@ main() {
     configure_laravel_csp
     configure_laravel_health
     configure_laravel_schedule_monitor
+    configure_laravel_pulse
 
     local duration=$(calculate_duration $start_time)
-    log_success "✅ Configuration des packages Spatie terminée en $duration"
+    log_success "✅ Configuration des packages terminée en $duration"
 }
 
 configure_laravel_csp() {
@@ -59,12 +61,17 @@ configure_laravel_csp() {
         }
     fi
 
-    # Ajouter le middleware dans app/Http/Kernel.php si nécessaire
-    if [ -f "app/Http/Kernel.php" ]; then
-        if ! grep -q "AddCspHeaders" app/Http/Kernel.php; then
-            log_info "⚡ Configuration du middleware CSP..."
-            log_info "💡 Ajoutez manuellement le middleware \\Spatie\\Csp\\AddCspHeaders::class dans app/Http/Kernel.php"
+    # Laravel 12 : enregistrement du middleware dans bootstrap/app.php (plus de Kernel.php)
+    if [ -f "bootstrap/app.php" ]; then
+        if ! grep -q "AddCspHeaders" bootstrap/app.php; then
+            log_info "⚡ Enregistrement du middleware CSP dans bootstrap/app.php..."
+            sed -i "s/->withMiddleware(function (Middleware \$middleware) {/->withMiddleware(function (Middleware \$middleware) {\n        \$middleware->append(\\\\Spatie\\\\Csp\\\\AddCspHeaders::class);/" bootstrap/app.php
+            log_success "✅ Middleware CSP enregistré dans bootstrap/app.php"
+        else
+            log_debug "✓ Middleware CSP déjà enregistré"
         fi
+    else
+        log_warn "⚠️ bootstrap/app.php non trouvé - enregistrez manuellement \\\\Spatie\\\\Csp\\\\AddCspHeaders::class"
     fi
 
     log_success "✅ Laravel CSP configuré"
@@ -148,14 +155,32 @@ configure_laravel_schedule_monitor() {
     log_info "Publication des migrations Schedule Monitor..."
     php artisan vendor:publish --tag=schedule-monitor-migrations 2>&1 | tee -a "$LOG_FILE" || log_debug "Migrations Schedule Monitor déjà publiées"
 
-    # Créer un exemple de scheduled task si app/Console/Kernel.php existe
-    if [ -f "app/Console/Kernel.php" ]; then
-        log_info "💡 Exemple de configuration dans app/Console/Kernel.php:"
-        log_info "   \$schedule->command('inspire')->hourly()->monitorName('inspire-command');"
-    fi
-
+    log_info "💡 Exemple dans routes/console.php (Laravel 12) :"
+    log_info "   Schedule::command('inspire')->hourly()->monitorName('inspire-command');"
     log_info "💡 Pour synchroniser les moniteurs: php artisan schedule-monitor:sync"
     log_success "✅ Laravel Schedule Monitor configuré"
+}
+
+configure_laravel_pulse() {
+    if ! is_package_installed "laravel/pulse"; then
+        log_debug "✓ laravel/pulse non installé - ignoré"
+        return 0
+    fi
+
+    log_info "📊 Configuration de Laravel Pulse..."
+
+    # Publier la configuration et les migrations
+    log_info "Publication des assets Pulse..."
+    php artisan vendor:publish --provider="Laravel\\Pulse\\PulseServiceProvider" 2>&1 | tee -a "$LOG_FILE" \
+        || log_debug "Assets Pulse déjà publiés"
+
+    # Exécuter les migrations Pulse
+    log_info "Migration des tables Pulse..."
+    php artisan migrate --force 2>&1 | tee -a "$LOG_FILE" || log_warn "⚠️ Migrations Pulse non exécutées"
+
+    log_info "💡 Dashboard Pulse disponible sur: /pulse (restreint aux admins en prod)"
+    log_info "💡 Configurez les enregistreurs dans config/pulse.php"
+    log_success "✅ Laravel Pulse configuré"
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then

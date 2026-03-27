@@ -5,7 +5,7 @@
 # =============================================================================
 #
 # Ce module configure les outils de qualité de code : PHPStan, ECS, Rector
-# avec les configurations optimisées pour Laravel 12 et PHP 8.4
+# avec les configurations optimisées pour Laravel 12 et PHP 8.5
 #
 # =============================================================================
 

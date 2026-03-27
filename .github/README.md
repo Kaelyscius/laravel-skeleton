@@ -49,8 +49,8 @@ DOCKER_PASSWORD     # Push images Docker Hub
 
 ### Variables d'environnement
 ```yaml
-PHP_VERSION: 8.4    # Compatible Laravel 12
-NODE_VERSION: 22    # LTS actuel
+PHP_VERSION: 8.5    # Compatible Laravel 12
+NODE_VERSION: 24    # LTS actuel
 ```
 
 ## 🎯 Utilisation

@@ -88,7 +88,6 @@ try:
 
     # Vérifier quels packages sont installés
     pest_available = os.path.exists('vendor/pestphp/pest')
-    enlightn_available = False  # Enlightn non supporté pour Laravel 12+
 
     # Scripts de base toujours disponibles
     custom_scripts = {
@@ -144,16 +143,6 @@ try:
             "@insights",
             "@test:unit"
         ]
-
-    # Pour Laravel 12+, ne pas inclure Enlightn
-    laravel_version = $laravel_version
-    if laravel_version >= 12:
-        custom_scripts["security"] = "echo '⚠️ Enlightn non compatible avec Laravel 12+ - utilisez les autres outils de qualité'"
-        custom_scripts["enlightn"] = "echo '⚠️ Enlightn sera disponible quand il supportera Laravel 12+'"
-    else:
-        # Pour les versions antérieures, inclure Enlightn si disponible
-        custom_scripts["security"] = "php artisan enlightn --format=github || echo '⚠️ Enlightn non disponible'"
-        custom_scripts["enlightn"] = "php artisan enlightn || echo '⚠️ Enlightn non disponible'"
 
     composer_data['scripts'].update(custom_scripts)
 
@@ -281,6 +270,28 @@ run_final_checks() {
     fi
 }
 
+create_security_txt() {
+    log_info "Création du fichier security.txt..."
+
+    local well_known_dir="public/.well-known"
+    mkdir -p "$well_known_dir"
+
+    if [ ! -f "$well_known_dir/security.txt" ]; then
+        cat > "$well_known_dir/security.txt" << 'EOF'
+# security.txt - https://securitytxt.org/
+# Mettez à jour ce fichier avec vos coordonnées de contact réelles.
+
+Contact: mailto:security@example.com
+Expires: 2027-01-01T00:00:00.000Z
+Preferred-Languages: fr, en
+EOF
+        log_success "✅ public/.well-known/security.txt créé (à personnaliser)"
+        log_warn "   → Pensez à mettre à jour Contact: et Expires:"
+    else
+        log_debug "✓ security.txt déjà présent"
+    fi
+}
+
 show_final_report() {
     log_separator "RAPPORT FINAL D'INSTALLATION"
     
@@ -324,6 +335,7 @@ main() {
     generate_ide_helpers
     configure_composer_scripts
     final_optimizations
+    create_security_txt
     
     # Configuration base de données de test (remplacer SQLite)
     configure_test_database

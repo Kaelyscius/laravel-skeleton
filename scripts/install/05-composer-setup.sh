@@ -43,7 +43,6 @@ readonly COMPOSER_ALLOWED_PLUGINS=(
     "infection/extension-installer"
     "phpstan/extension-installer"
     "rector/extension-installer"
-    "enlightn/enlightn"
     "spatie/laravel-ignition"
     "laravel/framework"
 )
@@ -62,7 +61,7 @@ readonly COMPOSER_CONFIG_OPTIMIZATIONS=(
 # =============================================================================
 
 #
-# Vérifier les extensions PHP critiques pour PHP 8.4 + Laravel 12
+# Vérifier les extensions PHP critiques pour PHP 8.5 + Laravel 12
 #
 check_critical_php_extensions() {
     log_info "🔍 Vérification des extensions PHP critiques..."
@@ -103,10 +102,10 @@ check_critical_php_extensions() {
 }
 
 #
-# Tester la résolution des dépendances pour PHP 8.4 + Laravel 12
+# Tester la résolution des dépendances pour PHP 8.5 + Laravel 12
 #
-test_php84_dependency_resolution() {
-    log_info "🧪 Test de résolution des dépendances PHP 8.4..."
+test_php85_dependency_resolution() {
+    log_info "🧪 Test de résolution des dépendances PHP 8.5..."
     
     # Test simple de validation Composer (plus robuste)
     if composer --version >/dev/null 2>&1; then
@@ -123,7 +122,7 @@ test_php84_dependency_resolution() {
         log_warn "⚠ Connectivité Packagist limitée"
     fi
     
-    log_success "✅ Test de compatibilité PHP 8.4 de base réussi"
+    log_success "✅ Test de compatibilité PHP 8.5 de base réussi"
     return 0
 }
 
@@ -170,9 +169,9 @@ fix_composer_config() {
     # Définir les variables d'environnement critiques
     setup_composer_environment_variables
     
-    # Vérifications PHP 8.4 (non-bloquantes)
+    # Vérifications PHP 8.5 (non-bloquantes)
     check_critical_php_extensions || log_warn "Extensions PHP manquantes détectées"
-    test_php84_dependency_resolution || log_warn "Problèmes de résolution détectés"
+    test_php85_dependency_resolution || log_warn "Problèmes de résolution détectés"
     
     # Vérifier la configuration finale
     if validate_composer_configuration; then

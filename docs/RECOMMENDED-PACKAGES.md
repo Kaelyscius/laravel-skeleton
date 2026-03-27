@@ -585,7 +585,7 @@ composer require filament/filament
 composer require spatie/laravel-mail-preview --dev
 ```
 
-**Note**: MailHog déjà installé ✅, mais ce package utile pour dev
+**Note**: Mailpit est utilisé pour la capture email, ce package ajoute des assertions pratiques dans les tests
 
 **Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 

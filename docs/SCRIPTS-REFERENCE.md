@@ -1,6 +1,6 @@
 # 📚 Scripts Reference - Documentation Complète
 
-**Total**: 31 scripts shell organisés en 6 catégories
+**Total**: 26 scripts shell organisés en 5 catégories
 
 ---
 
@@ -9,8 +9,6 @@
 ```
 scripts/
 ├── *.sh                 # Scripts racine (15 fichiers)
-├── ci-cd/              # CI/CD (vide actuellement)
-├── healthcheck/        # Health checks (vide actuellement)
 ├── install/            # Installation modulaire (9 scripts)
 ├── lib/                # Bibliothèques partagées (4 scripts)
 ├── security/           # Sécurité (1 script)
@@ -102,10 +100,10 @@ source ~/.bashrc
 ### 5. 📊 **diagnostic-tools.sh** (14K) - UTILISÉ
 **Chemin**: `scripts/diagnostic-tools.sh`
 **Utilisé par**: `make diagnostic`
-**Description**: Diagnostics complets PHP 8.4 + Laravel 12
+**Description**: Diagnostics complets PHP 8.5 + Laravel 12
 
 **Fonctionnalité**:
-- Vérifie PHP 8.4 extensions
+- Vérifie PHP 8.5 extensions
 - Test Laravel 12 compatibility
 - Check packages incompatibles
 - Génère rapport détaillé

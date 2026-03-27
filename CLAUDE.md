@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 #### Démarrage par environnement
 - `make up-local` - **Développement local complet** (recommandé) - Services essentiels + dev + tools
-- `make up-dev` - Développement - Services essentiels + outils dev (node, mailhog, adminer)
+- `make up-dev` - Développement - Services essentiels + outils dev (node, mailpit, adminer)
 - `make up-dev-full` - Développement complet - Tous les services + monitoring (dozzle, it-tools, watchtower)
 - `make up-dev-extra` - Développement + outils extra (phpmyadmin, redis-commander)
 - `make up-prod` - Production - Services essentiels uniquement (apache, php, mariadb, redis)
@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 #### Profiles disponibles
 - **Aucun profile** (Production) : apache, php, mariadb, redis
-- **dev** (Développement) : node, mailhog, adminer
+- **dev** (Développement) : node, mailpit, adminer
 - **tools** (Utilitaires) : dozzle, it-tools, watchtower
 - **dev-extra** (Outils additionnels) : phpmyadmin, redis-commander
 
@@ -106,7 +106,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 #### Profile "dev" (Outils de développement)
 - **Node.js 24** for frontend builds (LTS "Krypton")
-- **MailHog** for email testing (port 8025)
+- **Mailpit** for email testing (port 8025)
 - **Adminer** for database management (port 8080)
 
 #### Profile "tools" (Monitoring et utilitaires)
@@ -182,7 +182,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 #### Profile "dev" (Outils de développement)
 - Adminer for database management (port 8080)
-- MailHog for email testing (port 8025)
+- Mailpit for email testing (port 8025)
 
 #### Profile "tools" (Monitoring)
 - Dozzle for real-time log monitoring (port 9999)
@@ -213,8 +213,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Installed Packages & Features
 
 ### Testing Packages
-- **pestphp/pest** (v3.0) - Modern testing framework
-- **pestphp/pest-plugin-laravel** (v3.0) - Laravel integration for Pest
+- **pestphp/pest** (v4.0) - Modern testing framework
+- **pestphp/pest-plugin-laravel** (v4.0) - Laravel integration for Pest
 - **pestphp/pest-plugin-drift** (v3.0) - Detect uncovered code and mutation testing
 
 ### Security & Monitoring Packages
@@ -228,7 +228,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **laravel/horizon** - Queue monitoring and management
 - **laravel/telescope** - Application debugging and insights
 - **laravel/sanctum** - API authentication
-- **laravel/nightwatch** - Error monitoring and reporting
+- **laravel/nightwatch** - Error monitoring and reporting (optional, service payant)
+- **laravel/pulse** - Dashboard monitoring temps réel (exceptions, slow queries, cache, jobs)
+
+## Security Patterns
+
+### Jobs avec données sensibles — `ShouldBeEncrypted`
+Tout job qui transporte des données sensibles (tokens, mots de passe, données personnelles) doit implémenter l'interface `ShouldBeEncrypted`. Cela chiffre le payload en queue (Redis/DB) et réduit le rayon d'impact si la queue est compromise.
+
+```php
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
+use Illuminate\Contracts\Queue\ShouldQueue;
+
+class SendPasswordResetEmail implements ShouldQueue, ShouldBeEncrypted
+{
+    public function __construct(private string $token) {}
+}
+```
+
+### Fichier de divulgation de sécurité
+Un fichier `public/.well-known/security.txt` est généré lors de l'installation. Personnalisez-le avec vos coordonnées réelles.
+
+### TrustProxies en production
+Si l'application est derrière un load balancer ou un proxy (Nginx, CloudFlare, AWS ALB), configurez `TrustProxies` dans `bootstrap/app.php` pour garantir que les URLs, redirects et cookies HTTPS fonctionnent correctement.
 
 ## Important Notes
 

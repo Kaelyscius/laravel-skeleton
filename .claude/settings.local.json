@@ -19,7 +19,20 @@
       "Bash(docker-compose:*)",
       "Bash(make help-profiles:*)",
       "Bash(grep:*)",
-      "Bash(docker ps:*)"
+      "Bash(docker ps:*)",
+      "Bash(git -C /home/alex/myLaravelSkeleton status --short)",
+      "WebFetch(domain:mariadb.org)",
+      "WebFetch(domain:hub.docker.com)",
+      "Bash(node:*)",
+      "Bash(/dev/null __NEW_LINE_2c57fc5ceac500dc__ echo echo \"=== Versions dans les scripts d''''install ===\")",
+      "Bash(wc -l /home/alex/myLaravelSkeleton/scripts/**/*.sh /home/alex/myLaravelSkeleton/scripts/*.sh)",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(X11; Linux x86_64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" https://benjamincrozat.com/laravel-security-best-practices)",
+      "Bash(head -5 grep -r \"APP_DEBUG\\\\|APP_ENV.*production\\\\|LOG_LEVEL\" /home/alex/myLaravelSkeleton/scripts/)",
+      "Bash(head -10 grep -r \"HTTPS\\\\|force_https\\\\|TrustProxies\\\\|hsts\\\\|HSTS\" /home/alex/myLaravelSkeleton/scripts/ /home/alex/myLaravelSkeleton/docker/)",
+      "Bash(head -10 grep -r \"permission\\\\|role\\\\|gate\\\\|policy\" /home/alex/myLaravelSkeleton/scripts/)",
+      "Bash(head -10 grep -r \"ShouldBeEncrypted\\\\|encrypt.*queue\\\\|queue.*encrypt\" /home/alex/myLaravelSkeleton/scripts/)",
+      "Bash(head -10 grep -r \"security.txt\\\\|well-known\\\\|\\\\.well-known\" /home/alex/myLaravelSkeleton/scripts/ /home/alex/myLaravelSkeleton/docker/)",
+      "Bash(__NEW_LINE_af39447fcc023f7b__ echo:*)"
     ],
     "deny": [],
     "ask": []

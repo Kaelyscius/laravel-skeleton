@@ -1,0 +1,39 @@
+version: 2
+updates:
+  # Images Docker (Dockerfiles)
+  # Peu de bruit, valeur élevée : sécurité des images de base
+  - package-ecosystem: "docker"
+    directory: "/docker/php"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: "docker"
+    directory: "/docker/apache"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: "docker"
+    directory: "/docker/node"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "docker"]
+
+  # GitHub Actions
+  # Critique : les attaques supply chain sur CI sont réelles (ex: actions compromises)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "github-actions"]
+
+  # Composer PHP : géré par Snyk (voir .github/workflows/security.yml)
+  # npm : INTENTIONNELLEMENT ABSENT
+  # Raison : dans ce projet, 100% des packages npm sont des outils de build (Vite, etc.)
+  # Ils ne tournent pas en production → alertes = bruit pur (ref: Dan Abramov "npm audit: Broken by Design")
+  # La sécurité npm est couverte par : composer audit en CI + Snyk

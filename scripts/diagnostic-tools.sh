@@ -5,7 +5,7 @@
 # =============================================================================
 #
 # Fusion de :
-# - check-php84-extensions.sh     (95 lignes)
+# - check-php85-extensions.sh     (95 lignes)
 # - quick-laravel-test.sh         (149 lignes) 
 # - test-package-compatibility.sh (112 lignes)
 # - test-laravel-install.sh       (86 lignes)
@@ -39,17 +39,17 @@ log() {
 }
 
 # =============================================================================
-# FONCTION 1 : VÉRIFICATION EXTENSIONS PHP (Ex check-php84-extensions.sh)
+# FONCTION 1 : VÉRIFICATION EXTENSIONS PHP (Ex check-php85-extensions.sh)
 # =============================================================================
-check_php84_extensions() {
+check_php85_extensions() {
     echo ""
-    log "STEP" "🔍 Vérification des extensions PHP 8.4 dans le container"
+    log "STEP" "🔍 Vérification des extensions PHP 8.5 dans le container"
     echo ""
     
     # Extensions compilées manuellement
     compiled_extensions=("gd" "pdo" "pdo_mysql" "mysqli" "zip" "intl" "opcache" "bcmath" "xml" "dom" "xmlwriter" "xmlreader" "simplexml" "mbstring" "exif" "pcntl" "sockets")
 
-    # Extensions intégrées par défaut dans PHP 8.4
+    # Extensions intégrées par défaut dans PHP 8.5
     builtin_extensions=("tokenizer" "ctype" "fileinfo" "iconv" "json" "libxml" "openssl" "pcre" "reflection" "spl" "standard")
 
     # Extensions PECL
@@ -65,7 +65,7 @@ check_php84_extensions() {
     done
 
     echo ""
-    log "INFO" "🔧 Extensions intégrées par défaut dans PHP 8.4:"
+    log "INFO" "🔧 Extensions intégrées par défaut dans PHP 8.5:"
     for ext in "${builtin_extensions[@]}"; do
         if docker-compose exec -T php php -m | grep -q "^$ext$"; then
             log "SUCCESS" "✓ $ext (intégrée)"
@@ -117,7 +117,7 @@ check_php84_extensions() {
 # =============================================================================
 quick_laravel_test() {
     echo ""
-    log "STEP" "🚀 Test rapide Laravel 12 + PHP 8.4 + Extensions"
+    log "STEP" "🚀 Test rapide Laravel 12 + PHP 8.5 + Extensions"
     echo ""
 
     # 1. Attendre que les containers soient prêts
@@ -140,7 +140,7 @@ quick_laravel_test() {
     fi
 
     # 2. Test PHP et extensions critiques
-    log "INFO" "🔍 Test PHP 8.4 et extensions..."
+    log "INFO" "🔍 Test PHP 8.5 et extensions..."
     echo ""
 
     # Version PHP
@@ -167,7 +167,7 @@ quick_laravel_test() {
     fi
 
     # 3. Test Composer et résolution des packages problématiques
-    log "INFO" "🎵 Test Composer + résolution packages PHP 8.4..."
+    log "INFO" "🎵 Test Composer + résolution packages PHP 8.5..."
     echo ""
 
     # Version Composer
@@ -175,19 +175,19 @@ quick_laravel_test() {
     log "INFO" "$composer_version"
 
     # Test de résolution des packages problématiques avec versions spécifiques
-    log "INFO" "Test résolution packages PHP 8.4 compatible..."
+    log "INFO" "Test résolution packages PHP 8.5 compatible..."
 
-    docker-compose exec -T php bash -c 'cat > /tmp/test-php84.json << EOF
+    docker-compose exec -T php bash -c 'cat > /tmp/test-php85.json << EOF
 {
     "require": {
-        "php": "^8.4"
+        "php": "^8.5"
     },
     "require-dev": {
-        "symplify/easy-coding-standard": "^12.5",
-        "rector/rector": "^2.1",
+        "symplify/easy-coding-standard": "^13.0",
+        "rector/rector": "^2.3",
         "nunomaduro/phpinsights": "^2.13",
-        "pestphp/pest": "^3.0",
-        "pestphp/pest-plugin-laravel": "^3.0"
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -200,7 +200,7 @@ EOF'
 
     # Test dry-run avec timeout
     log "INFO" "Test dry-run installation packages..."
-    if timeout 30 docker-compose exec -T php composer install --dry-run --working-dir=/tmp --file=/tmp/test-php84.json --no-interaction --quiet; then
+    if timeout 30 docker-compose exec -T php composer install --dry-run --working-dir=/tmp --file=/tmp/test-php85.json --no-interaction --quiet; then
         log "SUCCESS" "✅ Résolution des packages OK !"
     else
         log "WARN" "⚠️  Problèmes de résolution détectés - mais ce n'est peut-être pas bloquant"
@@ -214,7 +214,7 @@ EOF'
     docker-compose exec -T php composer diagnose --no-ansi | head -10
 
     # 5. Nettoyage
-    docker-compose exec -T php rm -rf /tmp/test-php84.json 2>/dev/null || true
+    docker-compose exec -T php rm -rf /tmp/test-php85.json 2>/dev/null || true
 
     echo ""
     log "SUCCESS" "🎉 Test rapide terminé !"
@@ -226,7 +226,7 @@ EOF'
 # =============================================================================
 test_package_compatibility() {
     echo ""
-    log "STEP" "🧪 Test de compatibilité des packages avec Laravel 12 + PHP 8.4"
+    log "STEP" "🧪 Test de compatibilité des packages avec Laravel 12 + PHP 8.5"
     echo ""
 
     # Source des fonctions (si disponible)
@@ -237,7 +237,6 @@ test_package_compatibility() {
 
     # Packages problématiques identifiés
     problematic_packages=(
-        "beyondcode/laravel-query-detector"
         "driftingly/rector-laravel"
     )
 
@@ -265,11 +264,10 @@ test_package_compatibility() {
 
     # Packages qui devraient fonctionner
     compatible_packages=(
-        "symplify/easy-coding-standard:^12.5"
-        "rector/rector:^2.1"
+        "symplify/easy-coding-standard:^13.0"
+        "rector/rector:^2.3"
         "nunomaduro/phpinsights:^2.13"
-        "ivqonsanada/enlightn:^2.0"
-        "pestphp/pest:^3.0"
+        "pestphp/pest:^4.0"
     )
 
     for package_version in "${compatible_packages[@]}"; do
@@ -315,13 +313,6 @@ test_laravel_install() {
         laravel_version=$(docker-compose exec -T php bash -c 'cd /tmp/laravel-test && php artisan --version --no-ansi' 2>/dev/null || echo "Version inconnue")
         log "SUCCESS" "✅ Laravel créé: $laravel_version"
         
-        # Test ajout du fork Enlightn
-        log "INFO" "Test installation fork Enlightn Laravel 12..."
-        if timeout 30 docker-compose exec -T php bash -c 'cd /tmp/laravel-test && composer require --dev ivqonsanada/enlightn --no-interaction --quiet'; then
-            log "SUCCESS" "✅ Fork Enlightn installé !"
-        else
-            log "WARN" "⚠️  Échec installation fork Enlightn"
-        fi
     else
         log "ERROR" "❌ Échec création Laravel 12"
         return 1
@@ -346,8 +337,8 @@ show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --extensions     Vérifier les extensions PHP 8.4"
-    echo "  --quick-test     Test rapide Laravel + PHP 8.4"
+    echo "  --extensions     Vérifier les extensions PHP 8.5"
+    echo "  --quick-test     Test rapide Laravel + PHP 8.5"
     echo "  --packages       Test compatibilité packages"
     echo "  --install-test   Test création Laravel 12"
     echo "  --all           Exécuter tous les tests"
@@ -365,7 +356,7 @@ main() {
     
     case "$option" in
         "--extensions")
-            check_php84_extensions
+            check_php85_extensions
             ;;
         "--quick-test") 
             quick_laravel_test
@@ -384,7 +375,7 @@ main() {
             
             local all_passed=true
             
-            check_php84_extensions || all_passed=false
+            check_php85_extensions || all_passed=false
             quick_laravel_test || all_passed=false  
             test_package_compatibility || all_passed=false
             test_laravel_install || all_passed=false

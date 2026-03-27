@@ -89,7 +89,7 @@ make status
 
 ### Profile "dev" (Outils de développement)
 - **node** : Build frontend (Vite/npm)
-- **mailhog** : Test emails (port 8025)
+- **mailpit** : Test emails (port 8025)
 - **adminer** : Gestion BDD (port 8080)
 
 ### Profile "tools" (Monitoring)
@@ -119,7 +119,7 @@ make up-local
 
 **Ce qui démarre** :
 - ✅ Services essentiels (apache, php, mariadb, redis)
-- ✅ Outils dev (node, mailhog, adminer)
+- ✅ Outils dev (node, mailpit, adminer)
 - ✅ Outils monitoring (dozzle, it-tools, watchtower)
 
 ---
@@ -158,7 +158,7 @@ make up-dev
 **Ce qui démarre** :
 - ✅ Services essentiels (apache, php, mariadb, redis)
 - ✅ Node.js pour builds
-- ✅ MailHog et Adminer
+- ✅ Mailpit et Adminer
 - ❌ Pas de monitoring (dozzle, it-tools, watchtower)
 
 ---
@@ -200,7 +200,7 @@ make ps-profiles
 #
 # 🛠️ DEV (profile: dev):
 #   ✓ laravel-app_node
-#   ✓ laravel-app_mailhog
+#   ✓ laravel-app_mailpit
 #   ✓ laravel-app_adminer
 #
 # 🔧 TOOLS (profile: tools):
@@ -305,7 +305,7 @@ make up-dev  # Sans le profile tools
 ### Développement frontend uniquement
 
 ```bash
-# Services essentiels + Node.js + MailHog + Adminer
+# Services essentiels + Node.js + Mailpit + Adminer
 make up-dev
 ```
 

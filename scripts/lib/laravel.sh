@@ -310,25 +310,11 @@ check_package_compatibility() {
     # Vérifications spécifiques pour Laravel 12+
     if [ "$laravel_version" -ge 12 ]; then
         case $package in
-            "enlightn/enlightn")
-                log_debug "Enlightn non compatible avec Laravel 12+ - ignoré"
-                return 1
-                ;;
             "pestphp/pest")
                 # Compatible avec PHPUnit 11.5+
                 return 0
                 ;;
             "pestphp/pest-plugin-laravel")
-                return 0
-                ;;
-        esac
-    fi
-
-    # Vérifications pour Laravel 11 et antérieur
-    if [ "$laravel_version" -le 11 ]; then
-        case $package in
-            "enlightn/enlightn")
-                # Compatible avec Laravel 10 et 11
                 return 0
                 ;;
         esac

@@ -374,7 +374,7 @@ class RequireTwoFactor
 }
 ```
 
-**Enregistrer dans app/Http/Kernel.php** (ou bootstrap/app.php pour Laravel 11+):
+**Enregistrer dans app/Http/Kernel.php** (bootstrap/app.php pour Laravel 12):
 
 ```php
 protected $middlewareAliases = [

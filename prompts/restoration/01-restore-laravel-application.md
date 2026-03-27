@@ -53,8 +53,8 @@ composer require laravel/nightwatch
 composer require --dev larastan/larastan
 composer require --dev symplify/easy-coding-standard
 composer require --dev rector/rector
+composer require --dev driftingly/rector-laravel
 composer require --dev nunomaduro/phpinsights
-composer require --dev enlightn/enlightn
 ```
 
 **Testing**:
@@ -68,7 +68,6 @@ composer require --dev pestphp/pest-plugin-drift
 ```bash
 composer require --dev barryvdh/laravel-ide-helper
 composer require --dev barryvdh/laravel-debugbar
-composer require --dev beyondcode/laravel-query-detector
 ```
 
 ### Étape 4: Publier les configurations

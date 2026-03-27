@@ -191,7 +191,7 @@ get_enabled_services() {
             ;;
         "local"|"development")
             # Dev : Tous les services
-            enabled_services=("mailhog" "adminer" "dozzle")
+            enabled_services=("mailpit" "adminer" "dozzle")
             # IT-Tools optionnel selon config
             local it_tools_enabled=$(get_config ".services.optional.it-tools.enabled" "false")
             if [ "$it_tools_enabled" = "true" ]; then
@@ -249,7 +249,7 @@ EOF
           memory: 1G
 
   # Services de développement désactivés
-  mailhog:
+  mailpit:
     deploy:
       replicas: 0
 
@@ -277,7 +277,7 @@ EOF
     restart: unless-stopped
 
   # Services de développement partiellement désactivés
-  mailhog:
+  mailpit:
     deploy:
       replicas: 0
 
@@ -439,9 +439,9 @@ EOF
         update_env_var "$temp_env" "MAIL_PASSWORD" "$(get_env_value "MAIL_PASSWORD" "" "")"
         update_env_var "$temp_env" "MAIL_ENCRYPTION" "tls"
     else
-        # Dev/Staging : MailHog
+        # Dev/Staging : Mailpit
         update_env_var "$temp_env" "MAIL_MAILER" "smtp"
-        update_env_var "$temp_env" "MAIL_HOST" "mailhog"
+        update_env_var "$temp_env" "MAIL_HOST" "mailpit"
         update_env_var "$temp_env" "MAIL_PORT" "1025"
         update_env_var "$temp_env" "MAIL_USERNAME" "null"
         update_env_var "$temp_env" "MAIL_PASSWORD" "null"
@@ -562,7 +562,7 @@ show_generation_summary() {
             echo -e "${YELLOW}🛠️ Configuration DÉVELOPPEMENT :${NC}"
             echo -e "  • APP_DEBUG=true, LOG_LEVEL=debug"
             echo -e "  • TELESCOPE_ENABLED=true"
-            echo -e "  • Services: Tous (MailHog, Adminer, Dozzle)"
+            echo -e "  • Services: Tous (Mailpit, Adminer, Dozzle)"
             echo -e "  • Sampling Nightwatch: 10%"
             echo -e "  • Xdebug: Activable à la demande"
             ;;

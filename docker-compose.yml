@@ -67,13 +67,13 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - MAIL_HOST=mailhog
+      - MAIL_HOST=mailpit
       - MAIL_PORT=1025
     labels:
       - "com.centurylinklabs.watchtower.enable=false"  # Image custom - pas de mise à jour auto
 
   mariadb:
-    image: mariadb:latest
+    image: mariadb:11.8
     container_name: ${COMPOSE_PROJECT_NAME}_mariadb
     volumes:
       - mariadb_data:/var/lib/mysql
@@ -96,7 +96,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   redis:
-    image: redis:alpine
+    image: redis:8.6-alpine
     container_name: ${COMPOSE_PROJECT_NAME}_redis
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
@@ -132,17 +132,18 @@ services:
       labels:
         - "com.centurylinklabs.watchtower.enable=false"  # Image custom - pas de mise à jour auto
 
-  mailhog:
+  mailpit:
     profiles: ["dev"]
-    image: mailhog/mailhog:latest
-    container_name: ${COMPOSE_PROJECT_NAME}_mailhog
+    image: axllent/mailpit:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_mailpit
     ports:
-      - "8025:8025"
+      - "8025:8025"   # Web UI (identique à MailHog)
+      - "1025:1025"   # SMTP (identique à MailHog)
     networks:
       - app-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025/api/v1/info"]
       interval: 60s
       timeout: 10s
       retries: 3

@@ -22,7 +22,7 @@ Environnement de développement Docker complet et optimisé pour Laravel 12 avec
 - **Node.js 24 LTS** (build des assets frontend)
 
 ### Outils de développement et monitoring
-- **MailHog** - Capture des emails de développement
+- **Mailpit** - Capture des emails de développement
 - **Adminer** - Interface web pour les bases de données
 - **IT-Tools** - Boîte à outils pour développeurs
 - **Dozzle** - Monitoring des logs en temps réel
@@ -37,8 +37,6 @@ Environnement de développement Docker complet et optimisé pour Laravel 12 avec
 - **ECS** - Code style et formatage
 - **PHP Insights** - Analyse globale de qualité
 - **Laravel IDE Helper** - Autocomplétion IDE
-- **Laravel Query Detector** - Détection requêtes N+1
-- **Enlightn** - Audit sécurité et performance
 - **Pest** - Framework de tests moderne
 - **Xdebug** - Débogage (activable à la demande)
 
@@ -59,7 +57,7 @@ Une fois le projet démarré, voici tous les accès disponibles :
 - **💾 Adminer** : http://localhost:8080
   - Interface graphique pour MariaDB
   - Serveur : `mariadb`, utilisateur selon votre `.env`
-- **📧 MailHog** : http://localhost:8025
+- **📧 Mailpit** : http://localhost:8025
   - Capture tous les emails envoyés par Laravel
   - Interface web pour consulter les emails
 - **📋 Dozzle** : http://localhost:9999
@@ -166,13 +164,12 @@ make rector          # Analyse Rector (dry-run)
 make rector-fix      # Appliquer les suggestions Rector
 make insights        # Analyse PHP Insights
 make insights-fix    # PHP Insights avec corrections
-make enlightn        # Audit sécurité et performance
 make ide-helper      # Générer les fichiers IDE Helper
 
 # Commandes groupées
 make quality         # Vérification de base (ECS + PHPStan)
 make quality-fix     # Corrections automatiques
-make quality-full    # Audit complet (ECS + PHPStan + Insights + Enlightn + Tests)
+make quality-full    # Audit complet (ECS + PHPStan + Insights + Tests)
 make quality-report  # Générer des rapports de qualité
 make security-check  # Vérifier les vulnérabilités
 make security-fix    # Corriger les vulnérabilités
@@ -252,7 +249,7 @@ REDIS_PORT=6379
 
 # Email (développement)
 MAIL_MAILER=smtp
-MAIL_HOST=mailhog
+MAIL_HOST=mailpit
 MAIL_PORT=1025
 MAIL_USERNAME=null
 MAIL_PASSWORD=null
@@ -363,7 +360,7 @@ Redis Cache
 Laravel Horizon: https://laravel.local/horizon
 Laravel Telescope: https://laravel.local/telescope
 Adminer: http://localhost:8080
-MailHog: http://localhost:8025
+Mailpit: http://localhost:8025
 IT-Tools: http://localhost:8081
 Dozzle: http://localhost:9999
 ```
@@ -412,7 +409,7 @@ Certificat SSL Laravel
 **✅ Mis à jour automatiquement :**
 - MariaDB
 - Redis
-- MailHog
+- Mailpit
 - Adminer
 - IT-Tools
 - Dozzle
@@ -523,7 +520,7 @@ make monitoring-status  # État du monitoring spécifiquement
   - Import/export, éditeur SQL avancé
 
 ### 📧 Gestion des emails
-- **MailHog** : http://localhost:8025
+- **Mailpit** : http://localhost:8025
 - Capture automatique de tous les emails
 - Interface web pour consultation
 - API REST disponible
@@ -549,7 +546,6 @@ make phpstan      # Analyse statique PHPStan/Larastan
 make ecs          # Style de code (ECS)
 make rector       # Modernisation du code (Rector)
 make insights     # Analyse globale (PHP Insights)
-make enlightn     # Audit sécurité et performance
 ```
 
 ### 🧪 Tests
@@ -576,8 +572,7 @@ make test-parallel         # Tests en parallèle
 
 ### Scan de sécurité
 ```bash
-make security-check    # Scanner les vulnérabilités
-make enlightn         # Audit sécurité Laravel
+make security-check    # Scanner les vulnérabilités (Snyk)
 make security-fix     # Corriger automatiquement
 ```
 
@@ -597,7 +592,7 @@ Le projet inclut un workflow complet :
 - ✅ Rector (suggestions)
 
 ### Sécurité
-- ✅ Enlightn (audit Laravel)
+- ✅ Snyk (audit dépendances)
 - ✅ Audit des dépendances
 - ✅ Scan des vulnérabilités
 

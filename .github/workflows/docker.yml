@@ -320,9 +320,9 @@ jobs:
           echo "## 🐳 Docker Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Built Images" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ PHP 8.4 (Laravel runtime)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ PHP 8.5 (Laravel runtime)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Apache 2.4 (Web server)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Node.js 22 (Asset builder)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Node.js 24 (Asset builder)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Tests Performed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Dockerfile linting (hadolint)" >> $GITHUB_STEP_SUMMARY

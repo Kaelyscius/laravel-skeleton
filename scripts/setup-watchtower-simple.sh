@@ -129,7 +129,7 @@ configure_email_notifications() {
         # Construire l'URL SMTP
         notification_url="smtp://${smtp_user}:${smtp_password}@${smtp_host}:${smtp_port}/?from=${from_email}&to=${to_email}"
     else
-        echo -e "${YELLOW}Mode non-interactif: utilisation de MailHog local${NC}"
+        echo -e "${YELLOW}Mode non-interactif: utilisation de Mailpit local${NC}"
         notification_url="smtp://localhost:1025/?from=watchtower@laravel.local&to=admin@laravel.local"
     fi
 
@@ -209,7 +209,7 @@ configure_container_exclusions() {
     echo -e "${YELLOW}Containers avec images standard (mis à jour automatiquement):${NC}"
     echo -e "  • ${COMPOSE_PROJECT_NAME}_mariadb"
     echo -e "  • ${COMPOSE_PROJECT_NAME}_redis"
-    echo -e "  • ${COMPOSE_PROJECT_NAME}_mailhog"
+    echo -e "  • ${COMPOSE_PROJECT_NAME}_mailpit"
     echo -e "  • ${COMPOSE_PROJECT_NAME}_adminer"
     echo -e "  • ${COMPOSE_PROJECT_NAME}_it-tools"
     echo -e "  • ${COMPOSE_PROJECT_NAME}_dozzle"
@@ -298,7 +298,7 @@ show_monitored_containers() {
     auto_update_containers=(
         "${COMPOSE_PROJECT_NAME}_mariadb"
         "${COMPOSE_PROJECT_NAME}_redis"
-        "${COMPOSE_PROJECT_NAME}_mailhog"
+        "${COMPOSE_PROJECT_NAME}_mailpit"
         "${COMPOSE_PROJECT_NAME}_adminer"
         "${COMPOSE_PROJECT_NAME}_it-tools"
         "${COMPOSE_PROJECT_NAME}_dozzle"

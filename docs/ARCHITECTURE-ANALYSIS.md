@@ -19,11 +19,11 @@ Ce projet est un **environnement de développement Laravel complet et profession
 | Component | Technology | Version | Rôle |
 |-----------|------------|---------|------|
 | **Backend** | Laravel Framework | 12.x | Framework PHP principal |
-| **Runtime** | PHP | 8.4 | Environnement d'exécution |
-| **Database** | MariaDB | latest | Base de données principale |
-| **Cache** | Redis | alpine | Cache et sessions |
+| **Runtime** | PHP | 8.5 | Environnement d'exécution |
+| **Database** | MariaDB | 11.8 | Base de données principale |
+| **Cache** | Redis | 8.6 | Cache et sessions |
 | **Web Server** | Apache | 2.4-alpine | Serveur web avec SSL |
-| **Frontend Build** | Node.js | 22 LTS | Build assets (Vite) |
+| **Frontend Build** | Node.js | 24 LTS | Build assets (Vite) |
 | **Monitoring** | Watchtower | latest | Surveillance containers |
 
 ### **Services Docker Architecture**
@@ -44,7 +44,7 @@ Ce projet est un **environnement de développement Laravel complet et profession
          │                       │                       
          ▼                       ▼                       
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│    MailHog      │    │     Adminer     │    │    IT-Tools     │
+│    Mailpit      │    │     Adminer     │    │    IT-Tools     │
 │  (Mail Testing) │    │   (DB Manager)  │    │  (Dev Utils)    │
 │   Port 8025     │    │   Port 8080     │    │   Port 8081     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
@@ -199,7 +199,7 @@ make build                 # Build optimisé
 **Dashboard Ports :**
 - `:80/443` - Application principale
 - `:8080` - Adminer (DB management)
-- `:8025` - MailHog (test emails)
+- `:8025` - Mailpit (test emails)
 - `:8081` - IT-Tools (utilities)
 - `:9999` - Dozzle (logs en temps réel)
 

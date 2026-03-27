@@ -8,7 +8,7 @@
 #   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # IMPORTANT: En production, AUCUN profile ne doit être activé.
-# Les services dev (node, mailhog, adminer) et tools (dozzle, it-tools,
+# Les services dev (node, mailpit, adminer) et tools (dozzle, it-tools,
 # watchtower) ne démarreront pas car ils nécessitent leurs profiles.
 # =============================================================================
 

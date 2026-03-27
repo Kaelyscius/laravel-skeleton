@@ -26,9 +26,9 @@ readonly CUSTOM_IMAGES=(
 
 # Images de base à vérifier
 readonly BASE_IMAGES=(
-    "php:8.4-fpm-alpine"
+    "php:8.5-fpm-alpine"
     "httpd:2.4-alpine"
-    "node:22-alpine"
+    "node:24-alpine"
 )
 
 # Logging

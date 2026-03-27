@@ -45,7 +45,7 @@ Services de développement essentiels :
 | Service | Description | Port(s) |
 |---------|-------------|---------|
 | `node` | Node.js 24 LTS pour builds frontend | - |
-| `mailhog` | Capture d'emails pour tests | 8025 |
+| `mailpit` | Capture d'emails pour tests | 8025 |
 | `adminer` | Interface de gestion base de données | 8080 |
 
 **Usage** : Développement local, nécessite build frontend
@@ -160,13 +160,13 @@ make up-local
 
 **Services démarrés** :
 - ✅ Services essentiels (apache, php, mariadb, redis)
-- ✅ Outils dev (node, mailhog, adminer)
+- ✅ Outils dev (node, mailpit, adminer)
 - ✅ Outils monitoring (dozzle, it-tools, watchtower)
 
 **Accès** :
 - Laravel : https://laravel.local
 - Adminer : http://localhost:8080
-- MailHog : http://localhost:8025
+- Mailpit : http://localhost:8025
 - IT-Tools : http://localhost:8081
 - Dozzle : http://localhost:9999
 
@@ -218,7 +218,7 @@ make up-dev
 **Services démarrés** :
 - ✅ Services essentiels
 - ✅ Node.js pour builds
-- ✅ MailHog et Adminer
+- ✅ Mailpit et Adminer
 - ❌ Pas d'outils monitoring
 
 ---
@@ -296,7 +296,7 @@ services:
     profiles: ["dev"]
     # ...
 
-  mailhog:
+  mailpit:
     profiles: ["dev"]
     # ...
 
@@ -452,7 +452,7 @@ make up-tools
 
 ## 📊 Comparaison des modes de démarrage
 
-| Commande | Services essentiels | node | mailhog/adminer | dozzle/it-tools/watchtower | phpmyadmin/redis-commander |
+| Commande | Services essentiels | node | mailpit/adminer | dozzle/it-tools/watchtower | phpmyadmin/redis-commander |
 |----------|---------------------|------|-----------------|----------------------------|---------------------------|
 | `make up-prod` | ✅ | ❌ | ❌ | ❌ | ❌ |
 | `make up-dev` | ✅ | ✅ | ✅ | ❌ | ❌ |

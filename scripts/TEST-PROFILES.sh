@@ -101,7 +101,7 @@ fi
 
 # Services avec profile "dev"
 echo -e "${BLUE}Services avec profile 'dev':${NC}"
-DEV_SERVICES=$(docker-compose --profile dev config --services 2>/dev/null | grep -E "^(node|mailhog|adminer)$" || true)
+DEV_SERVICES=$(docker-compose --profile dev config --services 2>/dev/null | grep -E "^(node|mailpit|adminer)$" || true)
 if [ -n "$DEV_SERVICES" ]; then
     echo "$DEV_SERVICES" | while read service; do
         echo -e "  ${GREEN}✓${NC} $service"
@@ -142,7 +142,7 @@ check_profile_in_service() {
 
 # Vérifier les services du profile "dev"
 check_profile_in_service "node" "dev"
-check_profile_in_service "mailhog" "dev"
+check_profile_in_service "mailpit" "dev"
 check_profile_in_service "adminer" "dev"
 
 # Vérifier les services du profile "tools"

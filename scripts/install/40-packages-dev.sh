@@ -49,13 +49,6 @@ main() {
         # Ignorer les lignes vides
         [ -z "$package_name" ] && continue
         
-        # Vérifier la compatibilité Laravel pour certains packages
-        local laravel_version=$(get_laravel_version | cut -d. -f1)
-        if [ "$package_name" = "enlightn/enlightn" ] && [ "$laravel_version" -ge 12 ]; then
-            log_info "🔧 $package_name ignoré - utiliser ivqonsanada/enlightn pour Laravel $laravel_version"
-            continue
-        fi
-        
         # Vérifier la compatibilité Laravel générale
         if ! is_package_laravel_compatible "$package_name" "development"; then
             local max_laravel=$(get_package_max_laravel_version "$package_name" "development")
@@ -97,40 +90,6 @@ main() {
             log_debug "✓ $package_name déjà installé"
         fi
     done <<< "$packages_list"
-    
-    # Post-installation pour Enlightn Laravel 12 (fork ivqonsanada)
-    local laravel_version=$(get_laravel_version | cut -d. -f1)
-    if [ "$laravel_version" -ge 12 ]; then
-        # Vérifier si le fork Enlightn est installé
-        if is_package_installed "ivqonsanada/enlightn"; then
-            log_info "🔧 Configuration Enlightn pour Laravel 12..."
-            
-            # Publier la config Enlightn si pas encore fait
-            if [ ! -f config/enlightn.php ]; then
-                log_info "Publication de la configuration Enlightn..."
-                php artisan vendor:publish --tag=enlightn 2>&1 | tee -a "$LOG_FILE" || log_debug "Publish Enlightn config ignoré"
-            fi
-            
-            # Corriger le path analyzer pour le fork
-            if [ -f config/enlightn.php ]; then
-                log_info "Correction du path analyzer pour le fork ivqonsanada/enlightn..."
-                
-                # Backup de la config originale
-                cp config/enlightn.php config/enlightn.php.backup 2>/dev/null || true
-                
-                # Mise à jour du path avec sed
-                sed -i "s|vendor/enlightn/enlightn/src/Analyzers|vendor/ivqonsanada/enlightn/src/Analyzers|g" config/enlightn.php
-                
-                log_success "✅ Configuration Enlightn mise à jour pour Laravel 12"
-            else
-                log_warn "⚠️  Fichier config/enlightn.php non trouvé"
-            fi
-        else
-            log_debug "✓ Fork Enlightn (ivqonsanada/enlightn) non installé - ignoré"
-        fi
-    else
-        log_debug "✓ Laravel < 12 - configuration Enlightn standard"
-    fi
     
     # Générer les IDE helpers
     log_info "Génération des IDE helpers..."
