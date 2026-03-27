@@ -17,7 +17,7 @@
 Je travaille sur un template Laravel industrialisé avec Docker. Le script `docker/scripts/install-laravel.sh` faisait **2300+ lignes** et devait être refactorisé en modules.
 
 ### ARCHITECTURE ACTUELLE
-- **Projet** : Template Laravel 12 + PHP 8.4 + Docker
+- **Projet** : Template Laravel 12 + PHP 8.5.1 + Node.js 24 + Docker
 - **But** : Base réutilisable pour créer rapidement des projets Laravel
 - **Configuration centralisée** : `config/installer.yml` (voir fichiers joints)
 - **Générateur** : `scripts/setup/generate-configs.sh`

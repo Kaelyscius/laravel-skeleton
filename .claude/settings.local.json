@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(docker-compose logs:*)",
+      "Bash(make install:*)",
+      "Bash(docker exec:*)",
+      "Bash(for dir in scripts/*/)",
+      "Bash(do echo \"=== $dir ===\")",
+      "Bash(ls:*)",
+      "Bash(done)",
+      "Bash(cat:*)",
+      "WebSearch",
+      "Bash(make build:*)",
+      "Bash(tee:*)",
+      "Bash(make down:*)",
+      "Bash(chmod:*)",
+      "Bash(./TEST-PROFILES.sh)",
+      "Bash(docker-compose:*)",
+      "Bash(make help-profiles:*)",
+      "Bash(grep:*)",
+      "Bash(docker ps:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

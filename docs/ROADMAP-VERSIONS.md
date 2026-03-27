@@ -6,8 +6,8 @@ Ce document planifie les mises à jour futures des images Docker base.
 
 | Component | Version Actuelle | Status | Prochaine Action |
 |-----------|------------------|--------|------------------|
-| **Node.js** | 22.17.1 LTS | ✅ **Optimal** | Mise à jour vers 24 LTS en oct 2025 |
-| **PHP** | 8.4 | ✅ **Stable** | Surveiller PHP 8.5 (nov 2025) |
+| **Node.js** | 24 LTS | ✅ **Optimal** | LTS actif jusqu'en avril 2027 |
+| **PHP** | 8.5.1 | ✅ **Stable** | Stable pour production |
 | **Apache** | 2.4 | ✅ **Stable** | Aucune action requise |
 
 ## 🎯 Calendrier des Mises à Jour Planifiées
@@ -88,7 +88,7 @@ make check-image-updates
 
 | Date | Component | Ancienne Version | Nouvelle Version | Raison |
 |------|-----------|------------------|------------------|---------|
-| 2025-08-02 | Node.js | 20.x | 22.17.1 LTS | Migration vers LTS actuel |
+| 2025-08-02 | Node.js | 20.x | 24 LTS | Migration vers LTS actuel |
 
 ## 🎯 Objectifs Long Terme
 
@@ -108,9 +108,9 @@ make check-image-updates
 
 ## 💡 Notes Importantes
 
-- **Node.js 20** : End of Life avril 2026
-- **Node.js 22** : End of Life avril 2027
-- **Node.js 24** : End of Life avril 2028
+- **Node.js 20** : End of Life avril 2026 (obsolète)
+- **Node.js 22** : End of Life avril 2027 (supporté)
+- **Node.js 24** : End of Life avril 2028 (LTS actuel - recommandé)
 - **PHP 8.4** : Support actif jusqu'en novembre 2026
 
 ## 🚀 Actions Immédiates

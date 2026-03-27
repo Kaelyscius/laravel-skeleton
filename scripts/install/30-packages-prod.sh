@@ -111,14 +111,14 @@ main() {
     log_info "Publication des configurations des packages..."
     
     # Publication sélective des packages critiques
+    # NOTE: Ne publier QUE les configs et migrations nécessaires
+    # Telescope et Horizon chargent automatiquement leurs migrations depuis vendor
     local publish_packages=(
-        "horizon-config"
-        "telescope-config" 
         "sanctum-config"
         "laravel-permission-migrations"
         "activitylog-migrations"
     )
-    
+
     for tag in "${publish_packages[@]}"; do
         if php artisan vendor:publish --tag="$tag" --force 2>/dev/null; then
             log_debug "✓ Configuration publiée: $tag"
@@ -128,12 +128,14 @@ main() {
     done
     
     # Publication générale des configs sans forcer pour éviter les conflits
-    if php artisan vendor:publish --provider="Laravel\Horizon\HorizonServiceProvider" 2>/dev/null; then
+    # NOTE: Ne PAS publier les migrations - Laravel les charge automatiquement depuis vendor
+    if php artisan vendor:publish --tag="horizon-config" 2>/dev/null; then
         log_debug "✓ Horizon config publié"
     fi
-    
-    if php artisan vendor:publish --provider="Laravel\Telescope\TelescopeServiceProvider" 2>/dev/null; then
-        log_debug "✓ Telescope config publié"
+
+    # Publier UNIQUEMENT la config de Telescope, PAS les migrations (évite les duplicatas)
+    if php artisan vendor:publish --tag="telescope-config" 2>/dev/null; then
+        log_debug "✓ Telescope config publié (sans migrations)"
     fi
     
     # Configuration spécifique de Telescope

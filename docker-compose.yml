@@ -113,6 +113,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   node:
+      profiles: ["dev"]
       build:
         context: .
         dockerfile: docker/node/Dockerfile
@@ -122,15 +123,17 @@ services:
       container_name: ${COMPOSE_PROJECT_NAME}_node
       volumes:
         - ./src:/var/www/html:delegated
-        - .:/var/www/project:delegated
+        - .:/var/www/project:ro
       networks:
         - app-network
       working_dir: /var/www/html
       command: tail -f /dev/null
+      restart: unless-stopped
       labels:
         - "com.centurylinklabs.watchtower.enable=false"  # Image custom - pas de mise à jour auto
 
   mailhog:
+    profiles: ["dev"]
     image: mailhog/mailhog:latest
     container_name: ${COMPOSE_PROJECT_NAME}_mailhog
     ports:
@@ -147,6 +150,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   adminer:
+    profiles: ["dev"]
     image: adminer:latest
     container_name: ${COMPOSE_PROJECT_NAME}_adminer
     ports:
@@ -165,6 +169,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   it-tools:
+    profiles: ["tools"]
     image: corentinth/it-tools:latest
     container_name: ${COMPOSE_PROJECT_NAME}_it-tools
     ports:
@@ -181,6 +186,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
   dozzle:
+    profiles: ["tools"]
     image: amir20/dozzle:latest
     container_name: ${COMPOSE_PROJECT_NAME}_dozzle
     ports:
@@ -204,6 +210,7 @@ services:
 
   # 🔄 WATCHTOWER - Mises à jour automatiques
   watchtower:
+    profiles: ["tools"]
     image: containrrr/watchtower:latest
     container_name: ${COMPOSE_PROJECT_NAME}_watchtower
     volumes:

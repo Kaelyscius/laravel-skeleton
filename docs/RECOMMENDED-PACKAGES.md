@@ -1,6 +1,6 @@
 # 📦 Packages Laravel Recommandés
 
-Documentation complète des packages Laravel utiles pour Laravel 12 + PHP 8.4
+Documentation complète des packages Laravel utiles pour Laravel 12 + PHP 8.5.1
 
 ---
 
@@ -55,7 +55,7 @@ make artisan cmd="ide-helper:generate"
 - Compatible WSL + PhpStorm Windows
 - Regénérer après ajout de modèles
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -91,7 +91,7 @@ ray()->showQueries(); // Affiche toutes les queries
 
 **Recommandation**: ⚠️ Optionnel - Telescope fait déjà le job gratuitement
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -145,7 +145,7 @@ backup: ## Backup complet DB + fichiers
 
 **Recommandation**: 🔴 **CRITIQUE pour production**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -182,7 +182,7 @@ SENTRY_TRACES_SAMPLE_RATE=1.0
 
 **Recommandation**: 🟢 **HAUTEMENT RECOMMANDÉ pour production**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -219,7 +219,7 @@ protected $middlewareGroups = [
 
 **Recommandation**: 🟢 **RECOMMANDÉ si site à fort trafic**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -259,7 +259,7 @@ public function index()
 
 **Recommandation**: 🟢 **ESSENTIEL si tu fais une API REST**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -297,7 +297,7 @@ public function index() { }
 
 **Recommandation**: 🟢 **RECOMMANDÉ pour API publique/équipe**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -345,7 +345,7 @@ $post->getFirstMediaUrl('images', 'thumb');
 
 **Recommandation**: 🟢 **ESSENTIEL si upload images/fichiers**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -385,7 +385,7 @@ $settings->save();
 
 **Recommandation**: 🟡 **UTILE si beaucoup de settings configurables**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -416,7 +416,7 @@ Post::withAnyTags(['Laravel', 'PHP'])->get();
 
 **Recommandation**: 🟡 **UTILE si système de tags/catégories**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -445,7 +445,7 @@ php artisan test --drift
 
 **Recommandation**: 🟡 **NICE-TO-HAVE pour qualité maximale**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -474,7 +474,7 @@ composer require pragmarx/google2fa-laravel
 
 **Recommandation**: 🟢 **RECOMMANDÉ si données sensibles**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -489,7 +489,7 @@ composer require spatie/laravel-csp
 
 **Recommandation**: 🟢 **RECOMMANDÉ pour sécurité XSS**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -508,7 +508,7 @@ composer require spatie/laravel-health
 
 **Recommandation**: 🟢 **RECOMMANDÉ pour production**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -523,7 +523,7 @@ composer require spatie/laravel-schedule-monitor
 
 **Recommandation**: 🟢 **UTILE si beaucoup de cron jobs**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -540,7 +540,7 @@ composer require livewire/livewire
 
 **Recommandation**: 🟢 **EXCELLENT si pas de SPA complexe**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -555,7 +555,7 @@ composer require inertiajs/inertia-laravel
 
 **Recommandation**: 🟢 **PARFAIT pour SPA moderne**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -570,7 +570,7 @@ composer require filament/filament
 
 **Recommandation**: 🟢 **EXCELLENT pour backoffice**
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -587,7 +587,7 @@ composer require spatie/laravel-mail-preview --dev
 
 **Note**: MailHog déjà installé ✅, mais ce package utile pour dev
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -602,7 +602,7 @@ composer require spatie/laravel-mail-preview --dev
 composer require spatie/laravel-sluggable
 ```
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -617,7 +617,7 @@ composer require owen-it/laravel-auditing
 
 **Note**: Spatie ActivityLog déjà installé ✅, fait similaire
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 
@@ -632,7 +632,7 @@ composer require owen-it/laravel-auditing
 composer require spatie/laravel-translatable
 ```
 
-**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.4
+**Compatibilité**: ✅ Laravel 12 ✅ PHP 8.5+
 
 ---
 

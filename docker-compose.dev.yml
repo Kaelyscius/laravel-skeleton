@@ -1,5 +1,13 @@
-# Configuration spécifique au développement
-# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+# =============================================================================
+# DOCKER COMPOSE - Configuration Développement
+# =============================================================================
+# Usage avec profiles:
+#   make up-dev        (services essentiels + dev tools)
+#   make up-dev-full   (services essentiels + dev + tools)
+#
+# Usage manuel:
+#   docker-compose --profile dev --profile tools up -d
+# =============================================================================
 
 services:
   php:
@@ -21,19 +29,22 @@ services:
       - ./docker/apache/logs:/usr/local/apache2/logs
 
   node:
-    command: npm run dev
+    # Ne pas démarrer npm run dev automatiquement (utiliser make npm-dev)
+    # command: npm run dev
     stdin_open: true
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true
       - NODE_ENV=development
 
-  # PHPMyAdmin comme alternative à Adminer en dev
+  # Outils additionnels de développement (profile "dev-extra")
+  # PHPMyAdmin comme alternative à Adminer
   phpmyadmin:
+    profiles: ["dev-extra"]
     image: phpmyadmin:latest
     container_name: ${COMPOSE_PROJECT_NAME}_phpmyadmin
     ports:
-      - "8081:80"
+      - "8083:80"
     environment:
       - PMA_HOST=mariadb
       - PMA_USER=root
@@ -43,9 +54,13 @@ services:
       - app-network
     depends_on:
       - mariadb
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   # Redis Commander pour visualiser Redis
   redis-commander:
+    profiles: ["dev-extra"]
     image: rediscommander/redis-commander:latest
     container_name: ${COMPOSE_PROJECT_NAME}_redis_commander
     ports:
@@ -56,3 +71,6 @@ services:
       - app-network
     depends_on:
       - redis
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"

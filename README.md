@@ -1,6 +1,6 @@
 # 🚀 Environnement Docker Laravel 12
 
-Environnement de développement Docker complet et optimisé pour Laravel 12 avec PHP 8.4, MariaDB, Redis, Apache, Node.js et des outils de monitoring et d'industrialisation.
+Environnement de développement Docker complet et optimisé pour Laravel 12 avec PHP 8.5.1, MariaDB, Redis, Apache, Node.js et des outils de monitoring et d'industrialisation.
 
 ## 📋 Prérequis
 
@@ -16,10 +16,10 @@ Environnement de développement Docker complet et optimisé pour Laravel 12 avec
 
 ### Containers principaux
 - **Apache 2.4** (HTTPS, HTTP/2, SSL) - Ports 80/443
-- **PHP 8.4** (FPM + Supervisor + OPcache)
+- **PHP 8.5.1** (FPM + Supervisor + OPcache)
 - **MariaDB** (dernière version stable)
 - **Redis Alpine** (cache, sessions, queues)
-- **Node.js 20 LTS** (build des assets frontend)
+- **Node.js 24 LTS** (build des assets frontend)
 
 ### Outils de développement et monitoring
 - **MailHog** - Capture des emails de développement

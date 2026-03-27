@@ -1,5 +1,16 @@
-# Configuration spécifique à la production
-# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+# =============================================================================
+# DOCKER COMPOSE - Configuration Production
+# =============================================================================
+# Usage avec profiles:
+#   make up-prod       (services essentiels uniquement - AUCUN profile activé)
+#
+# Usage manuel:
+#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# IMPORTANT: En production, AUCUN profile ne doit être activé.
+# Les services dev (node, mailhog, adminer) et tools (dozzle, it-tools,
+# watchtower) ne démarreront pas car ils nécessitent leurs profiles.
+# =============================================================================
 
 services:
   apache:
@@ -75,20 +86,3 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
-
-  # Suppression des services non nécessaires en production
-  mailhog:
-    deploy:
-      replicas: 0
-
-  adminer:
-    deploy:
-      replicas: 0
-
-  dozzle:
-    deploy:
-      replicas: 0
-
-  node:
-    deploy:
-      replicas: 0

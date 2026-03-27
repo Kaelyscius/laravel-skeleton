@@ -4,15 +4,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-### Docker Environment
-- `make up` - Start all containers
-- `make down` - Stop containers
+### Docker Environment - Architecture Modulaire
+
+**🎯 Architecture avec Profiles Docker** : Ce projet utilise une architecture modulaire basée sur les Docker Compose Profiles permettant de démarrer uniquement les services nécessaires selon l'environnement. Voir [DOCKER-ARCHITECTURE.md](./DOCKER-ARCHITECTURE.md) pour la documentation complète.
+
+#### Démarrage par environnement
+- `make up-local` - **Développement local complet** (recommandé) - Services essentiels + dev + tools
+- `make up-dev` - Développement - Services essentiels + outils dev (node, mailhog, adminer)
+- `make up-dev-full` - Développement complet - Tous les services + monitoring (dozzle, it-tools, watchtower)
+- `make up-dev-extra` - Développement + outils extra (phpmyadmin, redis-commander)
+- `make up-prod` - Production - Services essentiels uniquement (apache, php, mariadb, redis)
+- `make up-tools` - Démarrer uniquement les outils de monitoring (dozzle, it-tools, watchtower)
+
+#### Profiles disponibles
+- **Aucun profile** (Production) : apache, php, mariadb, redis
+- **dev** (Développement) : node, mailhog, adminer
+- **tools** (Utilitaires) : dozzle, it-tools, watchtower
+- **dev-extra** (Outils additionnels) : phpmyadmin, redis-commander
+
+#### Gestion des containers
+- `make up` - Start containers (ancien comportement, démarrage basique)
+- `make down` - Stop all containers
 - `make restart` - Restart containers
+- `make status` - Check container status
+- `make ps-profiles` - Show active services by profile
+- `make stop-profile PROFILE=dev` - Stop specific profile
+
+#### Build et maintenance
 - `make build` - Build Docker images
+- `make build-fast` - Build with cache (faster)
+- `make rebuild` - Rebuild and restart
 - `make shell` - Access PHP container shell
 - `make logs` - View container logs
-- `make status` - Check container status
-- `make fix-permissions` - Fix file permissions for PhpStorm/IDE (after clean-all)
+- `make logs service=php` - View specific service logs
+- `make fix-permissions` - Fix file permissions for PhpStorm/IDE
 
 ### Laravel Development
 - `make install-laravel` - Install Laravel with dependencies
@@ -35,9 +60,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make test-drift` - Run tests with Drift (detect uncovered code)
 
 ### Diagnostics & Troubleshooting
-- `make diagnostic` - Run complete diagnostic suite (PHP 8.4 + Laravel 12)
-- `make quick-check` - Quick test of Laravel + PHP 8.4 compatibility
-- `make check-extensions` - Verify PHP 8.4 extensions installation
+- `make diagnostic` - Run complete diagnostic suite (PHP 8.5.1 + Laravel 12)
+- `make quick-check` - Quick test of Laravel + PHP 8.5.1 compatibility
+- `make check-extensions` - Verify PHP 8.5.1 extensions installation
 - `make test-packages` - Test package compatibility with Laravel 12
 - `make fix-composer` - Fix Composer configuration and cache issues
 - `make check-compatibility` - Check if incompatible packages became Laravel 12 compatible
@@ -69,13 +94,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Architecture
 
-### Docker-based Development Environment
+### Docker-based Modular Architecture
+
+**Architecture modulaire avec Docker Compose Profiles** permettant de démarrer uniquement les services nécessaires selon l'environnement.
+
+#### Services essentiels (toujours actifs, aucun profile)
 - **PHP 8.5.1** container with FPM, Supervisor, and OPcache
 - **Apache 2.4** with HTTPS/HTTP2 support
 - **MariaDB** for database
 - **Redis** for caching and sessions
+
+#### Profile "dev" (Outils de développement)
 - **Node.js 24** for frontend builds (LTS "Krypton")
+- **MailHog** for email testing (port 8025)
+- **Adminer** for database management (port 8080)
+
+#### Profile "tools" (Monitoring et utilitaires)
+- **Dozzle** for real-time log monitoring (port 9999)
+- **IT-Tools** for development utilities (port 8081)
 - **Watchtower** for automatic container updates
+
+#### Profile "dev-extra" (Outils additionnels)
+- **PHPMyAdmin** as an alternative to Adminer (port 8083)
+- **Redis Commander** for Redis management (port 8082)
+
+#### Commandes recommandées
+- **Développement local** : `make up-local` (tous les outils)
+- **Production** : `make up-prod` (services essentiels uniquement)
+- **Documentation complète** : Voir [DOCKER-ARCHITECTURE.md](./DOCKER-ARCHITECTURE.md)
 
 ### Laravel 12 Application Structure
 - Main application code in `/src` directory
@@ -100,14 +146,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `src/ecs.php` - Code style configuration
 - `src/rector.php` - Refactoring rules
 - `src/vite.config.js` - Frontend build configuration
-- `docker-compose.yml` - Docker services configuration
+- `docker-compose.yml` - Docker services configuration with profiles
+- `docker-compose.dev.yml` - Development environment overrides
+- `docker-compose.prod.yml` - Production environment overrides
+- `docker-compose.override.yml` - Local overrides (auto-generated)
 - `Makefile` - Development commands
+- `DOCKER-ARCHITECTURE.md` - Documentation de l'architecture modulaire
 
 ### Environment Management
 - Multiple environment configurations via interactive setup
+- **Docker Compose Profiles** for modular service management
 - Ansible playbooks for production deployment
-- Docker compose overrides for dev/prod environments
+- Docker compose overrides for dev/prod environments with profiles
 - Automated SSL certificate generation
+- Flexible profile activation (`dev`, `tools`, `dev-extra`)
 
 ### Testing Setup
 - **Pest framework** for modern PHP testing
@@ -125,15 +177,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 5. Use `make security-scan` for security checks
 
 ### Monitoring & Observability
-- Dozzle for real-time log monitoring (port 9999)
+
+**Outils activés selon les profiles Docker** :
+
+#### Profile "dev" (Outils de développement)
 - Adminer for database management (port 8080)
 - MailHog for email testing (port 8025)
+
+#### Profile "tools" (Monitoring)
+- Dozzle for real-time log monitoring (port 9999)
 - IT-Tools for development utilities (port 8081)
+- Watchtower for automatic container updates
+
+#### Profile "dev-extra" (Outils additionnels)
+- PHPMyAdmin as alternative to Adminer (port 8083)
+- Redis Commander for Redis management (port 8082)
+
+#### Laravel Monitoring (toujours actif)
 - Laravel Horizon for queue monitoring
 - Laravel Telescope for application debugging
 - **Spatie Laravel Health** for application health checks
 - **Spatie Laravel Schedule Monitor** for cron job monitoring
 - **Spatie Laravel CSP** for Content Security Policy headers
+
+**Usage** :
+- `make up-local` pour tous les outils de monitoring en local
+- `make up-prod` pour production sans outils de développement
 
 ### Deployment
 - Ansible playbooks for infrastructure management
