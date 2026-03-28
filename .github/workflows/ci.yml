@@ -81,7 +81,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
 
       - name: 💾 Cache Composer dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-php-${{ env.PHP_VERSION }}-composer-${{ hashFiles('src/composer.lock') }}
@@ -102,7 +102,7 @@ jobs:
       # Cache NPM optimisé
       # ==========================================
       - name: 💾 Cache NPM dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: src/node_modules
           key: ${{ runner.os }}-node-${{ env.NODE_VERSION }}-npm-${{ hashFiles('src/package-lock.json') }}
