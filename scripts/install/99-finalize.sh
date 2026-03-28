@@ -44,6 +44,22 @@ optimize_composer() {
     log_success "✅ Composer optimisé"
 }
 
+setup_laravel_boost() {
+    if ! is_package_installed "laravel/boost"; then
+        log_debug "✓ laravel/boost non installé - ignoré"
+        return 0
+    fi
+
+    log_info "🤖 Configuration de Laravel Boost (guidelines AI)..."
+
+    if php artisan boost:install --no-interaction 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "✅ Laravel Boost installé (répertoire .ai/ généré)"
+        log_info "💡 Pour configurer le MCP Claude Code (côté hôte): make boost-mcp"
+    else
+        log_warn "⚠️ boost:install a échoué - lancez manuellement: php artisan boost:install"
+    fi
+}
+
 generate_ide_helpers() {
     log_info "Génération des IDE helpers..."
     
@@ -88,6 +104,7 @@ try:
 
     # Vérifier quels packages sont installés
     pest_available = os.path.exists('vendor/pestphp/pest')
+    boost_available = os.path.exists('vendor/laravel/boost')
 
     # Scripts de base toujours disponibles
     custom_scripts = {
@@ -145,6 +162,13 @@ try:
         ]
 
     composer_data['scripts'].update(custom_scripts)
+
+    # Ajouter post-update-cmd pour Laravel Boost si installé
+    if boost_available:
+        if 'post-update-cmd' not in composer_data['scripts']:
+            composer_data['scripts']['post-update-cmd'] = []
+        if '@php artisan boost:update --ansi' not in composer_data['scripts']['post-update-cmd']:
+            composer_data['scripts']['post-update-cmd'].append('@php artisan boost:update --ansi')
 
     with open('composer.json', 'w') as f:
         json.dump(composer_data, f, indent=2)
@@ -332,6 +356,7 @@ main() {
     
     # Étapes de finalisation
     optimize_composer
+    setup_laravel_boost
     generate_ide_helpers
     configure_composer_scripts
     final_optimizations

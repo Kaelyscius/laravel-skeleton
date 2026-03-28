@@ -82,6 +82,10 @@ packages:
     - name: "nunomaduro/collision"
       version: "^8.0"
       required: true
+    - name: "laravel/boost"
+      version: "*"
+      required: true
+      description: "AI-assisted development: MCP server + Laravel guidelines pour Claude Code / Cursor"
     - name: "barryvdh/laravel-ide-helper"
       version: "^3.0"
       required: true

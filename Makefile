@@ -595,10 +595,35 @@ rector-fix: ## Appliquer refactoring
 insights: ## PHP Insights
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan insights
 
-.PHONY: enlightn
-enlightn: ## Audit sécurité (PHPStan - Enlightn supprimé, non compatible Laravel 12)
-	@echo "$(YELLOW)ℹ️  Enlightn retiré du projet (fork communautaire non maintenu).$(NC)"
-	@echo "$(CYAN)→ Utilisez 'make phpstan' pour l'analyse statique et 'make security-scan' pour la sécurité.$(NC)"
+.PHONY: ide-helper
+ide-helper: ## Générer les fichiers IDE Helper (autocomplétion PhpStorm/VSCode)
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	@echo "$(BLUE)🔧 Generating IDE helpers...$(NC)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan ide-helper:generate
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan ide-helper:meta
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan ide-helper:models --nowrite
+	@echo "$(GREEN)✓ IDE helpers generated$(NC)"
+
+.PHONY: boost-setup
+boost-setup: ## Configurer Laravel Boost guidelines AI (interactif)
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	@echo "$(CYAN)🤖 Laravel Boost - configuration des guidelines AI...$(NC)"
+	@$(DOCKER) exec -it $(PHP_CONTAINER_NAME) php artisan boost:install
+	@echo "$(GREEN)✓ Boost guidelines configurées$(NC)"
+	@echo "$(YELLOW)💡 Configurez le MCP Claude Code avec: make boost-mcp$(NC)"
+
+.PHONY: boost-update
+boost-update: ## Mettre à jour les guidelines Laravel Boost
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan boost:update --ansi
+	@echo "$(GREEN)✓ Boost guidelines à jour$(NC)"
+
+.PHONY: boost-mcp
+boost-mcp: ## Ajouter le MCP Laravel Boost à Claude Code (commande hôte)
+	@echo "$(CYAN)🔌 Configuration MCP Laravel Boost pour Claude Code...$(NC)"
+	claude mcp add -s local -t stdio laravel-boost -- docker exec -i $(PHP_CONTAINER_NAME) php artisan boost:mcp
+	@echo "$(GREEN)✓ MCP Laravel Boost configuré$(NC)"
+	@echo "$(YELLOW)💡 Redémarrez Claude Code pour activer le MCP$(NC)"
 
 # =============================================================================
 # GIT HOOKS
@@ -629,11 +654,10 @@ quality-fix: ecs-fix rector-fix ## Corrections automatiques
 .PHONY: quality-all
 quality-all: ## Audit complet de qualité
 	@echo "$(CYAN)🔍 Full quality audit$(NC)"
-	$(call quality_step,1,5,Code style,ecs)
-	$(call quality_step,2,5,Static analysis,phpstan)
-	$(call quality_step,3,5,Security audit,enlightn)
-	$(call quality_step,4,5,Quality insights,insights)
-	$(call quality_step,5,5,Unit tests,test-unit)
+	$(call quality_step,1,4,Code style,ecs)
+	$(call quality_step,2,4,Static analysis,phpstan)
+	$(call quality_step,3,4,Quality insights,insights)
+	$(call quality_step,4,4,Unit tests,test-unit)
 	@echo "$(GREEN)✅ Quality audit completed$(NC)"
 
 .PHONY: pre-commit
