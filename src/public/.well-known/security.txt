@@ -1,0 +1,6 @@
+# security.txt - https://securitytxt.org/
+# Mettez à jour ce fichier avec vos coordonnées de contact réelles.
+
+Contact: mailto:security@example.com
+Expires: 2027-01-01T00:00:00.000Z
+Preferred-Languages: fr, en
