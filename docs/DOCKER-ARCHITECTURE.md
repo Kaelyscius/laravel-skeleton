@@ -23,7 +23,7 @@ Services toujours actifs sans profile spécifique :
 | Service | Description | Port(s) |
 |---------|-------------|---------|
 | `apache` | Serveur web Apache 2.4 + HTTPS/HTTP2 | 80, 443 |
-| `php` | PHP 8.5.1 FPM + Supervisor + OPcache | - |
+| `php` | PHP 8.5.4 FPM + Supervisor + OPcache | - |
 | `mariadb` | Base de données MariaDB | 3306 |
 | `redis` | Cache et sessions Redis | 6379 |
 

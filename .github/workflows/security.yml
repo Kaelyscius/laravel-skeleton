@@ -22,10 +22,11 @@ jobs:
     name: Dependency Security Scan
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: hashFiles('src/composer.json') != ''
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ==========================================
       # Setup for security scanning
@@ -38,7 +39,7 @@ jobs:
           coverage: none
 
       - name: 📦 Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -178,10 +179,11 @@ jobs:
     name: Static Security Analysis
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: hashFiles('src/composer.json') != ''
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ==========================================
       # Security-focused static analysis
@@ -290,10 +292,10 @@ jobs:
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 📦 Setup Node.js for Snyk
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 

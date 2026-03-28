@@ -1,6 +1,6 @@
 # 📦 Packages Laravel Recommandés
 
-Documentation complète des packages Laravel utiles pour Laravel 12 + PHP 8.5.1
+Documentation complète des packages Laravel utiles pour Laravel 12 + PHP 8.5.4
 
 ---
 

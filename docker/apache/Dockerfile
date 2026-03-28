@@ -1,4 +1,4 @@
-FROM httpd:2.4-alpine
+FROM httpd:2.4.66-alpine3.23
 
 # Arguments pour l'utilisateur
 ARG UID=1000

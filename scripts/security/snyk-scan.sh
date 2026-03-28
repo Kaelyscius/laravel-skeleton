@@ -326,11 +326,11 @@ scan_docker_images() {
 
     # Liste des images à scanner
     local images=(
-        "php:8.5-fpm-alpine"
-        "httpd:2.4-alpine"
-        "mariadb:latest"
-        "redis:alpine"
-        "node:24-alpine"
+        "php:8.5.4-fpm-alpine3.22"
+        "httpd:2.4.66-alpine3.23"
+        "mariadb:11.8"
+        "redis:8.6-alpine"
+        "node:24.14.1-alpine3.23"
     )
 
     for image in "${images[@]}"; do

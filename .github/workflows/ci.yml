@@ -19,6 +19,7 @@ jobs:
     name: Tests & Quality
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    if: hashFiles('src/composer.json') != ''
 
     services:
       mariadb:
@@ -49,7 +50,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ==========================================
       # Setup PHP avec extensions Laravel 12
@@ -67,11 +68,9 @@ jobs:
       # Setup Node.js (mise à jour vers v22)
       # ==========================================
       - name: 📦 Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: 'src/package-lock.json'
 
       # ==========================================
       # Cache Composer optimisé
@@ -81,7 +80,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
 
       - name: 💾 Cache Composer dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-php-${{ env.PHP_VERSION }}-composer-${{ hashFiles('src/composer.lock') }}
@@ -102,7 +101,7 @@ jobs:
       # Cache NPM optimisé
       # ==========================================
       - name: 💾 Cache NPM dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: src/node_modules
           key: ${{ runner.os }}-node-${{ env.NODE_VERSION }}-npm-${{ hashFiles('src/package-lock.json') }}

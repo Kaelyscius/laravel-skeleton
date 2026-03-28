@@ -2,12 +2,12 @@
 
 ## 📋 Vue d'Ensemble du Projet
 
-Ce projet est un **environnement de développement Laravel complet et professionnel** basé sur Docker, configuré pour **Laravel 12** avec **PHP 8.5.1**. Il constitue un skeleton de développement moderne avec tous les outils nécessaires pour un projet Laravel de production.
+Ce projet est un **environnement de développement Laravel complet et professionnel** basé sur Docker, configuré pour **Laravel 12** avec **PHP 8.5.4**. Il constitue un skeleton de développement moderne avec tous les outils nécessaires pour un projet Laravel de production.
 
 ## 🎯 Objectif du Projet
 
 **Laravel Development Skeleton** - Un environnement de développement containerisé, prêt à l'emploi, avec :
-- Configuration optimisée pour **Laravel 12 + PHP 8.5.1**
+- Configuration optimisée pour **Laravel 12 + PHP 8.5.4**
 - Outils de qualité de code intégrés
 - Monitoring et debugging avancés
 - Déploiement automatisé avec Docker
@@ -22,7 +22,7 @@ Ce projet est un **environnement de développement Laravel complet et profession
 | **Runtime** | PHP | 8.5 | Environnement d'exécution |
 | **Database** | MariaDB | 11.8 | Base de données principale |
 | **Cache** | Redis | 8.6 | Cache et sessions |
-| **Web Server** | Apache | 2.4-alpine | Serveur web avec SSL |
+| **Web Server** | Apache | 2.4.66 | Serveur web avec SSL |
 | **Frontend Build** | Node.js | 24 LTS | Build assets (Vite) |
 | **Monitoring** | Watchtower | latest | Surveillance containers |
 
@@ -32,7 +32,7 @@ Ce projet est un **environnement de développement Laravel complet et profession
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │    Apache       │    │      PHP        │    │     Node.js     │
 │   (Web Server)  │◄──►│  (Application)  │    │ (Asset Builder) │
-│   Port 80/443   │    │   PHP 8.5.1-FPM │    │   Vite/Webpack  │
+│   Port 80/443   │    │   PHP 8.5.4-FPM │    │   Vite/Webpack  │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       
          ▼                       ▼                       
@@ -66,7 +66,7 @@ Ce projet est un **environnement de développement Laravel complet et profession
 - **Spatie Permissions** - Gestion des permissions
 
 **Configuration Notable :**
-- Environnement configuré pour **PHP 8.5.1**
+- Environnement configuré pour **PHP 8.5.4**
 - Scripts Composer pour workflow de développement
 - Support complet Pest (tests) + PHPUnit
 
@@ -218,7 +218,7 @@ make build                 # Build optimisé
 
 **Niveau : Production-Ready** ⭐⭐⭐⭐⭐
 
-- ✅ Laravel 12 + PHP 8.5.1 (dernières versions)
+- ✅ Laravel 12 + PHP 8.5.4 (dernières versions)
 - ✅ Qualité code stricte (PHPStan niveau 8)
 - ✅ Tests automatisés (Pest)
 - ✅ Monitoring complet

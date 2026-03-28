@@ -38,13 +38,13 @@ jobs:
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ==========================================
       # Docker setup and validation
       # ==========================================
       - name: 🐳 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: 🔍 Validate docker-compose files
         run: |
@@ -130,17 +130,17 @@ jobs:
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 🐳 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # ==========================================
       # Prepare build environment
       # ==========================================
       - name: 🏷️ Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}-${{ matrix.service }}
           tags: |
@@ -168,7 +168,7 @@ jobs:
       # ==========================================
       - name: 🔐 Log in to Docker Hub
         if: steps.registry_check.outputs.registry_available == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -178,7 +178,7 @@ jobs:
       # Build and optionally push images
       # ==========================================
       - name: 🔨 Build and push ${{ matrix.service }} image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/${{ matrix.service }}/Dockerfile
@@ -234,7 +234,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ==========================================
       # Test complete stack
