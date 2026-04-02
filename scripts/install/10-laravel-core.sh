@@ -262,39 +262,103 @@ install_laravel_via_composer() {
     export COMPOSER_PROCESS_TIMEOUT=0
     export COMPOSER_ALLOW_SUPERUSER=1
     
-    # Installer Laravel 12 avec composer create-project (méthode préférée)
-    local laravel_cmd="composer create-project --prefer-dist laravel/laravel \"$temp_dir\" \"^12.0\" --no-interaction"
-    log_debug "Commande Composer create-project: $laravel_cmd"
-    
+    # Étape 1 : Télécharger le skeleton SANS installer les dépendances.
+    # --no-install permet de patcher composer.json avant le premier install,
+    # évitant ainsi de télécharger puis supprimer phpunit/pint/sail.
+    local laravel_cmd="composer create-project --prefer-dist laravel/laravel \"$temp_dir\" \"^12.0\" --no-interaction --no-install"
+    log_debug "Commande Composer create-project (--no-install): $laravel_cmd"
+
+    local use_fallback=false
     if ! eval "$laravel_cmd" 2>&1 | tee -a "$LOG_FILE"; then
         log_warn "Échec avec composer create-project, tentative avec l'installeur Laravel..."
-        
-        # Fallback: utiliser l'installeur Laravel global
+        use_fallback=true
+
+        # Fallback: utiliser l'installeur Laravel global (installe les dépendances)
         log_info "Installation de l'installeur Laravel globalement..."
         if ! composer global require laravel/installer 2>&1 | tee -a "$LOG_FILE"; then
             log_error "Impossible d'installer l'installeur Laravel globalement"
             rm -rf "$temp_dir" 2>/dev/null || true
             return 1
         fi
-        
-        # Essayer avec laravel new
+
         local laravel_new_cmd="/var/composer/vendor/bin/laravel new \"$temp_dir\" --no-interaction --force"
         log_debug "Commande Laravel new: $laravel_new_cmd"
-        
+
         if ! eval "$laravel_new_cmd" 2>&1 | tee -a "$LOG_FILE"; then
             log_error "Échec de l'installation Laravel avec toutes les méthodes"
             rm -rf "$temp_dir" 2>/dev/null || true
             return 1
         fi
     fi
-    
-    # Vérifier l'installation temporaire
+
+    # Vérifier que le skeleton est présent
+    if [ ! -f "$temp_dir/composer.json" ]; then
+        log_error "Skeleton Laravel invalide (composer.json manquant)"
+        rm -rf "$temp_dir" 2>/dev/null || true
+        return 1
+    fi
+
+    # Étape 2 : Patcher composer.json AVANT le premier composer install.
+    # (uniquement pour le path principal --no-install ; le fallback laravel new
+    #  a déjà ses packages installés, patch_fresh_laravel_skeleton s'en chargera)
+    if [ "$use_fallback" = false ]; then
+        log_info "🔧 Patch pre-install du skeleton (suppression phpunit/pint/sail)..."
+        cd "$temp_dir"
+        python3 << 'PYEOF'
+import json, sys
+
+with open('composer.json', 'r') as f:
+    data = json.load(f)
+
+# Contrainte PHP alignée sur le container Docker
+data.setdefault('require', {})['php'] = '^8.5'
+
+# Supprimer les packages du skeleton par défaut non désirés
+dev_remove = {'phpunit/phpunit', 'laravel/pint', 'laravel/sail'}
+data['require-dev'] = {
+    k: v for k, v in data.get('require-dev', {}).items()
+    if k not in dev_remove
+}
+
+# Ajouter phpstan/extension-installer dans allow-plugins (requis par larastan)
+data.setdefault('config', {}).setdefault('allow-plugins', {})
+data['config']['allow-plugins']['phpstan/extension-installer'] = True
+
+# Supprimer la création du fichier SQLite dans post-create-project-cmd
+cmds = data.get('scripts', {}).get('post-create-project-cmd', [])
+data['scripts']['post-create-project-cmd'] = [
+    c for c in cmds
+    if 'database.sqlite' not in c
+]
+
+with open('composer.json', 'w') as f:
+    json.dump(data, f, indent=2)
+
+print("composer.json patché: PHP ^8.5, phpunit/pint/sail exclus avant install")
+PYEOF
+        if [ $? -eq 0 ]; then
+            log_success "✅ Pre-install patch appliqué (phpunit, pint, sail exclus)"
+        else
+            log_warn "⚠️ Patch pre-install échoué - ils seront supprimés après installation"
+        fi
+
+        # Étape 3 : Installer les dépendances avec le composer.json propre
+        log_info "📦 Installation des dépendances Composer (skeleton patché)..."
+        cd "$temp_dir"
+        if ! composer install --no-interaction --prefer-dist 2>&1 | tee -a "$LOG_FILE"; then
+            log_error "Échec de composer install"
+            rm -rf "$temp_dir" 2>/dev/null || true
+            return 1
+        fi
+    fi
+
+    # Vérifier l'installation temporaire (fichiers critiques présents)
     if ! is_laravel_installed "$temp_dir"; then
         log_error "Installation temporaire invalide"
         rm -rf "$temp_dir" 2>/dev/null || true
         return 1
     fi
-    
+
     # Déplacer les fichiers vers le répertoire cible
     log_debug "Déplacement des fichiers vers $target_dir"
     
@@ -688,7 +752,9 @@ patch_fresh_laravel_skeleton() {
 
     cd "$laravel_dir"
 
-    # --- 1. Patcher composer.json ---
+    # --- 1. Patch composer.json (idempotent) ---
+    # Pour le path principal (--no-install), ce patch a déjà été appliqué
+    # avant composer install. Pour le fallback (laravel new), il est nécessaire ici.
     if [ -f "composer.json" ]; then
         python3 << 'PYEOF'
 import json, sys
@@ -696,40 +762,69 @@ import json, sys
 with open('composer.json', 'r') as f:
     data = json.load(f)
 
-# Contrainte PHP alignée sur le container Docker
-data.setdefault('require', {})['php'] = '^8.5'
+changed = False
 
-# Supprimer les packages incompatibles / redondants du skeleton par défaut
+# Contrainte PHP alignée sur le container Docker
+if data.get('require', {}).get('php') != '^8.5':
+    data.setdefault('require', {})['php'] = '^8.5'
+    changed = True
+
+# Supprimer les packages du skeleton non désirés (idempotent)
 dev_remove = {'phpunit/phpunit', 'laravel/pint', 'laravel/sail'}
+before = set(data.get('require-dev', {}).keys())
 data['require-dev'] = {
     k: v for k, v in data.get('require-dev', {}).items()
     if k not in dev_remove
 }
+if before != set(data.get('require-dev', {}).keys()):
+    changed = True
 
-# Ajouter phpstan/extension-installer dans allow-plugins (requis par larastan)
-data.setdefault('config', {}).setdefault('allow-plugins', {})
-data['config']['allow-plugins']['phpstan/extension-installer'] = True
+# Ajouter phpstan/extension-installer dans allow-plugins
+plugins = data.setdefault('config', {}).setdefault('allow-plugins', {})
+if not plugins.get('phpstan/extension-installer'):
+    plugins['phpstan/extension-installer'] = True
+    changed = True
 
-# Supprimer la création du fichier SQLite dans post-create-project-cmd
+# Supprimer la création du fichier SQLite
 cmds = data.get('scripts', {}).get('post-create-project-cmd', [])
-data['scripts']['post-create-project-cmd'] = [
-    c for c in cmds
-    if 'database.sqlite' not in c
-]
+filtered = [c for c in cmds if 'database.sqlite' not in c]
+if filtered != cmds:
+    data['scripts']['post-create-project-cmd'] = filtered
+    changed = True
 
 with open('composer.json', 'w') as f:
     json.dump(data, f, indent=2)
 
-print("composer.json patché avec succès")
+if changed:
+    print("composer.json patché (fallback path: phpunit/pint/sail retirés)")
+else:
+    print("composer.json déjà patché (pre-install patch détecté, aucun changement)")
 PYEOF
-        if [ $? -eq 0 ]; then
-            log_success "✅ composer.json patché (PHP ^8.5, phpunit/pint/sail supprimés, allow-plugins mis à jour)"
-        else
-            log_warn "⚠️ Patch composer.json échoué - les packages conflictuels devront être supprimés manuellement"
-        fi
+        [ $? -eq 0 ] && log_success "✅ composer.json vérifié/patché" \
+                      || log_warn "⚠️ Patch composer.json échoué"
     fi
 
-    # --- 2. Patcher phpunit.xml : SQLite → MariaDB ---
+    # --- 2. Supprimer les packages skeleton si encore présents dans vendor/ ---
+    # Cas du fallback (laravel new) : les packages ont été installés.
+    # --no-scripts évite les erreurs prePackageUninstall de ComposerScripts.
+    local skeleton_pkgs=("phpunit/phpunit" "laravel/pint" "laravel/sail")
+    local pkgs_to_remove=()
+    for pkg in "${skeleton_pkgs[@]}"; do
+        if [ -d "vendor/${pkg}" ]; then
+            pkgs_to_remove+=("$pkg")
+        fi
+    done
+
+    if [ ${#pkgs_to_remove[@]} -gt 0 ]; then
+        log_info "🧹 Suppression des packages skeleton encore présents: ${pkgs_to_remove[*]}"
+        composer remove "${pkgs_to_remove[@]}" --dev --no-scripts --no-interaction \
+            2>&1 | tee -a "$LOG_FILE" || true
+        log_success "✅ Packages skeleton supprimés"
+    else
+        log_debug "✓ Aucun package skeleton à supprimer (pre-install patch appliqué)"
+    fi
+
+    # --- 3. Patcher phpunit.xml : SQLite → MariaDB ---
     if [ -f "phpunit.xml" ]; then
         # Remplacer sqlite par mysql
         sed -i 's|<env name="DB_CONNECTION" value="sqlite"/>|<env name="DB_CONNECTION" value="mysql"/>|' phpunit.xml

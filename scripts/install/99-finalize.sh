@@ -62,11 +62,19 @@ setup_laravel_boost() {
 
     log_info "🤖 Configuration de Laravel Boost (guidelines AI)..."
 
-    if php artisan boost:install --no-interaction 2>&1 | tee -a "$LOG_FILE"; then
+    # boost:install requiert des prompts interactifs (nom du projet).
+    # En mode non-interactif (Docker exec sans TTY), il lève NonInteractiveValidationException.
+    # On capture l'exit code via PIPESTATUS pour éviter le faux positif du pipe vers tee.
+    php artisan boost:install --no-interaction 2>&1 | tee -a "$LOG_FILE"
+    local boost_exit=${PIPESTATUS[0]}
+
+    if [ "$boost_exit" -eq 0 ]; then
         log_success "✅ Laravel Boost installé (répertoire .ai/ généré)"
         log_info "💡 Pour configurer le MCP Claude Code (côté hôte): make boost-mcp"
     else
-        log_warn "⚠️ boost:install a échoué - lancez manuellement: php artisan boost:install"
+        log_warn "⚠️ boost:install requiert un mode interactif (prompts obligatoires)"
+        log_warn "   Une fois l'installation terminée, lancez: make shell"
+        log_warn "   Puis dans le container: php artisan boost:install"
     fi
 }
 

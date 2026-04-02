@@ -65,12 +65,12 @@ packages:
     # predis/predis supprimé : phpredis (PECL) est installé dans le Dockerfile, ~10x plus rapide
     - name: "spatie/laravel-csp"
       version: "^3.0"
-      required: false
-      description: "Content Security Policy headers pour sécurité XSS"
+      required: true
+      description: "Content Security Policy headers pour sécurité XSS — middleware enregistré dans bootstrap/app.php"
     - name: "spatie/laravel-health"
       version: "^1.0"
-      required: false
-      description: "Health checks application (DB, Cache, Queue, etc.)"
+      required: true
+      description: "Health checks application (DB, Cache, Queue, etc.) — config/health.php + route /health"
     - name: "spatie/laravel-schedule-monitor"
       version: "^4.0"
       required: false
