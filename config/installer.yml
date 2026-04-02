@@ -43,26 +43,28 @@ security:
 packages:
   production:
     - name: "laravel/horizon"
-      version: "*"
+      version: "^5.0"
       required: true
     - name: "laravel/telescope"
-      version: "*"
+      version: "^5.0"
       required: true
     - name: "laravel/sanctum"
-      version: "*"
+      version: "^4.0"
       required: true
     - name: "laravel/nightwatch"
-      version: "*"
+      version: "^1.0"
       required: false
     - name: "spatie/laravel-permission"
-      version: "*"
+      version: "^7.0"
       required: true
+      description: "v7+ : PHP ^8.4 + Laravel ^12 uniquement. BREAKING: event classes renommées (ex. PermissionAttached → PermissionAttachedEvent)"
     - name: "spatie/laravel-activitylog"
-      version: "*"
+      version: "^5.0"
       required: true
+      description: "v5+ : PHP ^8.4 + Laravel ^12 uniquement. BREAKING: nouvelle colonne attribute_changes, LogBatch supprimé, méthodes renommées — migration requise sur projets existants"
     # predis/predis supprimé : phpredis (PECL) est installé dans le Dockerfile, ~10x plus rapide
     - name: "spatie/laravel-csp"
-      version: "^2.0"
+      version: "^3.0"
       required: false
       description: "Content Security Policy headers pour sécurité XSS"
     - name: "spatie/laravel-health"
@@ -70,7 +72,7 @@ packages:
       required: false
       description: "Health checks application (DB, Cache, Queue, etc.)"
     - name: "spatie/laravel-schedule-monitor"
-      version: "^3.0"
+      version: "^4.0"
       required: false
       description: "Monitoring des tâches cron et scheduled jobs"
     - name: "laravel/pulse"
@@ -83,15 +85,16 @@ packages:
       version: "^8.0"
       required: true
     - name: "laravel/boost"
-      version: "*"
+      version: "^2.0"
       required: true
       description: "AI-assisted development: MCP server + Laravel guidelines pour Claude Code / Cursor"
     - name: "barryvdh/laravel-ide-helper"
       version: "^3.0"
       required: true
-    - name: "barryvdh/laravel-debugbar"
-      version: "^3.15"
+    - name: "fruitcake/laravel-debugbar"
+      version: "^4.0"
       required: true
+      description: "Anciennement barryvdh/laravel-debugbar — renommé en fruitcake/ depuis v4.0"
     # beyondcode/laravel-query-detector supprimé : incompatible Laravel 12, fonctionnalité couverte par laravel-debugbar
     - name: "pestphp/pest"
       version: "^4.0"
@@ -100,15 +103,15 @@ packages:
       version: "^4.0"
       required: true
     - name: "pestphp/pest-plugin-drift"
-      version: "^3.0"
+      version: "^4.0"
       required: false
-      php_version: ">=8.1"
+      php_version: ">=8.3"
       description: "Détecte le code non couvert par les tests et mutation testing"
     # Quality tools (optional - PHP 8.5 compatible versions)
     - name: "symplify/easy-coding-standard"
       version: "^13.0"
       required: false
-      php_version: ">=7.2"
+      php_version: ">=8.3"
       description: "PHP 8.5 compatible"
     - name: "rector/rector"
       version: "^2.3"
@@ -118,15 +121,20 @@ packages:
     - name: "larastan/larastan"
       version: "^3.0"
       required: false
-      php_version: ">=8.1"
+      php_version: ">=8.2"
     - name: "driftingly/rector-laravel"
       version: "^2.0"
       required: false
       php_version: ">=8.0"
       description: "Règles Rector pour Laravel - v2.0 compatible Laravel 12"
     - name: "nunomaduro/phpinsights"
-      version: "^2.13"
+      version: "^2.14"
       required: false
-      php_version: ">=8.1"
+      php_version: ">=8.3"
+    - name: "php-code-archeology/php-code-archeology"
+      version: "^2.0"
+      required: false
+      php_version: ">=8.2"
+      description: "Architecture metrics, git churn analysis, health score (complète PHPStan)"
     # ivqonsanada/enlightn supprimé : fork communautaire peu maintenu, pas l'Enlightn officiel
     # Alternative : enlightn/enlightn (payant) ou se fier à PHPStan + ECS déjà en place

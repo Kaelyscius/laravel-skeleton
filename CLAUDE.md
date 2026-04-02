@@ -40,7 +40,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make fix-permissions` - Fix file permissions for PhpStorm/IDE
 
 ### Laravel Development
-- `make install-laravel` - Install Laravel with dependencies
+- `make install-dev-full` - **Installation complète recommandée** (build + up + Laravel + npm + SSL)
+- `make install-laravel` - Install Laravel with dependencies (containers déjà démarrés)
 - `make artisan cmd="migrate"` - Run artisan commands
 - `make composer cmd="install"` - Run composer commands
 - `make migrate` - Run database migrations
@@ -73,24 +74,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make ecs` - Check code style (Easy Coding Standard)
 - `make ecs-fix` - Fix code style issues
 - `make phpstan` - Run static analysis (PHPStan/Larastan level 8)
-- `make rector` - Show refactoring suggestions
+- `make rector` - Show refactoring suggestions (dry-run)
 - `make rector-fix` - Apply refactoring suggestions
 - `make insights` - Run PHP Insights analysis
-- `make quality-all` - Run complete quality audit
+- `make quality-all` - Run complete quality audit (ECS + PHPStan + Rector + Insights)
+- `make quality-fix` - Fix all auto-fixable quality issues (ECS + Rector)
+- `make quality-quick` - Quick quality check (ECS + PHPStan only)
+- `make archeology` - Full architecture metrics + git churn report (HTML + JSON)
+- `make archeology-quick` - Quick architecture analysis
+- `make ide-helper` - Regenerate IDE helpers (_ide_helper.php, _ide_helper_models.php, .phpstorm.meta.php)
 
 ### Security & Monitoring
 - `make security-setup` - Setup Snyk security scanning
-- `make security-scan` - Run security vulnerability scan
+- `make security-scan` - Run security vulnerability scan (PHP + Node)
+- `make security-scan-php` - Scan PHP dependencies only
+- `make security-scan-node` - Scan Node.js dependencies only
 - `make nightwatch-start` - Start Laravel Nightwatch agent
 - `make nightwatch-status` - Check Nightwatch status
 - `make health` - Run Laravel health checks (DB, Cache, Queue, etc.)
 - `make schedule-monitor-sync` - Sync schedule monitor
 - `make schedule-monitor-list` - List monitored scheduled tasks
 
-### Deployment
+### AI Assistance (Laravel Boost)
+- `make boost-mcp` - Configure MCP server for Claude Code (côté hôte)
+- `make boost-setup` - Install and configure Laravel Boost
+- `make boost-update` - Update Laravel Boost guidelines
+
+### Deployment & Setup
 - `make setup-interactive` - Interactive environment setup
 - `make setup-dev` - Development environment setup
 - `make setup-prod` - Production environment setup
+- `make install-dev-full` - Full dev install (build + up + Laravel + npm + SSL)
+- `make update-deps` - Update Composer + NPM dependencies
 
 ## Project Architecture
 
@@ -133,10 +148,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Laravel Nightwatch for monitoring
 
 ### Quality Tools Configuration
-- **PHPStan/Larastan** at level 8 for strict type checking
-- **ECS** (Easy Coding Standard) for PSR-12 compliance
-- **Rector** for automated refactoring and PHP modernization
-- **PHP Insights** for code quality analysis
+- **PHPStan/Larastan** (v3.x) at level 8 for strict type checking
+- **ECS** (Easy Coding Standard v13.x) for PSR-12 compliance
+- **Rector** (v2.x) for automated refactoring — rules PHP 8.5 + Laravel 12
+- **driftingly/rector-laravel** (v2.x) for Laravel-specific Rector rules
+- **PHP Insights** (v2.14+) for code quality metrics
+- **PhpCodeArcheology** (v2.x) for architecture metrics + git churn analysis
 - **Snyk** for security vulnerability scanning
 
 ### Key Configuration Files
@@ -156,7 +173,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Environment Management
 - Multiple environment configurations via interactive setup
 - **Docker Compose Profiles** for modular service management
-- Ansible playbooks for production deployment
 - Docker compose overrides for dev/prod environments with profiles
 - Automated SSL certificate generation
 - Flexible profile activation (`dev`, `tools`, `dev-extra`)
@@ -178,58 +194,58 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Monitoring & Observability
 
-**Outils activés selon les profiles Docker** :
+#### Laravel (toujours actif)
+- **Laravel Horizon** (v5.x) — queue monitoring dashboard (`/horizon`)
+- **Laravel Telescope** (v5.x) — application debugging, désactivé en production
+- **Laravel Pulse** (v1.x) — dashboard temps réel : exceptions, slow queries, jobs, cache (`/pulse`)
+- **Laravel Nightwatch** (v1.x) — error monitoring externe (service payant, optionnel)
+- **Spatie Laravel Health** (v1.x) — health checks: DB, Cache, Queue, Disk (`/health`)
+- **Spatie Laravel Schedule Monitor** (v4.x) — monitoring des tâches cron
 
-#### Profile "dev" (Outils de développement)
-- Adminer for database management (port 8080)
-- Mailpit for email testing (port 8025)
-
-#### Profile "tools" (Monitoring)
-- Dozzle for real-time log monitoring (port 9999)
-- IT-Tools for development utilities (port 8081)
-- Watchtower for automatic container updates
-
-#### Profile "dev-extra" (Outils additionnels)
-- PHPMyAdmin as alternative to Adminer (port 8083)
-- Redis Commander for Redis management (port 8082)
-
-#### Laravel Monitoring (toujours actif)
-- Laravel Horizon for queue monitoring
-- Laravel Telescope for application debugging
-- **Spatie Laravel Health** for application health checks
-- **Spatie Laravel Schedule Monitor** for cron job monitoring
-- **Spatie Laravel CSP** for Content Security Policy headers
-
-**Usage** :
-- `make up-local` pour tous les outils de monitoring en local
-- `make up-prod` pour production sans outils de développement
+#### Via Docker Profiles
+- Profil `dev` : Adminer (8080), Mailpit (8025)
+- Profil `tools` : Dozzle (9999), IT-Tools (8081), Watchtower
+- Profil `dev-extra` : PHPMyAdmin (8083), Redis Commander (8082)
 
 ### Deployment
-- Ansible playbooks for infrastructure management
 - Docker-based deployment with health checks
 - Automated updates via Watchtower
 - Support for development, staging, and production environments
 
 ## Installed Packages & Features
 
-### Testing Packages
-- **pestphp/pest** (v4.0) - Modern testing framework
-- **pestphp/pest-plugin-laravel** (v4.0) - Laravel integration for Pest
-- **pestphp/pest-plugin-drift** (v3.0) - Detect uncovered code and mutation testing
+### Laravel Core Packages
+- **laravel/horizon** (^5.0) - Queue monitoring and management
+- **laravel/telescope** (^5.0) - Application debugging and insights (désactivé en production)
+- **laravel/sanctum** (^4.0) - API authentication
+- **laravel/pulse** (^1.0) - Dashboard monitoring temps réel : exceptions, slow queries, jobs, cache
+- **laravel/nightwatch** (^1.0) - Error monitoring externe (service payant, optionnel)
 
 ### Security & Monitoring Packages
-- **spatie/laravel-csp** (v2.0) - Content Security Policy headers for XSS protection
-- **spatie/laravel-health** (v1.0) - Application health checks (DB, Cache, Queue, Disk, etc.)
-- **spatie/laravel-schedule-monitor** (v3.0) - Monitor scheduled tasks and cron jobs
-- **spatie/laravel-permission** - Role and permission management
-- **spatie/laravel-activitylog** - Activity logging
+- **spatie/laravel-csp** (^3.0) - Content Security Policy headers for XSS protection
+- **spatie/laravel-health** (^1.0) - Application health checks (DB, Cache, Queue, Disk, etc.)
+- **spatie/laravel-schedule-monitor** (^4.0) - Monitor scheduled tasks and cron jobs
+- **spatie/laravel-permission** (^7.0) - Role and permission management (PHP ^8.4 + Laravel ^12)
+- **spatie/laravel-activitylog** (^5.0) - Activity logging (PHP ^8.4 + Laravel ^12)
 
-### Laravel Core Packages
-- **laravel/horizon** - Queue monitoring and management
-- **laravel/telescope** - Application debugging and insights
-- **laravel/sanctum** - API authentication
-- **laravel/nightwatch** - Error monitoring and reporting (optional, service payant)
-- **laravel/pulse** - Dashboard monitoring temps réel (exceptions, slow queries, cache, jobs)
+### Testing Packages
+- **pestphp/pest** (^4.0) - Modern testing framework
+- **pestphp/pest-plugin-laravel** (^4.0) - Laravel integration for Pest
+- **pestphp/pest-plugin-drift** (^4.0) - Mutation testing, detect uncovered code
+
+### Development Packages
+- **fruitcake/laravel-debugbar** (^4.0) - Debug bar (ownership transférée de barryvdh/ en v4.0, namespace `Fruitcake\LaravelDebugbar`)
+- **barryvdh/laravel-ide-helper** (^3.0) - IDE autocompletion (_ide_helper.php, models, meta)
+- **laravel/boost** (^2.0) - AI-assisted development: MCP server + Laravel guidelines pour Claude Code / Cursor
+- **nunomaduro/collision** (^8.0) - Better error output in console
+
+### Quality Tools Packages
+- **larastan/larastan** (^3.0) - PHPStan extension for Laravel (level 8)
+- **symplify/easy-coding-standard** (^13.0) - PSR-12 code style enforcement
+- **rector/rector** (^2.3) - Automated refactoring, PHP 8.5 + Laravel 12 rules
+- **driftingly/rector-laravel** (^2.0) - Laravel-specific Rector rule sets
+- **nunomaduro/phpinsights** (^2.14) - Code quality metrics (complexity, architecture, style)
+- **php-code-archeology/php-code-archeology** (^2.0) - Architecture metrics + git churn analysis
 
 ## Security Patterns
 
