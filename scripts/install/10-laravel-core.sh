@@ -678,6 +678,72 @@ optimize_laravel_configuration() {
 }
 
 #
+# Patcher le skeleton Laravel par défaut après création
+# (supprimer les conflits avec Pest v4, corriger phpunit.xml pour MariaDB)
+#
+patch_fresh_laravel_skeleton() {
+    local laravel_dir="$1"
+
+    log_info "🔧 Patch du skeleton Laravel par défaut..."
+
+    cd "$laravel_dir"
+
+    # --- 1. Patcher composer.json ---
+    if [ -f "composer.json" ]; then
+        python3 << 'PYEOF'
+import json, sys
+
+with open('composer.json', 'r') as f:
+    data = json.load(f)
+
+# Contrainte PHP alignée sur le container Docker
+data.setdefault('require', {})['php'] = '^8.5'
+
+# Supprimer les packages incompatibles / redondants du skeleton par défaut
+dev_remove = {'phpunit/phpunit', 'laravel/pint', 'laravel/sail'}
+data['require-dev'] = {
+    k: v for k, v in data.get('require-dev', {}).items()
+    if k not in dev_remove
+}
+
+# Ajouter phpstan/extension-installer dans allow-plugins (requis par larastan)
+data.setdefault('config', {}).setdefault('allow-plugins', {})
+data['config']['allow-plugins']['phpstan/extension-installer'] = True
+
+# Supprimer la création du fichier SQLite dans post-create-project-cmd
+cmds = data.get('scripts', {}).get('post-create-project-cmd', [])
+data['scripts']['post-create-project-cmd'] = [
+    c for c in cmds
+    if 'database.sqlite' not in c
+]
+
+with open('composer.json', 'w') as f:
+    json.dump(data, f, indent=2)
+
+print("composer.json patché avec succès")
+PYEOF
+        if [ $? -eq 0 ]; then
+            log_success "✅ composer.json patché (PHP ^8.5, phpunit/pint/sail supprimés, allow-plugins mis à jour)"
+        else
+            log_warn "⚠️ Patch composer.json échoué - les packages conflictuels devront être supprimés manuellement"
+        fi
+    fi
+
+    # --- 2. Patcher phpunit.xml : SQLite → MariaDB ---
+    if [ -f "phpunit.xml" ]; then
+        # Remplacer sqlite par mysql
+        sed -i 's|<env name="DB_CONNECTION" value="sqlite"/>|<env name="DB_CONNECTION" value="mysql"/>|' phpunit.xml
+        # Remplacer :memory: par laravel_test
+        sed -i 's|<env name="DB_DATABASE" value=":memory:"/>|<env name="DB_DATABASE" value="laravel_test"/>|' phpunit.xml
+        # Supprimer la ligne DB_URL vide (spécifique SQLite)
+        sed -i '/<env name="DB_URL" value=""\/>/ d' phpunit.xml
+        log_success "✅ phpunit.xml patché (SQLite → MariaDB laravel_test)"
+    fi
+
+    log_success "✅ Skeleton Laravel patché"
+}
+
+#
 # Créer la route de healthcheck pour Docker (EXACTE DE L'ORIGINAL)
 #
 create_healthcheck_route() {
@@ -715,7 +781,10 @@ main() {
     
     # Créer le projet Laravel
     create_laravel_project "$target_dir"
-    
+
+    # Patcher le skeleton par défaut (PHP ^8.5, supprimer phpunit/pint/sail, MariaDB pour les tests)
+    patch_fresh_laravel_skeleton "$target_dir"
+
     # Configurer l'environnement
     configure_laravel_environment "$target_dir"
     

@@ -14,7 +14,7 @@
 set -e
 
 # Configuration
-DEFAULT_TARGET="/var/www/html/myLaravelSkeleton/src"
+DEFAULT_TARGET="/var/www/html"
 TARGET_DIR="${1:-$DEFAULT_TARGET}"
 USER_ID="${USER_ID:-1000}"
 GROUP_ID="${GROUP_ID:-1000}"

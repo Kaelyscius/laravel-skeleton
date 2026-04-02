@@ -185,9 +185,14 @@ quick_laravel_test() {
     "require-dev": {
         "symplify/easy-coding-standard": "^13.0",
         "rector/rector": "^2.3",
-        "nunomaduro/phpinsights": "^2.13",
+        "larastan/larastan": "^3.0",
+        "driftingly/rector-laravel": "^2.0",
+        "nunomaduro/phpinsights": "^2.14",
         "pestphp/pest": "^4.0",
-        "pestphp/pest-plugin-laravel": "^4.0"
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "pestphp/pest-plugin-drift": "^4.0",
+        "fruitcake/laravel-debugbar": "^4.0",
+        "php-code-archeology/php-code-archeology": "^2.0"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -266,8 +271,14 @@ test_package_compatibility() {
     compatible_packages=(
         "symplify/easy-coding-standard:^13.0"
         "rector/rector:^2.3"
-        "nunomaduro/phpinsights:^2.13"
+        "larastan/larastan:^3.0"
+        "driftingly/rector-laravel:^2.0"
+        "nunomaduro/phpinsights:^2.14"
         "pestphp/pest:^4.0"
+        "pestphp/pest-plugin-laravel:^4.0"
+        "pestphp/pest-plugin-drift:^4.0"
+        "fruitcake/laravel-debugbar:^4.0"
+        "php-code-archeology/php-code-archeology:^2.0"
     )
 
     for package_version in "${compatible_packages[@]}"; do

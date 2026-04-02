@@ -382,45 +382,63 @@ stop-profile: ## Arrêter un profile spécifique (usage: make stop-profile PROFI
 # =============================================================================
 
 .PHONY: install-laravel
-install-laravel: ## Installer Laravel avec outils qualité (version refactorisée)
+install-laravel: ## Installer Laravel complet (packages + permissions + MCP Claude Code)
 	$(call check_container,$(PHP_CONTAINER_NAME))
-	@echo "$(YELLOW)Installing Laravel (refactored)...$(NC)"
+	@echo "$(CYAN)🚀 Installation Laravel 12 + PHP 8.5...$(NC)"
+	@echo ""
+	@echo "$(BLUE)━━━ Étape 1/5 : Installation des packages et configuration ━━━$(NC)"
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh"
-	@echo "$(GREEN)✓ Laravel installed$(NC)"
-
-.PHONY: install-laravel-php84
-install-laravel-php84: ## Installation Laravel optimisée pour PHP 8.4 avec corrections
-	$(call check_container,$(PHP_CONTAINER_NAME))
-	@echo "$(CYAN)🚀 Installation Laravel optimisée PHP 8.4...$(NC)"
-	@echo "$(BLUE)→ Étape 1: Diagnostic et correction Composer$(NC)"
-	@if [ -f "./scripts/install/05-composer-setup.sh" ]; then \
-		chmod +x "./scripts/install/05-composer-setup.sh"; \
-		./scripts/install/05-composer-setup.sh; \
+	@echo ""
+	@echo "$(BLUE)━━━ Étape 2/5 : Correction des permissions (dans le container) ━━━$(NC)"
+	@$(DOCKER) exec $(PHP_CONTAINER_NAME) sh -c "\
+		chown -R www-data:www-data /var/www/html 2>/dev/null || true && \
+		find /var/www/html -type d -not -path '*/vendor/*' -not -path '*/node_modules/*' -exec chmod 775 {} + 2>/dev/null || true && \
+		find /var/www/html -type f -not -path '*/vendor/*' -not -path '*/node_modules/*' -exec chmod 664 {} + 2>/dev/null || true && \
+		chmod +x /var/www/html/artisan 2>/dev/null || true && \
+		chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true && \
+		find /var/www/html/vendor/bin -type f -exec chmod +x {} + 2>/dev/null || true"
+	@echo "$(GREEN)✓ Permissions corrigées dans le container (775/664, www-data = UID 1000)$(NC)"
+	@echo ""
+	@echo "$(BLUE)━━━ Étape 3/5 : Correction des permissions côté hôte WSL2 ━━━$(NC)"
+	@$(MAKE) fix-permissions-host || echo "$(YELLOW)⚠️  fix-permissions-host ignoré (sudo non disponible) — relancez manuellement: make fix-permissions-host$(NC)"
+	@echo ""
+	@echo "$(BLUE)━━━ Étape 4/5 : Configuration MCP Laravel Boost (Claude Code) ━━━$(NC)"
+	@if command -v claude >/dev/null 2>&1; then \
+		claude mcp add -s local -t stdio laravel-boost -- docker exec -i $(PHP_CONTAINER_NAME) php artisan boost:mcp 2>/dev/null \
+			&& echo "$(GREEN)✓ MCP Laravel Boost configuré pour Claude Code$(NC)" \
+			|| echo "$(YELLOW)⚠️  MCP déjà configuré ou erreur — vérifiez avec: claude mcp list$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠️  CLI Claude Code non trouvée — configurez manuellement: make boost-mcp$(NC)"; \
 	fi
-	@echo "$(BLUE)→ Étape 2: Test rapide compatibilité$(NC)"
-	@if [ -f "./scripts/diagnostic-tools.sh" ]; then \
-		chmod +x "./scripts/diagnostic-tools.sh"; \
-		./scripts/diagnostic-tools.sh --quick-test; \
-	fi
-	@echo "$(BLUE)→ Étape 3: Installation Laravel avec scripts refactorisés$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh"
-	@echo "$(GREEN)✅ Installation Laravel PHP 8.5.1 terminée !$(NC)"
+	@echo ""
+	@echo "$(BLUE)━━━ Étape 5/5 : Résumé ━━━$(NC)"
+	@echo "$(GREEN)✅ Installation terminée !$(NC)"
+	@echo ""
+	@echo "$(CYAN)Prochaines étapes :$(NC)"
+	@echo "  $(YELLOW)make migrate$(NC)        → Migrations si pas encore faites"
+	@echo "  $(YELLOW)make npm-install$(NC)     → Dépendances frontend"
+	@echo "  $(YELLOW)make npm-dev$(NC)         → Lancer Vite en mode watch"
+	@echo "  $(YELLOW)make quality-all$(NC)     → Vérifier la qualité du code"
+	@echo ""
 
 .PHONY: install-laravel-prod
 install-laravel-prod: ## Installer Laravel PRODUCTION (sans packages dev)
+	$(call check_container,$(PHP_CONTAINER_NAME))
 	@echo "$(CYAN)📦 Installation Laravel PRODUCTION (packages essentiels uniquement)$(NC)"
-	@echo "$(BLUE)→ Étape 1: Setup Composer$(NC)"
-	@if [ -f "./scripts/install/05-composer-setup.sh" ]; then \
-		chmod +x "./scripts/install/05-composer-setup.sh"; \
-		./scripts/install/05-composer-setup.sh; \
-	fi
-	@echo "$(BLUE)→ Étape 2: Installation packages production uniquement$(NC)"
+	@echo "$(BLUE)→ Installation packages production$(NC)"
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 10-laravel-core"
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 20-database"
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 30-packages-prod"
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 35-configure-spatie-packages"
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 99-finalize"
-	@echo "$(GREEN)✅ Installation Laravel PRODUCTION terminée (sans outils dev) !$(NC)"
+	@echo "$(BLUE)→ Correction des permissions$(NC)"
+	@$(DOCKER) exec $(PHP_CONTAINER_NAME) sh -c "\
+		chown -R www-data:www-data /var/www/html 2>/dev/null || true && \
+		find /var/www/html -type d -not -path '*/vendor/*' -exec chmod 775 {} + 2>/dev/null || true && \
+		find /var/www/html -type f -not -path '*/vendor/*' -exec chmod 664 {} + 2>/dev/null || true && \
+		chmod +x /var/www/html/artisan 2>/dev/null || true && \
+		chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true"
+	@echo "$(GREEN)✅ Installation Laravel PRODUCTION terminée$(NC)"
 	@echo "$(YELLOW)⚠️  PHPStan, ECS, Rector, Pest NON installés (environnement production)$(NC)"
 
 
@@ -595,6 +613,22 @@ rector-fix: ## Appliquer refactoring
 insights: ## PHP Insights
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan insights
 
+.PHONY: archeology
+archeology: ## PhpCodeArcheology - analyse architecture + métriques (rapport HTML + JSON)
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/phpcodearcheology --report-type=html,json
+
+.PHONY: archeology-quick
+archeology-quick: ## PhpCodeArcheology - résumé rapide dans le terminal
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/phpcodearcheology --quick
+
+.PHONY: archeology-init
+archeology-init: ## PhpCodeArcheology - initialiser la configuration interactivement
+	@$(DOCKER) exec -it $(PHP_CONTAINER_NAME) ./vendor/bin/phpcodearcheology init
+
+.PHONY: archeology-baseline
+archeology-baseline: ## PhpCodeArcheology - créer une baseline (projets existants)
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/phpcodearcheology baseline create app
+
 .PHONY: ide-helper
 ide-helper: ## Générer les fichiers IDE Helper (autocomplétion PhpStorm/VSCode)
 	$(call check_container,$(PHP_CONTAINER_NAME))
@@ -654,10 +688,11 @@ quality-fix: ecs-fix rector-fix ## Corrections automatiques
 .PHONY: quality-all
 quality-all: ## Audit complet de qualité
 	@echo "$(CYAN)🔍 Full quality audit$(NC)"
-	$(call quality_step,1,4,Code style,ecs)
-	$(call quality_step,2,4,Static analysis,phpstan)
-	$(call quality_step,3,4,Quality insights,insights)
-	$(call quality_step,4,4,Unit tests,test-unit)
+	$(call quality_step,1,5,Code style,ecs)
+	$(call quality_step,2,5,Static analysis,phpstan)
+	$(call quality_step,3,5,Quality insights,insights)
+	$(call quality_step,4,5,Architecture metrics,archeology-quick)
+	$(call quality_step,5,5,Unit tests,test-unit)
 	@echo "$(GREEN)✅ Quality audit completed$(NC)"
 
 .PHONY: pre-commit
@@ -744,15 +779,38 @@ shell-db: ## Console MariaDB
 	@$(DOCKER) exec -it $(MARIADB_CONTAINER_NAME) mysql -u root -p
 
 .PHONY: fix-permissions
-fix-permissions: ## Corriger les permissions pour PhpStorm (containers doivent être démarrés)
-	@echo "$(CYAN)🔧 Correction des permissions Docker pour PhpStorm$(NC)"
+fix-permissions: ## Corriger les permissions pour PhpStorm/WSL2 (tourne en root dans le container)
+	@echo "$(CYAN)🔧 Correction des permissions pour PhpStorm + WSL2...$(NC)"
 	@if docker ps --format "{{.Names}}" | grep -q "$(PHP_CONTAINER_NAME)"; then \
-		$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) /var/www/project/scripts/fix-permissions.sh; \
-		echo "$(GREEN)✅ Permissions corrigées - redémarrez PhpStorm si nécessaire$(NC)"; \
+		$(DOCKER) exec $(PHP_CONTAINER_NAME) sh -c "\
+			chown -R www-data:www-data /var/www/html 2>/dev/null || true && \
+			find /var/www/html -type d -not -path '*/vendor/*' -not -path '*/node_modules/*' -exec chmod 775 {} + 2>/dev/null || true && \
+			find /var/www/html -type f -not -path '*/vendor/*' -not -path '*/node_modules/*' -exec chmod 664 {} + 2>/dev/null || true && \
+			chmod +x /var/www/html/artisan 2>/dev/null || true && \
+			chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true && \
+			find /var/www/html/vendor/bin -type f -exec chmod +x {} + 2>/dev/null || true"; \
+		echo "$(GREEN)✅ Permissions corrigées (www-data:www-data, 775/664)$(NC)"; \
+		echo "$(YELLOW)💡 Si PhpStorm affiche encore 'read-only': File → Invalidate Caches and Restart$(NC)"; \
 	else \
-		echo "$(YELLOW)⚠️ Containers non démarrés - lancement direct du script$(NC)"; \
-		/var/www/html/myLaravelSkeleton/scripts/fix-permissions.sh; \
+		echo "$(RED)❌ Container PHP non démarré. Lance 'make up-local' d'abord.$(NC)"; \
+		exit 1; \
 	fi
+
+.PHONY: fix-permissions-host
+fix-permissions-host: ## Corriger les permissions depuis l'hôte WSL2 (sans Docker, requiert sudo)
+	@echo "$(CYAN)🔧 Correction des permissions depuis l'hôte WSL2...$(NC)"
+	@HOST_USER=$$(id -un); \
+	HOST_UID=$$(id -u); \
+	HOST_GID=$$(id -g); \
+	echo "$(YELLOW)👤 Utilisateur: $$HOST_USER ($$HOST_UID:$$HOST_GID)$(NC)"; \
+	echo "$(YELLOW)📁 Répertoire: ./src$(NC)"; \
+	sudo chown -R $$HOST_UID:$$HOST_GID ./src && \
+	find ./src -type d -exec chmod 775 {} + 2>/dev/null || true && \
+	find ./src -type f -not -path '*/vendor/bin/*' -exec chmod 664 {} + 2>/dev/null || true && \
+	find ./src/vendor/bin -type f -exec chmod 775 {} + 2>/dev/null || true && \
+	chmod 775 ./src/artisan 2>/dev/null || true && \
+	chmod -R 775 ./src/storage ./src/bootstrap/cache 2>/dev/null || true && \
+	echo "$(GREEN)✅ Permissions corrigées depuis l'hôte (775/664, $$HOST_USER:$$HOST_USER)$(NC)"
 
 # =============================================================================
 # MAINTENANCE & CLEANUP

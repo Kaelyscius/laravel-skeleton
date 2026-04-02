@@ -32,7 +32,15 @@
       "Bash(head -10 grep -r \"permission\\\\|role\\\\|gate\\\\|policy\" /home/alex/myLaravelSkeleton/scripts/)",
       "Bash(head -10 grep -r \"ShouldBeEncrypted\\\\|encrypt.*queue\\\\|queue.*encrypt\" /home/alex/myLaravelSkeleton/scripts/)",
       "Bash(head -10 grep -r \"security.txt\\\\|well-known\\\\|\\\\.well-known\" /home/alex/myLaravelSkeleton/scripts/ /home/alex/myLaravelSkeleton/docker/)",
-      "Bash(__NEW_LINE_af39447fcc023f7b__ echo:*)"
+      "Bash(__NEW_LINE_af39447fcc023f7b__ echo:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s \"https://repo.packagist.org/p2/laravel/horizon.json\")",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); pkgs=data['packages']['laravel/horizon']; stable=[p for p in pkgs if p['version_normalized'].count\\('.'\\)==3 and not any\\(x in p['version'].lower\\(\\) for x in ['dev','rc','alpha','beta','patch']\\) and p['version'].startswith\\('v'\\)]; print\\(stable[0]['version'] if stable else 'N/A'\\)\")",
+      "Bash(curl -s \"https://packagist.org/packages/nunomaduro/phpinsights.json\")",
+      "Bash(curl -s \"https://repo.packagist.org/p2/php-code-archeology/php-code-archeology.json\")",
+      "Bash(python3 -c ':*)",
+      "WebFetch(domain:packagist.org)",
+      "Bash(git -C /home/alex/myLaravelSkeleton diff Makefile)"
     ],
     "deny": [],
     "ask": []

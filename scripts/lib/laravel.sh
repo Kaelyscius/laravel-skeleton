@@ -13,8 +13,10 @@
 # =============================================================================
 
 # Configuration Laravel par défaut
-readonly LARAVEL_MIN_VERSION="11.0"
-readonly LARAVEL_DEFAULT_VERSION="11.*"
+# Laravel 12 minimum : spatie/laravel-permission v7, activitylog v5, laravel-csp v3
+# et pest-plugin-laravel v4 requièrent tous Laravel ^12
+readonly LARAVEL_MIN_VERSION="12.0"
+readonly LARAVEL_DEFAULT_VERSION="12.*"
 readonly LARAVEL_TIMEZONE_DEFAULT="UTC"
 readonly LARAVEL_LOCALE_DEFAULT="en"
 

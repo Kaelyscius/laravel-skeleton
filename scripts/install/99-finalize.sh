@@ -18,6 +18,16 @@ source "$SCRIPT_DIR/../lib/laravel.sh"
 
 init_logging "99-finalize"
 
+run_pending_migrations() {
+    log_info "🗄️ Exécution des migrations en attente (packages installés après la DB)..."
+
+    if php artisan migrate --force --no-interaction 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "✅ Migrations finales exécutées (Telescope, Horizon, Pulse, etc.)"
+    else
+        log_warn "⚠️ Certaines migrations ont échoué (non-bloquant)"
+    fi
+}
+
 optimize_composer() {
     log_info "Optimisation de Composer..."
     
@@ -111,7 +121,8 @@ try:
         "quality": [
             "@check:cs",
             "@analyse",
-            "@insights"
+            "@insights",
+            "@archeology:quick"
         ],
         "quality:fix": [
             "@fix:cs",
@@ -124,12 +135,13 @@ try:
         "refactor:fix": "vendor/bin/rector process",
         "insights": "php artisan insights",
         "insights:fix": "php artisan insights --fix",
+        "archeology": "vendor/bin/phpcodearcheology --report-type=html,json",
+        "archeology:quick": "vendor/bin/phpcodearcheology --quick",
         "ide-helper": [
             "php artisan ide-helper:generate",
             "php artisan ide-helper:meta",
             "php artisan ide-helper:models --write"
         ],
-        "test:coverage": "php artisan test --coverage-html coverage"
     }
 
     # Scripts adaptatifs selon les packages installés
@@ -137,6 +149,7 @@ try:
         custom_scripts.update({
             "test:unit": "vendor/bin/pest --testsuite=Unit",
             "test:feature": "vendor/bin/pest --testsuite=Feature",
+            "test:coverage": "vendor/bin/pest --coverage-html coverage",
             "test:pest": "vendor/bin/pest"
         })
         # Ajouter Pest aux scripts de qualité
@@ -144,6 +157,7 @@ try:
             "@check:cs",
             "@analyse",
             "@insights",
+            "@archeology:quick",
             "@test:pest"
         ]
     else:
@@ -151,13 +165,14 @@ try:
         custom_scripts.update({
             "test:unit": "php artisan test --testsuite=Unit",
             "test:feature": "php artisan test --testsuite=Feature",
-            "test:phpunit": "vendor/bin/phpunit"
+            "test:coverage": "php artisan test --coverage-html coverage"
         })
         # Ajouter PHPUnit aux scripts de qualité
         custom_scripts["quality:full"] = [
             "@check:cs",
             "@analyse",
             "@insights",
+            "@archeology:quick",
             "@test:unit"
         ]
 
@@ -356,6 +371,7 @@ main() {
     
     # Étapes de finalisation
     optimize_composer
+    run_pending_migrations
     setup_laravel_boost
     generate_ide_helpers
     configure_composer_scripts

@@ -32,9 +32,11 @@ init_logging "00-prerequisites"
 # =============================================================================
 
 # Versions minimales requises
-readonly MIN_PHP_VERSION="8.1"
+# PHP 8.3 minimum : requis par pest ^4, phpinsights ^2.14, symplify/ecs ^13, spatie/laravel-csp ^3
+readonly MIN_PHP_VERSION="8.3"
 readonly MIN_COMPOSER_VERSION="2.0"
-readonly MIN_NODE_VERSION="18.0"
+# Node 22 minimum : Node 18 est EOL depuis avril 2025 ; Docker utilise Node 24
+readonly MIN_NODE_VERSION="22.0"
 
 # Outils système requis
 readonly REQUIRED_TOOLS=(

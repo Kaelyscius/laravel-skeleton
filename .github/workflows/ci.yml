@@ -3,8 +3,12 @@ name: Laravel CI/CD Pipeline
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'src/**'
   pull_request:
     branches: [ main, develop ]
+    paths:
+      - 'src/**'
   workflow_dispatch:
 
 env:
@@ -19,7 +23,6 @@ jobs:
     name: Tests & Quality
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    if: hashFiles('src/composer.json') != ''
 
     services:
       mariadb:
@@ -50,7 +53,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       # ==========================================
       # Setup PHP avec extensions Laravel 12
@@ -68,7 +71,7 @@ jobs:
       # Setup Node.js (mise à jour vers v22)
       # ==========================================
       - name: 📦 Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -124,35 +127,36 @@ jobs:
         run: |
           # Copier .env.example vers .env
           cp .env.example .env
-          
+
           # Configuration optimisée pour les tests
-          cat >> .env << 'EOF'
-          APP_ENV=testing
-          APP_DEBUG=true
-          
-          # Base de données de test
-          DB_CONNECTION=mysql
-          DB_HOST=127.0.0.1
-          DB_PORT=3306
-          DB_DATABASE=laravel_test
-          DB_USERNAME=laravel_test
-          DB_PASSWORD=laravel_test
-          
-          # Redis pour cache et sessions
-          REDIS_HOST=127.0.0.1
-          REDIS_PORT=6379
-          CACHE_DRIVER=redis
-          SESSION_DRIVER=redis
-          QUEUE_CONNECTION=redis
-          
-          # Disable external services in tests
-          MAIL_MAILER=array
-          BROADCAST_DRIVER=log
-          
-          # Telescope (ne pas persister en test)
-          TELESCOPE_ENABLED=false
-          EOF
-          
+          # NOTE: utilisation de printf pour éviter l'indentation YAML dans le heredoc
+          printf '%s\n' \
+            'APP_ENV=testing' \
+            'APP_DEBUG=true' \
+            '' \
+            '# Base de données de test' \
+            'DB_CONNECTION=mysql' \
+            'DB_HOST=127.0.0.1' \
+            'DB_PORT=3306' \
+            'DB_DATABASE=laravel_test' \
+            'DB_USERNAME=laravel_test' \
+            'DB_PASSWORD=laravel_test' \
+            '' \
+            '# Redis pour cache et sessions' \
+            'REDIS_HOST=127.0.0.1' \
+            'REDIS_PORT=6379' \
+            'CACHE_DRIVER=redis' \
+            'SESSION_DRIVER=redis' \
+            'QUEUE_CONNECTION=redis' \
+            '' \
+            '# Disable external services in tests' \
+            'MAIL_MAILER=array' \
+            'BROADCAST_DRIVER=log' \
+            '' \
+            '# Telescope (ne pas persister en test)' \
+            'TELESCOPE_ENABLED=false' \
+            >> .env
+
           # Générer la clé d'application
           php artisan key:generate --no-interaction
 
@@ -197,25 +201,22 @@ jobs:
         run: composer run insights
 
       # ==========================================
-      # Tests avec coverage
+      # Tests avec coverage (Clover XML pour Codecov)
+      # NOTE: test:coverage génère un rapport HTML (usage local).
+      # En CI on génère le format Clover XML requis par Codecov.
       # ==========================================
       - name: 🧪 Run tests with coverage
         working-directory: src
-        run: |
-          composer run test:coverage
-          # Copier les résultats pour l'upload
-          if [ -f "coverage.xml" ]; then
-            cp coverage.xml ../coverage.xml
-          fi
+        run: vendor/bin/pest --coverage-clover coverage.xml
 
       # ==========================================
       # Upload coverage report
       # ==========================================
       - name: 📊 Upload coverage to Codecov
-        if: success() && hashFiles('coverage.xml') != ''
-        uses: codecov/codecov-action@v6
+        if: success() && hashFiles('src/coverage.xml') != ''
+        uses: codecov/codecov-action@v4
         with:
-          file: ./coverage.xml
+          file: src/coverage.xml
           fail_ci_if_error: false
           verbose: true
         env:

@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
+# Garantit que les fichiers créés dans le container sont group-writable (664/775)
+# Indispensable pour l'édition depuis Windows/PhpStorm via WSL2
+umask 002
+
 # Couleurs pour les logs
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

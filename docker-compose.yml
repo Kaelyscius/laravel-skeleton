@@ -241,6 +241,9 @@ services:
       - WATCHTOWER_ROLLING_RESTART=true
       - WATCHTOWER_INCLUDE_RESTARTING=true
 
+      # Compatibilité API Docker (nécessaire si le daemon exige API >= 1.40)
+      - DOCKER_API_VERSION=1.40
+
       # Debug (peut être activé en développement)
       - WATCHTOWER_DEBUG=${WATCHTOWER_DEBUG:-false}
 

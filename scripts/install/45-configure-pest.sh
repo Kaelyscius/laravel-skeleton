@@ -138,31 +138,15 @@ update_pest_config() {
 }
 
 configure_drift_plugin() {
-    log_info "Configuration du plugin Drift dans phpunit.xml..."
+    log_info "Configuration du plugin Drift (v4)..."
 
-    # Le plugin Drift s'active automatiquement via Composer
-    # Pas besoin de configuration supplémentaire dans phpunit.xml
+    # Pest Plugin Drift v4 s'active automatiquement via Composer.
+    # Il n'utilise PAS de fichier drift.json — la config JSON était une API d'une version antérieure.
+    # Le plugin ajoute le flag --mutate à Pest pour le mutation testing.
 
-    # Créer un fichier de configuration pour Drift si nécessaire
-    if [ ! -f ".pest/drift.json" ]; then
-        mkdir -p .pest
-        cat > .pest/drift.json << 'EOF'
-{
-    "enabled": true,
-    "threshold": 80,
-    "excludes": [
-        "tests",
-        "vendor",
-        "config",
-        "database/migrations",
-        "bootstrap"
-    ]
-}
-EOF
-        log_success "✅ Configuration Drift créée dans .pest/drift.json"
-    fi
-
-    log_info "💡 Pour utiliser Drift: php artisan test --drift"
+    log_info "💡 Pour utiliser Drift (mutation testing): vendor/bin/pest --mutate"
+    log_info "💡 Pour cibler un fichier spécifique:       vendor/bin/pest --mutate --path=app/Models"
+    log_success "✅ Pest Plugin Drift v4 prêt (aucun fichier de configuration requis)"
 }
 
 ensure_test_directories() {

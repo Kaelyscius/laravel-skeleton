@@ -83,6 +83,7 @@ parameters:
         - storage/
         - vendor/
         - node_modules/
+        - database/migrations/
 
     treatPhpDocTypesAsCertain: false
     reportUnmatchedIgnoredErrors: false
@@ -159,7 +160,7 @@ return static function (RectorConfig \$rectorConfig): void {
 
     // Sets optimisés pour PHPStan
     \$rectorConfig->sets([
-        LevelSetList::UP_TO_PHP_84,
+        LevelSetList::UP_TO_PHP_85,
         $rector_laravel_set,
         LaravelSetList::LARAVEL_CODE_QUALITY,
         SetList::CODE_QUALITY,
@@ -186,6 +187,59 @@ return static function (RectorConfig \$rectorConfig): void {
 EOF
 
     log_success "✅ Configuration Rector créée (adaptée Laravel $laravel_version)"
+}
+
+create_codearcheology_config() {
+    log_info "Création de la configuration PhpCodeArcheology..."
+
+    cat > php-codearch-config.yaml << 'EOF'
+# PhpCodeArcheology - Configuration Laravel
+# https://github.com/PhpCodeArcheology/PhpCodeArcheology
+
+include:
+  - app/
+  - config/
+  - database/
+  - routes/
+
+exclude:
+  - vendor/
+  - node_modules/
+  - storage/
+  - bootstrap/cache/
+  - public/build/
+
+extensions:
+  - php
+
+# Seuils adaptés pour Laravel (controllers + services souvent plus complexes)
+thresholds:
+  cyclomaticComplexity: 10
+  maintainabilityIndex: 65
+  linesOfCode: 300
+  methodCount: 20
+  parameterCount: 5
+
+# Seuils assouplis pour les controllers Laravel (injection de dépendances)
+controllerThresholds: true
+
+# Analyse de l'historique git pour détecter les hotspots
+git:
+  enabled: true
+  lookback: 90  # jours
+
+# Intégration avec Pest (auto-détecté via composer.json)
+coverage:
+  enabled: false  # Activer avec: --coverage-file=build/logs/clover.xml
+
+report:
+  directory: tmp/codearcheology
+  formats:
+    - html
+    - json
+EOF
+
+    log_success "✅ Configuration PhpCodeArcheology créée (php-codearch-config.yaml)"
 }
 
 create_insights_config() {
@@ -266,8 +320,8 @@ main() {
     # Lire les packages qualité depuis config/installer.yml (CONFORMÉMENT AU PROMPT)
     log_info "📋 Lecture des packages d'outils qualité depuis config/installer.yml..."
     
-    # Liste des packages qualité attendus
-    local quality_tools=("nunomaduro/larastan" "symplify/easy-coding-standard" "rector/rector" "nunomaduro/phpinsights")
+    # Liste des packages qualité attendus (noms conformes à config/installer.yml)
+    local quality_tools=("larastan/larastan" "symplify/easy-coding-standard" "rector/rector" "nunomaduro/phpinsights" "php-code-archeology/php-code-archeology")
     
     # Obtenir la liste de tous les packages de développement depuis le YAML
     local all_dev_packages
@@ -307,6 +361,10 @@ main() {
     create_phpstan_config
     create_rector_config
     create_insights_config
+
+    if is_package_installed "php-code-archeology/php-code-archeology"; then
+        create_codearcheology_config
+    fi
     
     local duration=$(calculate_duration $start_time)
     log_success "✅ Outils qualité configurés en $duration"

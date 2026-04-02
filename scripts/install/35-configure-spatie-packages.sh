@@ -53,9 +53,10 @@ configure_laravel_csp() {
     log_info "🔒 Configuration de Laravel CSP..."
 
     # Publier la configuration
+    # Note : tag renommé en laravel-csp-config depuis v3 (était csp-config en v2)
     if [ ! -f "config/csp.php" ]; then
         log_info "Publication de la configuration CSP..."
-        php artisan vendor:publish --tag=csp-config 2>&1 | tee -a "$LOG_FILE" || {
+        php artisan vendor:publish --tag=laravel-csp-config 2>&1 | tee -a "$LOG_FILE" || {
             log_warn "⚠️ Impossible de publier la config CSP"
             return 1
         }

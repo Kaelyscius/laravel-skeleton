@@ -3,8 +3,12 @@ name: Security Audit
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'src/**'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'src/**'
   schedule:
     # Run security scan daily at 02:00 UTC
     - cron: '0 2 * * *'
@@ -22,11 +26,20 @@ jobs:
     name: Dependency Security Scan
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: hashFiles('src/composer.json') != ''
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
+      - name: ⏭️ Skip if Laravel not installed
+        id: check
+        run: |
+          if [ ! -f "src/composer.json" ]; then
+            echo "⚠️ src/composer.json not found — skeleton sans Laravel installé, skip."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
 
       # ==========================================
       # Setup for security scanning
@@ -39,7 +52,7 @@ jobs:
           coverage: none
 
       - name: 📦 Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -47,10 +60,12 @@ jobs:
       # Composer Security Audit
       # ==========================================
       - name: 🔍 Install Composer dependencies (no scripts)
+        if: steps.check.outputs.skip != 'true'
         working-directory: src
         run: composer install --no-interaction --no-scripts --no-dev --prefer-dist
 
       - name: 🛡️ Run Composer Security Audit
+        if: steps.check.outputs.skip != 'true'
         working-directory: src
         run: |
           echo "🔍 Running Composer security audit..."
@@ -70,10 +85,12 @@ jobs:
       # NPM Security Audit
       # ==========================================
       - name: 🔍 Install NPM dependencies
+        if: steps.check.outputs.skip != 'true'
         working-directory: src
         run: npm ci --audit=false --fund=false
 
       - name: 🛡️ Run NPM Security Audit
+        if: steps.check.outputs.skip != 'true'
         working-directory: src
         run: |
           echo "🔍 Running NPM security audit..."
@@ -114,6 +131,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
       - name: 🛡️ Snyk scan PHP dependencies
+        if: steps.check.outputs.skip != 'true'
         working-directory: src
         run: |
           echo "🔍 Scanning PHP dependencies with Snyk..."
@@ -126,6 +144,7 @@ jobs:
           fi
 
       - name: 🛡️ Snyk scan Node.js dependencies
+        if: steps.check.outputs.skip != 'true'
         working-directory: src
         run: |
           echo "🔍 Scanning Node.js dependencies with Snyk..."
@@ -141,6 +160,7 @@ jobs:
       # Security Summary
       # ==========================================
       - name: 📊 Security Summary
+        if: steps.check.outputs.skip != 'true'
         working-directory: src
         run: |
           echo "## 🛡️ Security Audit Summary" >> $GITHUB_STEP_SUMMARY
@@ -179,11 +199,20 @@ jobs:
     name: Static Security Analysis
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: hashFiles('src/composer.json') != ''
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
+      - name: ⏭️ Skip if Laravel not installed
+        id: check
+        run: |
+          if [ ! -f "src/composer.json" ]; then
+            echo "⚠️ src/composer.json not found — skeleton sans Laravel installé, skip."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
 
       # ==========================================
       # Security-focused static analysis
@@ -196,6 +225,7 @@ jobs:
           coverage: none
 
       - name: 🔍 Install dependencies for analysis
+        if: steps.check.outputs.skip != 'true'
         working-directory: src
         run: composer install --no-interaction --no-scripts --prefer-dist
 
@@ -220,6 +250,7 @@ jobs:
           fi
 
       - name: 🔍 PHPStan Security Rules
+        if: steps.check.outputs.skip != 'true'
         working-directory: src
         run: |
           if [ -f "vendor/bin/phpstan" ] && [ -f "phpstan.neon" ]; then
@@ -233,6 +264,7 @@ jobs:
       # Framework-specific security checks
       # ==========================================
       - name: 🛡️ Laravel Security Checks
+        if: steps.check.outputs.skip != 'true'
         working-directory: src
         run: |
           echo "🔍 Laravel-specific security checks..."
@@ -292,10 +324,10 @@ jobs:
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: 📦 Setup Node.js for Snyk
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
