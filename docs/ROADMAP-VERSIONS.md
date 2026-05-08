@@ -9,7 +9,7 @@ Ce document planifie les mises à jour futures des images Docker base.
 | **PHP** | 8.5.3 (FPM Alpine) | Stable | Nov 2027 | ✅ Actuel |
 | **Node.js** | 24 LTS (Alpine) | LTS actif | Avr 2028 | ✅ Actuel |
 | **Apache** | 2.4 Alpine | Stable | — | ✅ Actuel |
-| **MariaDB** | 11.8 LTS | LTS 2025 | Juin 2028 | ✅ Actuel |
+| **PostgreSQL** | 17 (Alpine) | Stable | Nov 2029 | ✅ Actuel |
 | **Redis** | 7.4 Alpine | Stable | — | ✅ Actuel |
 
 ## 🎯 Calendrier des Mises à Jour Planifiées
@@ -28,11 +28,17 @@ Ce document planifie les mises à jour futures des images Docker base.
 
 ---
 
-### 📅 **2026 - MariaDB 11.8 → 12.x (Évaluation)**
+### 📅 **2027 - PostgreSQL 17 → 18 (Évaluation)**
 
-**Condition :** Quand MariaDB 12.x atteint le statut LTS
+**Date de sortie prévue :** Septembre 2027
 
-**Status :** 🔍 MariaDB 12.2 rolling disponible — attendre LTS
+**Actions à effectuer :**
+1. Vérifier compat Laravel pgsql driver
+2. Tester migrations + RLS policies (acté en v2+ multi-tenant SaaS)
+3. Évaluer breaking changes (rare en Postgres)
+4. Décider migration après 6+ mois post-release
+
+**Status :** 🔮 Planifié
 
 ---
 
@@ -65,6 +71,7 @@ Ce document planifie les mises à jour futures des images Docker base.
 | 2025-08-02 | Node.js | 20.x | 24 | Migration vers LTS actuel |
 | 2025-11-xx | PHP | 8.4 | 8.5.1 | Nouvelle version stable |
 | 2026-03-28 | MariaDB | `latest` (12.2 rolling) | 11.8 LTS | Stabilité + LTS actuel |
+| 2026-05-08 | DB Engine | MariaDB 11.8 LTS | PostgreSQL 17 (Alpine) | Switch SaaS-ready : RLS native + JSONB + full-text FR. ADR-0001 |
 | 2026-03-28 | Redis | `alpine` (non pinnée) | 7.4-alpine | Version explicite |
 | 2026-03-28 | MailHog | mailhog/mailhog | axllent/mailpit | MailHog abandonné 2023 |
 
@@ -73,16 +80,16 @@ Ce document planifie les mises à jour futures des images Docker base.
 ### **2026**
 - ✅ PHP 8.5 en production
 - ✅ Node.js 24 LTS actif
-- ✅ MariaDB 11.8 LTS
+- ✅ PostgreSQL 17
 - 🔍 Évaluation PHP 8.6 (novembre)
-- 🔍 Surveillance MariaDB 12 LTS
+- 🔍 Surveillance PostgreSQL 18
 
 ### **2027**
 - 🎯 Préparation migration Node.js 26 LTS
 - 🎯 Évaluation PHP 8.6 (si stable et compatible)
 
 ### **2028**
-- 🎯 Migration MariaDB avant EOL 11.8 (juin 2028)
+- 🎯 Évaluation PostgreSQL 18 (si stable et compatible)
 
 ## 💡 Versions et EOL de Référence
 
@@ -92,6 +99,6 @@ Ce document planifie les mises à jour futures des images Docker base.
 | Node.js 22 LTS | LTS actif | Avr 2027 |
 | PHP 8.5 | Actif | Nov 2027 |
 | PHP 8.4 | Actif | Nov 2026 |
-| MariaDB 11.8 LTS | LTS actuel | Juin 2028 |
-| MariaDB 11.4 LTS | Supporté | Mai 2029 |
-| MariaDB 10.6 LTS | ⚠️ EOL proche | Juil 2026 |
+| PostgreSQL 17 | Stable actuel | Nov 2029 |
+| PostgreSQL 16 | Stable supporté | Nov 2028 |
+| PostgreSQL 15 | Stable supporté | Nov 2027 |

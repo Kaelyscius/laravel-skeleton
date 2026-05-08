@@ -30,7 +30,8 @@ log "INFO" "🗄️ Configuration de la base de données de test"
 echo ""
 
 # Variables
-DB_HOST="${DB_HOST:-mariadb}"
+DB_HOST="${DB_HOST:-postgres}"
+DB_PORT="${DB_PORT:-5432}"
 DB_USERNAME="${DB_USERNAME:-laravel}"
 DB_PASSWORD="${DB_PASSWORD:-laravel}"
 DB_DATABASE="${DB_DATABASE:-laravel}"
@@ -39,19 +40,17 @@ DB_TEST_DATABASE="${DB_DATABASE}_test"
 # 1. Créer la base de données de test
 log "INFO" "Création de la base de données de test: $DB_TEST_DATABASE"
 
-# Créer la base de données de test dans MariaDB
-mysql -h"$DB_HOST" -u"$DB_USERNAME" -p"$DB_PASSWORD" -e "
-    CREATE DATABASE IF NOT EXISTS \`$DB_TEST_DATABASE\` 
-    CHARACTER SET utf8mb4 
-    COLLATE utf8mb4_unicode_ci;
-    
-    GRANT ALL PRIVILEGES ON \`$DB_TEST_DATABASE\`.* TO '$DB_USERNAME'@'%';
-    FLUSH PRIVILEGES;
-" 2>/dev/null || {
+# Créer la base de données de test dans PostgreSQL
+# Note : on utilise la connexion existante pour CREATE DATABASE (qui ne peut pas tourner dans une transaction)
+PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -tc "SELECT 1 FROM pg_database WHERE datname = '$DB_TEST_DATABASE'" 2>/dev/null | grep -q 1 || \
+PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -c "CREATE DATABASE \"$DB_TEST_DATABASE\" ENCODING 'UTF8' TEMPLATE template0;" 2>/dev/null || {
     log "ERROR" "Impossible de créer la base de données de test"
-    log "INFO" "Vérifiez que MariaDB est démarré et accessible"
+    log "INFO" "Vérifiez que PostgreSQL est démarré et accessible"
     exit 1
 }
+
+# Granter les privilèges (idempotent — pas d'erreur si déjà fait)
+PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -c "GRANT ALL PRIVILEGES ON DATABASE \"$DB_TEST_DATABASE\" TO \"$DB_USERNAME\";" 2>/dev/null || true
 
 log "SUCCESS" "Base de données de test créée: $DB_TEST_DATABASE"
 
@@ -166,25 +165,20 @@ $testConfig = "\n\n        'mysql_testing' => [\n" .
     "            'driver' => 'mysql',\n" .
     "            'url' => env('DB_TEST_URL'),\n" .
     "            'host' => env('DB_HOST', '127.0.0.1'),\n" .
-    "            'port' => env('DB_PORT', '3306'),\n" .
+    "            'port' => env('DB_PORT', '5432'),\n" .
     "            'database' => env('DB_DATABASE') . '_test',\n" .
     "            'username' => env('DB_USERNAME', 'forge'),\n" .
     "            'password' => env('DB_PASSWORD', ''),\n" .
-    "            'unix_socket' => env('DB_SOCKET', ''),\n" .
-    "            'charset' => 'utf8mb4',\n" .
-    "            'collation' => 'utf8mb4_unicode_ci',\n" .
+    "            'charset' => 'utf8',\n" .
     "            'prefix' => '',\n" .
     "            'prefix_indexes' => true,\n" .
-    "            'strict' => true,\n" .
-    "            'engine' => null,\n" .
-    "            'options' => extension_loaded('pdo_mysql') ? array_filter([\n" .
-    "                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),\n" .
-    "            ]) : [],\n" .
+    "            'search_path' => 'public',\n" .
+    "            'sslmode' => 'prefer',\n" .
     "        ],";
 
 $newContent = substr_replace($content, $testConfig, $pos, 0);
 file_put_contents($file, $newContent);
-echo "Connexion mysql_testing ajoutée avec succès\n";
+echo "Connexion pgsql_testing ajoutée avec succès\n";
 EOPHP
 
         php /tmp/add_test_connection.php

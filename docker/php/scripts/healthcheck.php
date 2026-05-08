@@ -4,7 +4,7 @@ $errors = [];
 $warnings = [];
 
 // Vérification des extensions critiques
-$requiredExtensions = ['pdo', 'pdo_mysql', 'mbstring', 'zip'];
+$requiredExtensions = ['pdo', 'pdo_pgsql', 'mbstring', 'zip'];
 $optionalExtensions = ['redis', 'apcu'];
 
 foreach ($requiredExtensions as $ext) {

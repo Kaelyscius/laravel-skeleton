@@ -1,6 +1,6 @@
 # 🚀 Environnement Docker Laravel 12
 
-Environnement de développement Docker complet et optimisé pour Laravel 12 avec PHP 8.5.1, MariaDB, Redis, Apache, Node.js et des outils de monitoring et d'industrialisation.
+Environnement de développement Docker complet et optimisé pour Laravel 12 avec PHP 8.5.1, PostgreSQL, Redis, Apache, Node.js et des outils de monitoring et d'industrialisation.
 
 ## 📋 Prérequis
 
@@ -17,7 +17,7 @@ Environnement de développement Docker complet et optimisé pour Laravel 12 avec
 ### Containers principaux
 - **Apache 2.4** (HTTPS, HTTP/2, SSL) - Ports 80/443
 - **PHP 8.5.1** (FPM + Supervisor + OPcache)
-- **MariaDB** (dernière version stable)
+- **PostgreSQL** (dernière version stable)
 - **Redis Alpine** (cache, sessions, queues)
 - **Node.js 24 LTS** (build des assets frontend)
 
@@ -55,8 +55,8 @@ Une fois le projet démarré, voici tous les accès disponibles :
   - Hash, Base64, JWT, UUID, etc.
   - Outils réseau et développement
 - **💾 Adminer** : http://localhost:8080
-  - Interface graphique pour MariaDB
-  - Serveur : `mariadb`, utilisateur selon votre `.env`
+  - Interface graphique pour PostgreSQL
+  - Serveur : `postgres`, utilisateur selon votre `.env`
 - **📧 Mailpit** : http://localhost:8025
   - Capture tous les emails envoyés par Laravel
   - Interface web pour consulter les emails
@@ -201,7 +201,7 @@ make shell           # Shell dans le container PHP
 make shell-php       # Shell PHP (alias)
 make shell-apache    # Shell dans le container Apache
 make shell-node      # Shell dans le container Node
-make shell-mariadb   # Console MySQL/MariaDB
+make shell-db        # Console PostgreSQL (psql)
 ```
 
 ### 🧹 Maintenance et nettoyage
@@ -235,8 +235,8 @@ COMPOSE_PROJECT_NAME=laravel-app
 
 # Base de données
 DB_CONNECTION=mysql
-DB_HOST=mariadb
-DB_PORT=3306
+DB_HOST=postgres
+DB_PORT=5432
 DB_DATABASE=laravel
 DB_USERNAME=laravel_user
 DB_PASSWORD=secure_password
@@ -340,9 +340,9 @@ Laravel Application
 - Interval: 60 secondes
 - Tag: critical
 
-Base de données MariaDB
+Base de données PostgreSQL
 - Host: localhost
-- Port: 3306  
+- Port: 5432  
 - Type: Port
 - Interval: 120 secondes
 - Tag: critical
@@ -407,7 +407,7 @@ Certificat SSL Laravel
 
 ### Containers surveillés
 **✅ Mis à jour automatiquement :**
-- MariaDB
+- PostgreSQL
 - Redis
 - Mailpit
 - Adminer
@@ -516,7 +516,7 @@ make monitoring-status  # État du monitoring spécifiquement
 ### 💾 Bases de données
 - **Adminer** : http://localhost:8080
   - Interface moderne et complète
-  - Support MySQL/MariaDB, PostgreSQL, SQLite
+  - Support PostgreSQL, MySQL, SQLite
   - Import/export, éditeur SQL avancé
 
 ### 📧 Gestion des emails
@@ -609,7 +609,7 @@ project/
 │   ├── apache/                  # Container Apache + SSL
 │   ├── php/                     # Container PHP + extensions
 │   ├── node/                    # Container Node.js
-│   ├── mariadb/                 # Configuration MariaDB
+│   ├── postgres/                 # Configuration PostgreSQL
 │   ├── supervisor/              # Configuration Supervisor
 │   └── scripts/                 # Scripts d'installation
 ├── 🔧 scripts/                   # Scripts utilitaires
@@ -669,9 +669,9 @@ ls -la /var/www/html
 
 #### Base de données non accessible
 ```bash
-make shell-mariadb                    # Vérifier la connexion
-make logs mariadb                     # Voir les logs MariaDB
-docker-compose exec mariadb mysql -u root -p${DB_ROOT_PASSWORD}
+make shell-db                         # Vérifier la connexion (psql)
+make logs postgres                    # Voir les logs PostgreSQL
+docker-compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE"
 ```
 
 ### Commandes de diagnostic

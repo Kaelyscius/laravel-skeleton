@@ -13,11 +13,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make up-dev` - Développement - Services essentiels + outils dev (node, mailpit, adminer)
 - `make up-dev-full` - Développement complet - Tous les services + monitoring (dozzle, it-tools, watchtower)
 - `make up-dev-extra` - Développement + outils extra (phpmyadmin, redis-commander)
-- `make up-prod` - Production - Services essentiels uniquement (apache, php, mariadb, redis)
+- `make up-prod` - Production - Services essentiels uniquement (apache, php, postgres, redis)
 - `make up-tools` - Démarrer uniquement les outils de monitoring (dozzle, it-tools, watchtower)
 
 #### Profiles disponibles
-- **Aucun profile** (Production) : apache, php, mariadb, redis
+- **Aucun profile** (Production) : apache, php, postgres, redis
 - **dev** (Développement) : node, mailpit, adminer
 - **tools** (Utilitaires) : dozzle, it-tools, watchtower
 - **dev-extra** (Outils additionnels) : phpmyadmin, redis-commander
@@ -116,7 +116,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 #### Services essentiels (toujours actifs, aucun profile)
 - **PHP 8.5.1** container with FPM, Supervisor, and OPcache
 - **Apache 2.4** with HTTPS/HTTP2 support
-- **MariaDB** for database
+- **PostgreSQL** for database
 - **Redis** for caching and sessions
 
 #### Profile "dev" (Outils de développement)
@@ -181,7 +181,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Pest framework** for modern PHP testing
 - **Pest Plugin Drift** for detecting uncovered code and mutation testing
 - Separate test suites for Unit and Feature tests
-- MariaDB test database (`laravel_test`) for testing
+- PostgreSQL test database (`laravel_test`) for testing
 - Coverage reporting available
 - Test configuration in `src/phpunit.xml` and `src/tests/Pest.php`
 
@@ -277,8 +277,8 @@ Si l'application est derrière un load balancer ou un proxy (Nginx, CloudFlare, 
 - Security scanning is integrated with Snyk
 - Watchtower handles automatic updates for standard Docker images
 - Custom images (PHP, Apache, Node) are excluded from auto-updates
-- Database: MariaDB for both development and testing (no SQLite)
-- Queue: Redis for job processing, MariaDB for job batching and failed jobs
+- Database: PostgreSQL 17 for both development and testing (no SQLite)
+- Queue: Redis for job processing, PostgreSQL for job batching and failed jobs
 
 ## PhpStorm + WSL2 Configuration
 

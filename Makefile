@@ -12,13 +12,13 @@ SCRIPT_DIR = ./scripts
 PHP_CONTAINER = $$(docker ps -qf "name=$(COMPOSE_PROJECT_NAME)_php")
 APACHE_CONTAINER = $$(docker ps -qf "name=$(COMPOSE_PROJECT_NAME)_apache")
 NODE_CONTAINER = $$(docker ps -qf "name=$(COMPOSE_PROJECT_NAME)_node")
-MARIADB_CONTAINER = $$(docker ps -qf "name=$(COMPOSE_PROJECT_NAME)_mariadb")
+POSTGRES_CONTAINER = $$(docker ps -qf "name=$(COMPOSE_PROJECT_NAME)_postgres")
 
 # Containers par nom
 PHP_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_php
 APACHE_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_apache
 NODE_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_node
-MARIADB_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_mariadb
+POSTGRES_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_postgres
 
 # Colors
 GREEN = \033[0;32m
@@ -105,7 +105,7 @@ install: install-dev ## Alias pour install-dev (par défaut en développement)
 .PHONY: install-dev
 install-dev: build up-dev install-laravel npm-install setup-ssl ## Installation complète DÉVELOPPEMENT (avec Node, Mailpit, Adminer, etc.)
 	@echo "$(GREEN)🎉 Installation DÉVELOPPEMENT terminée !$(NC)"
-	@echo "$(CYAN)📦 Services actifs: PHP, Apache, MariaDB, Redis, Node, Mailpit, Adminer$(NC)"
+	@echo "$(CYAN)📦 Services actifs: PHP, Apache, PostgreSQL, Redis, Node, Mailpit, Adminer$(NC)"
 	@$(MAKE) _show_urls
 
 .PHONY: install-dev-full
@@ -118,7 +118,7 @@ install-dev-full: build up-dev-full install-laravel npm-install setup-ssl ## Ins
 .PHONY: install-prod
 install-prod: build up install-laravel-prod setup-ssl ## Installation PRODUCTION (services essentiels uniquement)
 	@echo "$(GREEN)🎉 Installation PRODUCTION terminée !$(NC)"
-	@echo "$(CYAN)📦 Services actifs: PHP, Apache, MariaDB, Redis$(NC)"
+	@echo "$(CYAN)📦 Services actifs: PHP, Apache, PostgreSQL, Redis$(NC)"
 	@echo "$(YELLOW)⚠️  Node, Mailpit, Adminer NON démarrés (profil dev désactivé)$(NC)"
 	@$(MAKE) _show_urls
 
@@ -308,14 +308,14 @@ logs: ## Afficher les logs (usage: make logs service=php)
 # DOCKER PROFILES MANAGEMENT (Modular Architecture)
 # =============================================================================
 # Profiles disponibles:
-#   - AUCUN       : Production (apache, php, mariadb, redis)
+#   - AUCUN       : Production (apache, php, postgres, redis)
 #   - dev         : Outils développement (node, mailpit, adminer)
 #   - tools       : Utilitaires (dozzle, it-tools, watchtower)
 #   - dev-extra   : Outils additionnels (phpmyadmin, redis-commander)
 # =============================================================================
 
 .PHONY: up-prod
-up-prod: ## Production - Services essentiels uniquement (apache, php, mariadb, redis)
+up-prod: ## Production - Services essentiels uniquement (apache, php, postgres, redis)
 	@echo "$(CYAN)🚀 Démarrage en mode PRODUCTION (services essentiels uniquement)$(NC)"
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml up -d
 	@echo "$(GREEN)✓ Services production démarrés$(NC)"
@@ -356,7 +356,7 @@ ps-profiles: ## Afficher les services actifs avec leurs profiles
 	@echo "$(CYAN)📋 Services actifs par profile:$(NC)"
 	@echo ""
 	@echo "$(YELLOW)🏭 PRODUCTION (aucun profile):$(NC)"
-	@$(DOCKER_COMPOSE) ps --filter "name=apache" --filter "name=php" --filter "name=mariadb" --filter "name=redis" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
+	@$(DOCKER_COMPOSE) ps --filter "name=apache" --filter "name=php" --filter "name=postgres" --filter "name=redis" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
 	@echo ""
 	@echo "$(YELLOW)🛠️  DEV (profile: dev):$(NC)"
 	@$(DOCKER_COMPOSE) ps --filter "name=node" --filter "name=mailpit" --filter "name=adminer" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
@@ -526,6 +526,40 @@ clean-telescope-migrations: ## Nettoyer les entrées de migrations Telescope en 
 		echo 'Migrations Telescope supprimées de la table migrations';\
 	" 2>/dev/null || echo "$(RED)Erreur lors du nettoyage$(NC)"
 	@echo "$(GREEN)✓ Nettoyage terminé - relancez: make migrate$(NC)"
+
+.PHONY: db-snapshot
+db-snapshot: ## Snapshot rapide DB (pg_dump avant ops risquées)
+	@mkdir -p ./storage/db-snapshots
+	@SNAPSHOT="./storage/db-snapshots/snapshot-$$(date +%Y%m%d-%H%M%S).sql.gz"; \
+	$(DOCKER) exec -t $(POSTGRES_CONTAINER_NAME) pg_dump -U $${DB_USERNAME:-laravel} -d $${DB_DATABASE:-laravel} | gzip > "$$SNAPSHOT" && \
+	echo "$(GREEN)✓ Snapshot saved: $$SNAPSHOT$(NC)"
+
+.PHONY: db-restore
+db-restore: ## Restaurer DB depuis snapshot (usage: make db-restore FILE=storage/db-snapshots/xxx.sql.gz)
+	@if [ -z "$(FILE)" ]; then echo "$(RED)❌ Usage: make db-restore FILE=path/to/snapshot.sql.gz$(NC)"; exit 1; fi
+	@echo "$(YELLOW)⚠️  Restoring $(FILE) into database$(NC)"
+	@gunzip -c $(FILE) | $(DOCKER) exec -i $(POSTGRES_CONTAINER_NAME) psql -U $${DB_USERNAME:-laravel} -d $${DB_DATABASE:-laravel}
+	@echo "$(GREEN)✓ Database restored from $(FILE)$(NC)"
+
+.PHONY: destroy-db
+destroy-db: ## ⚠️  DANGER : supprime définitivement le volume DB (avec confirmation interactive)
+	@echo "$(RED)⚠️  This will DROP the postgres-data volume PERMANENTLY.$(NC)"
+	@echo "$(YELLOW)All Postgres data will be lost (volume: $(COMPOSE_PROJECT_NAME)_postgres_data)$(NC)"
+	@read -p "Type 'DROP IT' to confirm: " confirm; \
+	if [ "$$confirm" = "DROP IT" ]; then \
+		$(DOCKER_COMPOSE) down postgres && \
+		$(DOCKER) volume rm $(COMPOSE_PROJECT_NAME)_postgres_data && \
+		echo "$(GREEN)✓ Volume destroyed. Run 'make up' to recreate empty.$(NC)"; \
+	else \
+		echo "$(YELLOW)Aborted.$(NC)"; \
+	fi
+
+.PHONY: db-backup-local
+db-backup-local: ## Backup local DB vers /var/backups/postgres/ (pour cron VPS prod)
+	@mkdir -p /var/backups/postgres 2>/dev/null || true
+	@$(DOCKER) exec -t $(POSTGRES_CONTAINER_NAME) pg_dump -U $${DB_USERNAME:-laravel} -d $${DB_DATABASE:-laravel} | gzip > /var/backups/postgres/backup-$$(date +%Y%m%d).sql.gz
+	@find /var/backups/postgres -name "backup-*.sql.gz" -mtime +14 -delete 2>/dev/null || true
+	@echo "$(GREEN)✓ Local backup done + 14-day rotation applied$(NC)"
 
 # =============================================================================
 # NPM/NODE MANAGEMENT
@@ -712,7 +746,7 @@ setup-watchtower: ## Configuration Watchtower
 	else \
 		echo "$(YELLOW)⚠ Script Watchtower non trouvé - Watchtower fonctionne automatiquement$(NC)"; \
 		echo "$(BLUE)→ Planification: Tous les jours à 3h du matin$(NC)"; \
-		echo "$(BLUE)→ Containers surveillés: MariaDB, Redis, Mailpit, Adminer, IT-Tools, Dozzle$(NC)"; \
+		echo "$(BLUE)→ Containers surveillés: PostgreSQL, Redis, Mailpit, Adminer, IT-Tools, Dozzle$(NC)"; \
 		echo "$(BLUE)→ Containers exclus: PHP, Apache, Node (images custom)$(NC)"; \
 	fi
 
@@ -775,8 +809,8 @@ shell-node: ## Shell Node
 	@$(DOCKER) exec -it -u 1000:1000 $(NODE_CONTAINER) bash
 
 .PHONY: shell-db
-shell-db: ## Console MariaDB
-	@$(DOCKER) exec -it $(MARIADB_CONTAINER_NAME) mysql -u root -p
+shell-db: ## Console PostgreSQL (psql)
+	@$(DOCKER) exec -it $(POSTGRES_CONTAINER_NAME) psql -U $${DB_USERNAME:-laravel} -d $${DB_DATABASE:-laravel}
 
 .PHONY: fix-permissions
 fix-permissions: ## Corriger les permissions pour PhpStorm/WSL2 (tourne en root dans le container)
@@ -962,7 +996,7 @@ help-profiles: ## Aide pour l'architecture modulaire (profiles)
 	@echo "$(YELLOW)📦 Profiles disponibles:$(NC)"
 	@echo ""
 	@echo "  $(PURPLE)Aucun profile$(NC) (Production)"
-	@echo "    • Services: apache, php, mariadb, redis"
+	@echo "    • Services: apache, php, postgres, redis"
 	@echo "    • Usage: Services essentiels uniquement"
 	@echo ""
 	@echo "  $(PURPLE)dev$(NC) (Développement)"
@@ -1031,7 +1065,7 @@ help-watchtower: ## Aide Watchtower (mises à jour auto)
 	@echo ""
 	@echo "$(YELLOW)⚙️ Fonctionnement:$(NC)"
 	@echo "  • Planification: Tous les jours à 3h du matin"
-	@echo "  • Containers surveillés: MariaDB, Redis, Mailpit, Adminer, IT-Tools, Dozzle"
+	@echo "  • Containers surveillés: PostgreSQL, Redis, Mailpit, Adminer, IT-Tools, Dozzle"
 	@echo "  • Containers exclus: PHP, Apache, Node (images custom)"
 	@echo "  • Nettoyage automatique des anciennes images"
 	@echo "  • Rollback automatique en cas de problème"

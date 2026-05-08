@@ -161,7 +161,7 @@ services:
 
 network:
   ports:
-    mariadb: 3306
+    postgres: 5432
     redis: 6379
     dozzle: 9999
 

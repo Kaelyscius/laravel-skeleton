@@ -209,7 +209,7 @@ wait_for_database() {
     while [ $attempt -le $max_attempts ]; do
         if php -r "
             try {
-                \$pdo = new PDO('mysql:host=' . getenv('DB_HOST') . ';port=' . getenv('DB_PORT'), getenv('DB_USERNAME'), getenv('DB_PASSWORD'));
+                \$pdo = new PDO('pgsql:host=' . getenv('DB_HOST') . ';port=' . getenv('DB_PORT') . ';dbname=' . getenv('DB_DATABASE'), getenv('DB_USERNAME'), getenv('DB_PASSWORD'));
                 echo 'OK';
                 exit(0);
             } catch (Exception \$e) {
@@ -245,8 +245,8 @@ table_exists() {
     
     local result=$(php -r "
         try {
-            \$pdo = new PDO('mysql:host=' . getenv('DB_HOST') . ';dbname=' . getenv('DB_DATABASE') . ';port=' . getenv('DB_PORT'), getenv('DB_USERNAME'), getenv('DB_PASSWORD'));
-            \$stmt = \$pdo->query(\"SHOW TABLES LIKE '$table_name'\");
+            \$pdo = new PDO('pgsql:host=' . getenv('DB_HOST') . ';port=' . getenv('DB_PORT') . ';dbname=' . getenv('DB_DATABASE'), getenv('DB_USERNAME'), getenv('DB_PASSWORD'));
+            \$stmt = \$pdo->query(\"SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$table_name'\");
             echo \$stmt->rowCount() > 0 ? 'EXISTS' : 'NOT_EXISTS';
         } catch (Exception \$e) {
             echo 'ERROR';

@@ -328,7 +328,7 @@ scan_docker_images() {
     local images=(
         "php:8.5.4-fpm-alpine3.22"
         "httpd:2.4.66-alpine3.23"
-        "mariadb:11.8"
+        "postgres:17-alpine"
         "redis:8.6-alpine"
         "node:24.14.1-alpine3.23"
     )

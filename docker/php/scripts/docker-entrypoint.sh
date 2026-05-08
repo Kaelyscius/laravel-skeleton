@@ -11,7 +11,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-WAIT_TIMEOUT=${WAIT_TIMEOUT:-60}  # Timeout max (en secondes) pour attendre MariaDB et Redis
+WAIT_TIMEOUT=${WAIT_TIMEOUT:-60}  # Timeout max (en secondes) pour attendre PostgreSQL et Redis
 
 echo -e "${YELLOW}🚀 Démarrage du container PHP...${NC}"
 
@@ -41,7 +41,7 @@ wait_for_service() {
   echo -e "${GREEN}✓ $host est prêt${NC}"
 }
 
-wait_for_service mariadb 3306
+wait_for_service postgres 5432
 wait_for_service redis 6379
 
 # Corriger les permissions pour le développement (compatibilité PHPStorm/IDE)

@@ -585,7 +585,7 @@ find_root_env_file() {
     for env_path in "${search_paths[@]}"; do
         if [ -f "$env_path" ]; then
             # Vérifier que c'est un fichier .env de projet Docker
-            if grep -q "COMPOSE_PROJECT_NAME\|DB_HOST.*mariadb\|DB_HOST.*mysql" "$env_path" 2>/dev/null; then
+            if grep -q "COMPOSE_PROJECT_NAME\|DB_HOST.*postgres\|DB_CONNECTION.*pgsql" "$env_path" 2>/dev/null; then
                 echo "$env_path"
                 return 0
             fi
@@ -743,7 +743,7 @@ optimize_laravel_configuration() {
 
 #
 # Patcher le skeleton Laravel par défaut après création
-# (supprimer les conflits avec Pest v4, corriger phpunit.xml pour MariaDB)
+# (supprimer les conflits avec Pest v4, corriger phpunit.xml pour PostgreSQL)
 #
 patch_fresh_laravel_skeleton() {
     local laravel_dir="$1"
@@ -824,15 +824,15 @@ PYEOF
         log_debug "✓ Aucun package skeleton à supprimer (pre-install patch appliqué)"
     fi
 
-    # --- 3. Patcher phpunit.xml : SQLite → MariaDB ---
+    # --- 3. Patcher phpunit.xml : SQLite → PostgreSQL ---
     if [ -f "phpunit.xml" ]; then
-        # Remplacer sqlite par mysql
-        sed -i 's|<env name="DB_CONNECTION" value="sqlite"/>|<env name="DB_CONNECTION" value="mysql"/>|' phpunit.xml
+        # Remplacer sqlite par pgsql
+        sed -i 's|<env name="DB_CONNECTION" value="sqlite"/>|<env name="DB_CONNECTION" value="pgsql"/>|' phpunit.xml
         # Remplacer :memory: par laravel_test
         sed -i 's|<env name="DB_DATABASE" value=":memory:"/>|<env name="DB_DATABASE" value="laravel_test"/>|' phpunit.xml
         # Supprimer la ligne DB_URL vide (spécifique SQLite)
         sed -i '/<env name="DB_URL" value=""\/>/ d' phpunit.xml
-        log_success "✅ phpunit.xml patché (SQLite → MariaDB laravel_test)"
+        log_success "✅ phpunit.xml patché (SQLite → PostgreSQL laravel_test)"
     fi
 
     log_success "✅ Skeleton Laravel patché"
@@ -877,7 +877,7 @@ main() {
     # Créer le projet Laravel
     create_laravel_project "$target_dir"
 
-    # Patcher le skeleton par défaut (PHP ^8.5, supprimer phpunit/pint/sail, MariaDB pour les tests)
+    # Patcher le skeleton par défaut (PHP ^8.5, supprimer phpunit/pint/sail, PostgreSQL pour les tests)
     patch_fresh_laravel_skeleton "$target_dir"
 
     # Configurer l'environnement

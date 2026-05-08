@@ -51,11 +51,9 @@ services:
           cpus: '1'
           memory: 512M
 
-  mariadb:
+  postgres:
     restart: always
-    environment:
-      - MARIADB_AUTO_UPGRADE=1
-      - MARIADB_DISABLE_UPGRADE_BACKUP=1
+    # Pas de port exposé sur l'hôte en prod (DB accessible uniquement via app-network interne)
     logging:
       driver: "json-file"
       options:

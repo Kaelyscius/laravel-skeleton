@@ -24,7 +24,7 @@ Services toujours actifs sans profile spécifique :
 |---------|-------------|---------|
 | `apache` | Serveur web Apache 2.4 + HTTPS/HTTP2 | 80, 443 |
 | `php` | PHP 8.5.4 FPM + Supervisor + OPcache | - |
-| `mariadb` | Base de données MariaDB | 3306 |
+| `postgres` | Base de données PostgreSQL 17 | 5432 |
 | `redis` | Cache et sessions Redis | 6379 |
 
 **Usage** : Production, serveurs distants
@@ -159,7 +159,7 @@ make up-local
 ```
 
 **Services démarrés** :
-- ✅ Services essentiels (apache, php, mariadb, redis)
+- ✅ Services essentiels (apache, php, postgres, redis)
 - ✅ Outils dev (node, mailpit, adminer)
 - ✅ Outils monitoring (dozzle, it-tools, watchtower)
 
@@ -181,7 +181,7 @@ make up-prod
 ```
 
 **Services démarrés** :
-- ✅ Services essentiels uniquement (apache, php, mariadb, redis)
+- ✅ Services essentiels uniquement (apache, php, postgres, redis)
 - ❌ Pas d'outils de développement
 - ❌ Pas d'outils de monitoring
 
@@ -201,7 +201,7 @@ docker-compose up -d  # Sans profiles
 ```
 
 **Services démarrés** :
-- ✅ Services essentiels (apache, php, mariadb, redis)
+- ✅ Services essentiels (apache, php, postgres, redis)
 - ❌ Pas de Node.js
 - ❌ Pas d'outils
 
@@ -286,7 +286,7 @@ services:
     # ...
   php:
     # ...
-  mariadb:
+  postgres:
     # ...
   redis:
     # ...

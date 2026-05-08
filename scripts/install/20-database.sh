@@ -58,7 +58,7 @@ setup_database_connection() {
     
     # Lire les paramètres de connexion depuis .env
     local db_host=$(grep "^DB_HOST=" .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "localhost")
-    local db_port=$(grep "^DB_PORT=" .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "3306")
+    local db_port=$(grep "^DB_PORT=" .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "5432")
     local db_database=$(grep "^DB_DATABASE=" .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "laravel")
     local db_username=$(grep "^DB_USERNAME=" .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "root")
     

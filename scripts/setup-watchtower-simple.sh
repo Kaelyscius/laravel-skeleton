@@ -207,7 +207,7 @@ configure_container_exclusions() {
     echo ""
 
     echo -e "${YELLOW}Containers avec images standard (mis à jour automatiquement):${NC}"
-    echo -e "  • ${COMPOSE_PROJECT_NAME}_mariadb"
+    echo -e "  • ${COMPOSE_PROJECT_NAME}_postgres"
     echo -e "  • ${COMPOSE_PROJECT_NAME}_redis"
     echo -e "  • ${COMPOSE_PROJECT_NAME}_mailpit"
     echo -e "  • ${COMPOSE_PROJECT_NAME}_adminer"
@@ -296,7 +296,7 @@ show_monitored_containers() {
 
     echo -e "\n${YELLOW}🔄 Containers avec mise à jour automatique:${NC}"
     auto_update_containers=(
-        "${COMPOSE_PROJECT_NAME}_mariadb"
+        "${COMPOSE_PROJECT_NAME}_postgres"
         "${COMPOSE_PROJECT_NAME}_redis"
         "${COMPOSE_PROJECT_NAME}_mailpit"
         "${COMPOSE_PROJECT_NAME}_adminer"
@@ -421,7 +421,7 @@ main() {
     echo -e "  • Planification: Tous les jours à 3h du matin"
     echo -e "  • Nettoyage: Automatique"
     echo -e "  • Containers exclus: Images custom (PHP, Apache, Node)"
-    echo -e "  • Containers surveillés: Images standard (MariaDB, Redis, etc.)"
+    echo -e "  • Containers surveillés: Images standard (PostgreSQL, Redis, etc.)"
 
     if grep -q "^WATCHTOWER_NOTIFICATION_URL=" "$ENV_FILE"; then
         echo -e "  • Notifications: Configurées"

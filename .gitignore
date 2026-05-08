@@ -166,3 +166,23 @@ node_modules/
 # Configuration locale de développement
 .vscode/settings.json
 .idea/workspace.xml
+
+# ===========================================
+# BMAD - Planification & outils personnels
+# ===========================================
+# Artefacts de planification party-mode/roundtables (DONNÉES PRIVÉES)
+# Contiennent stratégie business, pricing, plans SaaS — JAMAIS dans un repo public
+_bmad-output/
+
+# Module BMAD installé localement (configs user-scoped + skills modules)
+# Les forkers installent leur propre BMAD via npx bmad-method install si besoin
+_bmad/
+
+# ===========================================
+# CLAUDE CODE - Skills perso & configs locales
+# ===========================================
+# Skills Claude Code installés localement (chacun installe les siens)
+.claude/skills/
+
+# Settings locaux Claude Code (DOIT être local-only — unstage avec : git rm --cached .claude/settings.local.json)
+.claude/settings.local.json

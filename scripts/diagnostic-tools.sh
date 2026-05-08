@@ -47,7 +47,7 @@ check_php85_extensions() {
     echo ""
     
     # Extensions compilées manuellement
-    compiled_extensions=("gd" "pdo" "pdo_mysql" "mysqli" "zip" "intl" "opcache" "bcmath" "xml" "dom" "xmlwriter" "xmlreader" "simplexml" "mbstring" "exif" "pcntl" "sockets")
+    compiled_extensions=("gd" "pdo" "pdo_pgsql" "pgsql" "zip" "intl" "opcache" "bcmath" "xml" "dom" "xmlwriter" "xmlreader" "simplexml" "mbstring" "exif" "pcntl" "sockets")
 
     # Extensions intégrées par défaut dans PHP 8.5
     builtin_extensions=("tokenizer" "ctype" "fileinfo" "iconv" "json" "libxml" "openssl" "pcre" "reflection" "spl" "standard")

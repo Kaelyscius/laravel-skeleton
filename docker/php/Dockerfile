@@ -37,8 +37,8 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 
 RUN docker-php-ext-install -j$(nproc) \
         pdo \
-        pdo_mysql \
-        mysqli
+        pdo_pgsql \
+        pgsql
 
 RUN docker-php-ext-install -j$(nproc) \
         zip \

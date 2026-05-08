@@ -90,7 +90,7 @@ echo -e "${YELLOW}[TEST 4]${NC} Vérification des services et profiles..."
 
 # Services essentiels (sans profile)
 echo -e "${BLUE}Services essentiels (aucun profile):${NC}"
-ESSENTIAL_SERVICES=$(docker-compose config --services 2>/dev/null | grep -E "^(apache|php|mariadb|redis)$" || true)
+ESSENTIAL_SERVICES=$(docker-compose config --services 2>/dev/null | grep -E "^(apache|php|postgres|redis)$" || true)
 if [ -n "$ESSENTIAL_SERVICES" ]; then
     echo "$ESSENTIAL_SERVICES" | while read service; do
         echo -e "  ${GREEN}✓${NC} $service"

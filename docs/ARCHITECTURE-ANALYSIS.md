@@ -20,7 +20,7 @@ Ce projet est un **environnement de développement Laravel complet et profession
 |-----------|------------|---------|------|
 | **Backend** | Laravel Framework | 12.x | Framework PHP principal |
 | **Runtime** | PHP | 8.5 | Environnement d'exécution |
-| **Database** | MariaDB | 11.8 | Base de données principale |
+| **Database** | PostgreSQL | 17 | Base de données principale |
 | **Cache** | Redis | 8.6 | Cache et sessions |
 | **Web Server** | Apache | 2.4.66 | Serveur web avec SSL |
 | **Frontend Build** | Node.js | 24 LTS | Build assets (Vite) |
@@ -37,9 +37,9 @@ Ce projet est un **environnement de développement Laravel complet et profession
          │                       │                       
          ▼                       ▼                       
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│    MariaDB      │    │      Redis      │    │   Watchtower    │
+│   PostgreSQL    │    │      Redis      │    │   Watchtower    │
 │   (Database)    │    │     (Cache)     │    │  (Monitoring)   │
-│   Port 3306     │    │   Port 6379     │    │                 │
+│   Port 5432     │    │   Port 6379     │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       
          ▼                       ▼                       

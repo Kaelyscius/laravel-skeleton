@@ -37,26 +37,11 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - NODE_ENV=development
 
-  # Outils additionnels de développement (profile "dev-extra")
-  # PHPMyAdmin comme alternative à Adminer
-  phpmyadmin:
-    profiles: ["dev-extra"]
-    image: phpmyadmin:latest
-    container_name: ${COMPOSE_PROJECT_NAME}_phpmyadmin
+  # Postgres : exposition du port 5432 sur l'hôte UNIQUEMENT en dev
+  # (pour clients GUI host comme DBeaver, TablePlus, pgAdmin desktop)
+  postgres:
     ports:
-      - "8083:80"
-    environment:
-      - PMA_HOST=mariadb
-      - PMA_USER=root
-      - PMA_PASSWORD=${DB_ROOT_PASSWORD}
-      - UPLOAD_LIMIT=64M
-    networks:
-      - app-network
-    depends_on:
-      - mariadb
-    restart: unless-stopped
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      - "5432:5432"
 
   # Redis Commander pour visualiser Redis
   redis-commander:

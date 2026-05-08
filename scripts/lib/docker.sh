@@ -20,7 +20,7 @@ readonly DOCKER_CMD="${DOCKER_CMD:-docker}"
 # Containers par défaut du projet Laravel
 readonly DEFAULT_PHP_CONTAINER="laravel-app_php"
 readonly DEFAULT_APACHE_CONTAINER="laravel-app_apache"
-readonly DEFAULT_MARIADB_CONTAINER="laravel-app_mariadb"
+readonly DEFAULT_POSTGRES_CONTAINER="laravel-app_postgres"
 readonly DEFAULT_REDIS_CONTAINER="laravel-app_redis"
 readonly DEFAULT_NODE_CONTAINER="laravel-app_node"
 
@@ -56,7 +56,7 @@ get_compose_project_name() {
 # Construire le nom complet d'un container
 #
 # Arguments:
-#   $1: Nom du service (php, apache, mariadb, etc.)
+#   $1: Nom du service (php, apache, postgres, etc.)
 #
 get_container_name() {
     local service="$1"
@@ -328,7 +328,7 @@ restart_docker_services() {
 check_all_containers_status() {
     log_info "Vérification du statut des containers..."
     
-    local services=("php" "apache" "mariadb" "redis")
+    local services=("php" "apache" "postgres" "redis")
     local all_ok=true
     
     for service in "${services[@]}"; do
@@ -399,7 +399,7 @@ show_docker_environment_info() {
     
     # Containers actifs
     log_info "📋 Containers actifs:"
-    local services=("php" "apache" "mariadb" "redis" "node")
+    local services=("php" "apache" "postgres" "redis" "node")
     for service in "${services[@]}"; do
         local container_name=$(get_container_name "$service")
         local container_id=$(get_container_id "$service")
@@ -456,4 +456,4 @@ export -f show_container_logs show_docker_environment_info cleanup_docker_resour
 
 # Variables exportées
 export DOCKER_COMPOSE_CMD DOCKER_CMD
-export DEFAULT_PHP_CONTAINER DEFAULT_APACHE_CONTAINER DEFAULT_MARIADB_CONTAINER DEFAULT_REDIS_CONTAINER DEFAULT_NODE_CONTAINER
+export DEFAULT_PHP_CONTAINER DEFAULT_APACHE_CONTAINER DEFAULT_POSTGRES_CONTAINER DEFAULT_REDIS_CONTAINER DEFAULT_NODE_CONTAINER

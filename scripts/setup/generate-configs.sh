@@ -406,15 +406,15 @@ EOF
     # Base de données (valeurs préservées)
     echo "" >> "$temp_env"
     echo "# ===========================================
-# 💾 DATABASE (MariaDB)
+# 💾 DATABASE (PostgreSQL)
 # ===========================================" >> "$temp_env"
-    update_env_var "$temp_env" "DB_CONNECTION" "mysql"
-    update_env_var "$temp_env" "DB_HOST" "mariadb"
-    update_env_var "$temp_env" "DB_PORT" "3306"
+    update_env_var "$temp_env" "DB_CONNECTION" "pgsql"
+    update_env_var "$temp_env" "DB_HOST" "postgres"
+    update_env_var "$temp_env" "DB_PORT" "5432"
     update_env_var "$temp_env" "DB_DATABASE" "$(get_env_value "DB_DATABASE" "" "laravel")"
     update_env_var "$temp_env" "DB_USERNAME" "$(get_env_value "DB_USERNAME" "" "laravel")"
     update_env_var "$temp_env" "DB_PASSWORD" "$(get_env_value "DB_PASSWORD" "" "secret")"
-    update_env_var "$temp_env" "DB_ROOT_PASSWORD" "$(get_env_value "DB_ROOT_PASSWORD" "" "rootsecret")"
+    # Note : pas de DB_ROOT_PASSWORD avec PostgreSQL (le superuser "postgres" est local par défaut)
 
     # Redis (valeurs préservées)
     echo "" >> "$temp_env"

@@ -207,7 +207,7 @@ make check-compatibility
 
 **Fonctionnalité**:
 - Rebuild PHP, Apache, Node
-- Skip images standard (MariaDB, Redis)
+- Skip images standard (PostgreSQL, Redis)
 - Avec ou sans cache
 
 **Utilisation**:

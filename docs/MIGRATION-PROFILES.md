@@ -84,7 +84,7 @@ make status
 ### Services toujours actifs (aucun profile)
 - **apache** : Serveur web
 - **php** : PHP-FPM
-- **mariadb** : Base de données
+- **postgres** : Base de données PostgreSQL 17
 - **redis** : Cache
 
 ### Profile "dev" (Outils de développement)
@@ -118,7 +118,7 @@ make up-local
 ```
 
 **Ce qui démarre** :
-- ✅ Services essentiels (apache, php, mariadb, redis)
+- ✅ Services essentiels (apache, php, postgres, redis)
 - ✅ Outils dev (node, mailpit, adminer)
 - ✅ Outils monitoring (dozzle, it-tools, watchtower)
 
@@ -137,7 +137,7 @@ make up-prod
 ```
 
 **Ce qui démarre** :
-- ✅ Services essentiels uniquement (apache, php, mariadb, redis)
+- ✅ Services essentiels uniquement (apache, php, postgres, redis)
 - ❌ Aucun outil de développement
 - ❌ Aucun outil de monitoring
 
@@ -156,7 +156,7 @@ make up-dev
 ```
 
 **Ce qui démarre** :
-- ✅ Services essentiels (apache, php, mariadb, redis)
+- ✅ Services essentiels (apache, php, postgres, redis)
 - ✅ Node.js pour builds
 - ✅ Mailpit et Adminer
 - ❌ Pas de monitoring (dozzle, it-tools, watchtower)
@@ -195,7 +195,7 @@ make ps-profiles
 # 🏭 PRODUCTION (aucun profile):
 #   ✓ laravel-app_apache
 #   ✓ laravel-app_php
-#   ✓ laravel-app_mariadb
+#   ✓ laravel-app_postgres
 #   ✓ laravel-app_redis
 #
 # 🛠️ DEV (profile: dev):
