@@ -109,6 +109,78 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Architecture
 
+### Application Modular Architecture (ADR-0009)
+
+**Architecture modulaire `app/Modules/*` PSR-4 hand-rolled** — décision LOCKED party-mode (ADR-0009). Pas de `nwidart/laravel-modules`, pas de DDD/hexagonal, pas de repositories systématiques.
+
+#### Arborescence cible
+
+```
+src/app/
+├── Core/                          # Cœur transversal, toujours actif
+│   ├── Models/Streamer.php
+│   ├── Concerns/BelongsToStreamer.php
+│   ├── Scopes/BelongsToStreamerScope.php
+│   ├── Http/Middleware/SetCurrentStreamer.php
+│   ├── Providers/CoreServiceProvider.php
+│   └── Support/CurrentStreamer.php
+│
+└── Modules/                       # Modules métier activables via ENV
+    ├── Public/                    # Homepage, About, SEO, sitemap
+    ├── Live/                      # Twitch embed + chat + status
+    ├── Reviews/                   # CRUD articles + comments dormant
+    ├── PressKit/                  # Page presse + bio FR+EN
+    └── Admin/                     # Filament panels + Sanctum + Permissions
+```
+
+#### Namespaces PSR-4 (déclarés dans `src/composer.json`)
+
+| Namespace | Path |
+|---|---|
+| `App\Core\` | `app/Core/` |
+| `App\Modules\Public\` | `app/Modules/Public/` |
+| `App\Modules\Live\` | `app/Modules/Live/` |
+| `App\Modules\Reviews\` | `app/Modules/Reviews/` |
+| `App\Modules\PressKit\` | `app/Modules/PressKit/` |
+| `App\Modules\Admin\` | `app/Modules/Admin/` |
+
+Le namespace Laravel natif `App\\` → `app/` reste pour les controllers/models génériques (compatibilité Laravel standard).
+
+#### Conventions interdites (refus explicites)
+
+- ❌ `nwidart/laravel-modules` — magic inutile, PSR-4 natif suffit
+- ❌ Repositories systématiques — Eloquent EST le repository
+- ❌ Façades custom par module
+- ❌ Event bus inter-modules J1 (YAGNI v1)
+- ❌ CQRS / Command Bus
+- ❌ Hexagonal / Ports & Adapters / DDD vocabulaire
+- ❌ DTOs systématiques (Form Requests + Resources Eloquent suffisent)
+- ❌ `app/Domain/`, `app/UseCases/`, `app/Application/`
+- ❌ Mix migrations modules dans `database/migrations/` racine — chaque module aura son propre dossier `Database/migrations/`
+- ❌ Discovery automatique Filament resources — registration explicite par module
+
+#### Couplage cross-modules
+
+Un module **ne peut pas** importer un autre module directement (sauf via `App\Core\`). Cette règle sera enforcée en CI par un test Pest scan `use` statements (Story 1.6 à venir). En attendant : convention humaine + review PR.
+
+#### Activation conditionnelle des modules
+
+Modules activables au déploiement via variables d'environnement `MODULE_<NAME>_ENABLED=true|false` + `config/modules.php` + bootstrap conditionnel dans `AppServiceProvider::register()` (Story 1.7 à venir).
+
+→ Un fork-streamer peut désactiver `MODULE_REVIEWS_ENABLED=false` sans toucher au code (philosophie Plausible-style — ADR-0001).
+
+#### Smoke test (Story 1.1)
+
+`src/tests/Unit/PsrAutoloadTest.php` vérifie que les 6 namespaces sont correctement déclarés dans `composer.json` ET que les 6 dossiers existent sur disque. **DOIT passer** avant toute story module-spécifique.
+
+#### Références
+
+- ADR-0009 : `docs/adr/ADR-0009-modular-app-modules-psr4.md`
+- ADR-0001 (Plausible-style, refus WordPress runtime) : `docs/adr/ADR-0001-modularity-plausible-style.md`
+- Architecture applicative §3.1 : `docs/architecture/3-architecture-applicative.md#31-arborescence-cible`
+
+---
+
 ### Docker-based Modular Architecture
 
 **Architecture modulaire avec Docker Compose Profiles** permettant de démarrer uniquement les services nécessaires selon l'environnement.

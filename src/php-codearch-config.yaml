@@ -1,0 +1,44 @@
+# PhpCodeArcheology - Configuration Laravel
+# https://github.com/PhpCodeArcheology/PhpCodeArcheology
+
+include:
+  - app/
+  - config/
+  - database/
+  - routes/
+
+exclude:
+  - vendor/
+  - node_modules/
+  - storage/
+  - bootstrap/cache/
+  - public/build/
+
+extensions:
+  - php
+
+# Seuils adaptés pour Laravel (controllers + services souvent plus complexes)
+thresholds:
+  cyclomaticComplexity: 10
+  maintainabilityIndex: 65
+  linesOfCode: 300
+  methodCount: 20
+  parameterCount: 5
+
+# Seuils assouplis pour les controllers Laravel (injection de dépendances)
+controllerThresholds: true
+
+# Analyse de l'historique git pour détecter les hotspots
+git:
+  enabled: true
+  lookback: 90  # jours
+
+# Intégration avec Pest (auto-détecté via composer.json)
+coverage:
+  enabled: false  # Activer avec: --coverage-file=build/logs/clover.xml
+
+report:
+  directory: tmp/codearcheology
+  formats:
+    - html
+    - json
