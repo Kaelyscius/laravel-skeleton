@@ -40,7 +40,7 @@ return [
         /*
          * Notifications will only get sent if this option is set to `true`.
          */
-        'enabled' => true,
+        'enabled' => env('HEALTH_NOTIFICATIONS_ENABLED', false),
 
         'notifications' => [
             CheckFailedNotification::class => ['mail'],
@@ -69,7 +69,7 @@ return [
         'only_on_failure' => false,
 
         'mail' => [
-            'to' => 'your@example.com',
+            'to' => env('HEALTH_NOTIFICATION_EMAIL'),
 
             'from' => [
                 'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
@@ -152,7 +152,7 @@ return [
      * The response code to use for HealthCheckJsonResultsController when a health
      * check has failed
      */
-    'json_results_failure_status' => 200,
+    'json_results_failure_status' => 503,
 
     /*
      * You can specify a secret token that needs to be sent in the X-Secret-Token for secured access.
@@ -165,5 +165,5 @@ return [
  *
  * @link https://spatie.be/docs/laravel-health/v1/basic-usage/conditionally-running-or-modifying-checks
  */
-    // 'treat_skipped_as_failure' => false
+    // 'treat_skipped_as_failure' => false,
 ];

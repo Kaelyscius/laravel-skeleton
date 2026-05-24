@@ -17,8 +17,12 @@ declare(strict_types=1);
 $projectRoot = dirname(__DIR__, 2);
 
 it('registers the 6 PSR-4 namespaces required by ADR-0009', function () use ($projectRoot): void {
+    $composerPath = $projectRoot . '/composer.json';
+    $contents = file_get_contents($composerPath);
+    expect($contents)->not->toBeFalse("composer.json missing at {$composerPath}");
+
     $composerJson = json_decode(
-        json: file_get_contents($projectRoot . '/composer.json'),
+        json: $contents,
         associative: true,
         flags: JSON_THROW_ON_ERROR,
     );
