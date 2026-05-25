@@ -95,6 +95,30 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
 
+  # 📊 POSTGRES-PULSE - DB isolée pour Laravel Pulse (ADR-0004)
+  # Always-on (aucun profile) comme postgres. Jamais exposée à l'hôte.
+  # Wiring Laravel (config/database.php pgsql_pulse) = Story 3.2.
+  postgres-pulse:
+    image: postgres:17-alpine
+    container_name: ${COMPOSE_PROJECT_NAME}_postgres_pulse
+    volumes:
+      - postgres_pulse_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    environment:
+      - POSTGRES_DB=${DB_PULSE_DATABASE}
+      - POSTGRES_USER=${DB_PULSE_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PULSE_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"   # Image standard - mise à jour auto
+
   redis:
     image: redis:8.6-alpine
     container_name: ${COMPOSE_PROJECT_NAME}_redis
@@ -263,5 +287,7 @@ networks:
 volumes:
   postgres_data:
     name: ${COMPOSE_PROJECT_NAME}_postgres_data
+  postgres_pulse_data:
+    name: ${COMPOSE_PROJECT_NAME}_postgres_pulse_data
   redis_data:
     name: ${COMPOSE_PROJECT_NAME}_redis_data

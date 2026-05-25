@@ -4,6 +4,8 @@
 
 Ce projet utilise **Docker Compose Profiles** pour une architecture modulaire permettant de démarrer uniquement les services nécessaires selon l'environnement (développement local, staging, production).
 
+> **Source de vérité** : [docs/architecture/5-architecture-infra-docker.md](architecture/5-architecture-infra-docker.md) §5.1 — ce document est la référence utilisateur, le §5.1 fait foi en cas de divergence.
+
 ### Avantages de cette architecture
 
 ✅ **Séparation claire** : Services essentiels vs outils de développement
@@ -25,6 +27,7 @@ Services toujours actifs sans profile spécifique :
 | `apache` | Serveur web Apache 2.4 + HTTPS/HTTP2 | 80, 443 |
 | `php` | PHP 8.5.4 FPM + Supervisor + OPcache | - |
 | `postgres` | Base de données PostgreSQL 17 | 5432 |
+| `postgres-pulse` | Base de données dédiée Pulse monitoring (ADR-0004) | - |
 | `redis` | Cache et sessions Redis | 6379 |
 
 **Usage** : Production, serveurs distants
@@ -86,7 +89,6 @@ Services supplémentaires pour le développement :
 
 | Service | Description | Port(s) |
 |---------|-------------|---------|
-| `phpmyadmin` | Alternative à Adminer (interface riche) | 8083 |
 | `redis-commander` | Interface de gestion Redis | 8082 |
 
 **Usage** : Développement avec tous les outils disponibles
@@ -318,10 +320,6 @@ services:
     # ...
 
   # Profile "dev-extra" (dans docker-compose.dev.yml)
-  phpmyadmin:
-    profiles: ["dev-extra"]
-    # ...
-
   redis-commander:
     profiles: ["dev-extra"]
     # ...
@@ -452,7 +450,7 @@ make up-tools
 
 ## 📊 Comparaison des modes de démarrage
 
-| Commande | Services essentiels | node | mailpit/adminer | dozzle/it-tools/watchtower | phpmyadmin/redis-commander |
+| Commande | Services essentiels | node | mailpit/adminer | dozzle/it-tools/watchtower | redis-commander |
 |----------|---------------------|------|-----------------|----------------------------|---------------------------|
 | `make up-prod` | ✅ | ❌ | ❌ | ❌ | ❌ |
 | `make up-dev` | ✅ | ✅ | ✅ | ❌ | ❌ |

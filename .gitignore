@@ -50,6 +50,7 @@ docker/apache/conf/ssl/*.pem
 /src/storage/*.key
 /src/vendor
 /src/.env*
+!/src/.env.example
 /src/.env.backup*
 /src/.phpunit.result.cache
 /src/Homestead.json

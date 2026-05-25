@@ -98,7 +98,6 @@ make status
 - **watchtower** : Mises à jour auto
 
 ### Profile "dev-extra" (Outils additionnels)
-- **phpmyadmin** : Alternative Adminer (port 8083)
 - **redis-commander** : Gestion Redis (port 8082)
 
 ---
@@ -326,7 +325,7 @@ make up-prod
 ### Développement avec TOUS les outils
 
 ```bash
-# Services + dev + tools + extras (phpmyadmin, redis-commander)
+# Services + dev + tools + extras (redis-commander)
 make up-dev-extra
 ```
 

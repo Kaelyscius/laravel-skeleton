@@ -7,7 +7,7 @@
 | (aucun) | apache, php, postgres, redis, postgres-pulse | **Production** |
 | `dev` | + node, mailpit, adminer | Dev local |
 | `tools` | + dozzle, it-tools, watchtower | Monitoring conteneurs |
-| `dev-extra` | + phpmyadmin, redis-commander | Outils additionnels |
+| `dev-extra` | + redis-commander | Outils additionnels |
 
 Commandes Makefile :
 - `make up-prod` → production stricte

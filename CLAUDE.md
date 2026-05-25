@@ -12,15 +12,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make up-local` - **Développement local complet** (recommandé) - Services essentiels + dev + tools
 - `make up-dev` - Développement - Services essentiels + outils dev (node, mailpit, adminer)
 - `make up-dev-full` - Développement complet - Tous les services + monitoring (dozzle, it-tools, watchtower)
-- `make up-dev-extra` - Développement + outils extra (phpmyadmin, redis-commander)
+- `make up-dev-extra` - Développement + outils extra (redis-commander)
 - `make up-prod` - Production - Services essentiels uniquement (apache, php, postgres, redis)
 - `make up-tools` - Démarrer uniquement les outils de monitoring (dozzle, it-tools, watchtower)
 
 #### Profiles disponibles
-- **Aucun profile** (Production) : apache, php, postgres, redis
+- **Aucun profile** (Production) : apache, php, postgres, postgres-pulse, redis
 - **dev** (Développement) : node, mailpit, adminer
 - **tools** (Utilitaires) : dozzle, it-tools, watchtower
-- **dev-extra** (Outils additionnels) : phpmyadmin, redis-commander
+- **dev-extra** (Outils additionnels) : redis-commander
 
 #### Gestion des containers
 - `make up` - Start containers (ancien comportement, démarrage basique)
@@ -189,6 +189,7 @@ Modules activables au déploiement via variables d'environnement `MODULE_<NAME>_
 - **PHP 8.5.1** container with FPM, Supervisor, and OPcache
 - **Apache 2.4** with HTTPS/HTTP2 support
 - **PostgreSQL** for database
+- **PostgreSQL 17 (postgres-pulse)** dedicated container for Pulse monitoring (ADR-0004)
 - **Redis** for caching and sessions
 
 #### Profile "dev" (Outils de développement)
@@ -202,7 +203,6 @@ Modules activables au déploiement via variables d'environnement `MODULE_<NAME>_
 - **Watchtower** for automatic container updates
 
 #### Profile "dev-extra" (Outils additionnels)
-- **PHPMyAdmin** as an alternative to Adminer (port 8083)
 - **Redis Commander** for Redis management (port 8082)
 
 #### Commandes recommandées
@@ -277,7 +277,7 @@ Modules activables au déploiement via variables d'environnement `MODULE_<NAME>_
 #### Via Docker Profiles
 - Profil `dev` : Adminer (8080), Mailpit (8025)
 - Profil `tools` : Dozzle (9999), IT-Tools (8081), Watchtower
-- Profil `dev-extra` : PHPMyAdmin (8083), Redis Commander (8082)
+- Profil `dev-extra` : Redis Commander (8082)
 
 ### Deployment
 - Docker-based deployment with health checks

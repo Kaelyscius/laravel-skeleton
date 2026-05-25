@@ -311,7 +311,7 @@ logs: ## Afficher les logs (usage: make logs service=php)
 #   - AUCUN       : Production (apache, php, postgres, redis)
 #   - dev         : Outils développement (node, mailpit, adminer)
 #   - tools       : Utilitaires (dozzle, it-tools, watchtower)
-#   - dev-extra   : Outils additionnels (phpmyadmin, redis-commander)
+#   - dev-extra   : Outils additionnels (redis-commander)
 # =============================================================================
 
 .PHONY: up-prod
@@ -336,7 +336,7 @@ up-dev-full: ## Développement complet - Essentiels + dev + tools (+ dozzle, wat
 	@$(MAKE) _show-active-services
 
 .PHONY: up-dev-extra
-up-dev-extra: ## Développement avec outils extra (+ phpmyadmin, redis-commander)
+up-dev-extra: ## Développement avec outils extra (+ redis-commander)
 	@echo "$(CYAN)🚀 Démarrage DÉVELOPPEMENT + outils extra$(NC)"
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile dev --profile tools --profile dev-extra up -d
 	@echo "$(GREEN)✓ Tous les services + outils extra démarrés$(NC)"
@@ -356,16 +356,16 @@ ps-profiles: ## Afficher les services actifs avec leurs profiles
 	@echo "$(CYAN)📋 Services actifs par profile:$(NC)"
 	@echo ""
 	@echo "$(YELLOW)🏭 PRODUCTION (aucun profile):$(NC)"
-	@$(DOCKER_COMPOSE) ps --filter "name=apache" --filter "name=php" --filter "name=postgres" --filter "name=redis" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
+	@docker ps --filter "name=apache" --filter "name=php" --filter "name=postgres" --filter "name=redis$$" --format "  ✓ {{.Names}}" 2>/dev/null | grep . || echo "  ○ Aucun"
 	@echo ""
 	@echo "$(YELLOW)🛠️  DEV (profile: dev):$(NC)"
-	@$(DOCKER_COMPOSE) ps --filter "name=node" --filter "name=mailpit" --filter "name=adminer" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
+	@docker ps --filter "name=node" --filter "name=mailpit" --filter "name=adminer" --format "  ✓ {{.Names}}" 2>/dev/null | grep . || echo "  ○ Aucun"
 	@echo ""
 	@echo "$(YELLOW)🔧 TOOLS (profile: tools):$(NC)"
-	@$(DOCKER_COMPOSE) ps --filter "name=dozzle" --filter "name=it-tools" --filter "name=watchtower" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
+	@docker ps --filter "name=dozzle" --filter "name=it-tools" --filter "name=watchtower" --format "  ✓ {{.Names}}" 2>/dev/null | grep . || echo "  ○ Aucun"
 	@echo ""
 	@echo "$(YELLOW)➕ DEV-EXTRA (profile: dev-extra):$(NC)"
-	@$(DOCKER_COMPOSE) ps --filter "name=phpmyadmin" --filter "name=redis-commander" --format "  ✓ {{.Name}}" 2>/dev/null || echo "  ○ Aucun"
+	@docker ps --filter "name=redis_commander" --format "  ✓ {{.Names}}" 2>/dev/null | grep . || echo "  ○ Aucun"
 
 .PHONY: stop-profile
 stop-profile: ## Arrêter un profile spécifique (usage: make stop-profile PROFILE=dev)
@@ -1008,7 +1008,7 @@ help-profiles: ## Aide pour l'architecture modulaire (profiles)
 	@echo "    • Usage: Monitoring et outils de diagnostic"
 	@echo ""
 	@echo "  $(PURPLE)dev-extra$(NC) (Outils additionnels)"
-	@echo "    • Services: phpmyadmin, redis-commander"
+	@echo "    • Services: redis-commander"
 	@echo "    • Usage: Outils supplémentaires de développement"
 	@echo ""
 	@echo "$(YELLOW)🚀 Commandes de démarrage:$(NC)"
@@ -1098,10 +1098,7 @@ _show_urls:
 	@if docker ps --format "{{.Names}}" | grep -q "dozzle"; then \
 		echo "  • Dozzle: http://localhost:9999"; \
 	fi
-	@if docker ps --format "{{.Names}}" | grep -q "phpmyadmin"; then \
-		echo "  • PHPMyAdmin: http://localhost:8083"; \
-	fi
-	@if docker ps --format "{{.Names}}" | grep -q "redis-commander"; then \
+	@if docker ps --format "{{.Names}}" | grep -q "redis_commander"; then \
 		echo "  • Redis Commander: http://localhost:8082"; \
 	fi
 

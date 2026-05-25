@@ -39,6 +39,7 @@
     "pestphp/pest-plugin-laravel": "^4.0",
     "php-code-archeology/php-code-archeology": "^2.0",
     "rector/rector": "^2.3",
+    "symfony/yaml": "^8.0",
     "symplify/easy-coding-standard": "^13.0"
   },
   "autoload": {
