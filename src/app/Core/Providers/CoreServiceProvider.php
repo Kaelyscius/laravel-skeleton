@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core\Providers;
 
+use App\Core\Console\Commands\TenancyAssertCommand;
 use App\Core\Http\Middleware\SetCurrentStreamer;
 use App\Core\Support\CurrentStreamer;
 use Illuminate\Routing\Router;
@@ -37,5 +38,11 @@ class CoreServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->app->make(Router::class)->pushMiddlewareToGroup('web', SetCurrentStreamer::class);
+
+        // app/Core/Console/Commands is outside Laravel's auto-discovery path
+        // (app/Console/Commands), so Core commands are registered explicitly.
+        $this->commands([
+            TenancyAssertCommand::class,
+        ]);
     }
 }
