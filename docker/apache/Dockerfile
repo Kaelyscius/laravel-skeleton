@@ -73,7 +73,7 @@ EXPOSE 80 443
 
 # Healthcheck amélioré
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -k -f https://localhost/health || curl -f http://localhost/ || exit 1
+    CMD curl -k -f https://localhost/up || curl -f http://localhost/up || exit 1
 
 # Apache doit rester root pour binder les ports < 1024
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
