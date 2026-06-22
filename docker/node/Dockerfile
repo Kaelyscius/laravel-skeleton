@@ -1,4 +1,4 @@
-FROM node:24.14.1-alpine3.23
+FROM node:26.3.1-alpine3.23
 
 # Arguments utilisateur
 ARG UID=1000
