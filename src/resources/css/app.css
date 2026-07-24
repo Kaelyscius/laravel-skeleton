@@ -1,11 +1,52 @@
 @import 'tailwindcss';
+@import './tokens.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+/*
+ * Bridge tokens → Tailwind 4.
+ *
+ * Deux niveaux de variables, à ne pas confondre :
+ *   1. Les TOKENS (--bg, --accent-lava, --font-sans…) vivent dans tokens.css.
+ *      Nommage sémantique métier, single source of truth.
+ *   2. Les VARIABLES DE THÈME Tailwind (--color-*, --font-*, --ease-*) ont un
+ *      nommage imposé par Tailwind : c'est ce qui génère les utilities
+ *      (--color-lava produit bg-lava, text-lava, border-lava…).
+ *
+ * `@theme inline` (et pas `@theme`) est délibéré : avec inline, l'utility
+ * générée conserve la référence var(--token) au lieu d'inliner la valeur finale.
+ * Résultat : .bg-lava { background-color: var(--accent-lava) } — un seul point
+ * de vérité, modifiable dans tokens.css sans recompiler la sémantique.
+ *
+ * Tailwind 4 est CSS-first : il n'y a pas de tailwind.config.js, et on n'en
+ * crée pas (ADR-0008).
+ *
+ * ⚠️ NE PAS mettre tokens.css dans un layer (`@import './tokens.css' layer(...)`).
+ * Deux tokens portent le même nom que la variable de thème Tailwind qu'ils
+ * alimentent (--font-sans, --ease-default), donc le bridge émet une
+ * auto-référence dans @layer theme : `--font-sans: var(--font-sans)`. C'est
+ * inoffensif tant que tokens.css est importé SANS layer, car une déclaration
+ * hors layer bat toute déclaration layered : la vraie valeur gagne la cascade
+ * et l'auto-référence est écartée. Layer-ifier tokens.css inverse la cascade,
+ * crée un cycle, et typo + motion tombent en "guaranteed-invalid" SANS erreur
+ * de build ni erreur console. Invariant testé : DesignTokensTest.
+ */
+@theme inline {
+    --color-bg: var(--bg);
+    --color-surface: var(--surface);
+    --color-border: var(--border);
+    --color-text-primary: var(--text-primary);
+    --color-text-secondary: var(--text-secondary);
+    --color-lava: var(--accent-lava);
+    --color-ok: var(--state-ok);
+    --color-warn: var(--state-warn);
+    --color-err: var(--state-err);
+
+    --font-sans: var(--font-sans);
+    --font-mono: var(--font-mono);
+
+    --ease-default: var(--ease-default);
 }

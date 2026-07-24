@@ -1,0 +1,65 @@
+/*
+ * Design system tokens — single source of truth.
+ *
+ * Refs: UX-DR-40 (tokens.css canonique), UX-DR-41 (Tailwind référence les tokens),
+ *       UX-DR-43 (motion CSS pur), UX-DR-44 (ratio 90/8/2), UX-DR-45 (dark-only),
+ *       ADR-0008 (stack Blade + Livewire + Tailwind 4),
+ *       docs/architecture/2-stack-technique.md §2.5 (table canonique des valeurs).
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * RÈGLE 1 — Aucun composant ne hardcode de couleur.
+ *   Tout passe par les utilities Tailwind générées depuis ces tokens
+ *   (bg-bg, text-text-secondary, bg-lava…), jamais par un hex ni une
+ *   arbitrary value type bg-[#FF5722]. Le bridge vit dans app.css (@theme inline).
+ *   Garde-fou automatisé : tests/Feature/DesignTokensTest.php.
+ *
+ * RÈGLE 2 — Ratio 90/8/2 (UX-DR-44, discipline Caravaggio).
+ *   90% monochrome (bg / surface / border / text) — 8% accent — 2% états.
+ *   --accent-lava est réservé à EXACTEMENT 4 usages :
+ *     1. le badge LIVE
+ *     2. les CTA primaires
+ *     3. les notes >= 9/10
+ *     4. les actions destructives en admin
+ *   Un orange qui apparaît partout n'est plus un signal, c'est du bruit — et le
+ *   badge LIVE, seul vrai moment d'urgence de l'app, perd son pouvoir.
+ *
+ * RÈGLE 3 — Dark-only (UX-DR-45).
+ *   Pas de thème clair, pas de toggle, pas de @media (prefers-color-scheme).
+ *   Les valeurs ci-dessous sont dark par construction, pas par défaut.
+ *
+ * NOTE — Les familles de police sont déclarées ici, mais les fichiers woff2
+ * (@font-face + preload, self-hosting IBM Plex) arrivent en Story 1.9. D'ici là
+ * le rendu utilise les fallbacks système : c'est attendu, pas un bug.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+:root {
+    /* Surfaces — 90% de la surface visible */
+    --bg: #0A0A0B;
+    --surface: #141416;
+    --border: #1F1F22;
+
+    /* Texte */
+    --text-primary: rgba(255, 255, 255, 0.92);
+    --text-secondary: rgba(255, 255, 255, 0.60);
+
+    /* Accent — 8%, réservé aux 4 usages listés ci-dessus */
+    --accent-lava: #FF5722;
+
+    /* États — 2% */
+    --state-ok: #22C55E;
+    --state-warn: #F59E0B;
+    --state-err: #EF4444;
+
+    /* Typographie (fichiers woff2 → Story 1.9) */
+    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+
+    /* Lecture longue (corps d'article, Epic 5) */
+    --leading-prose: 1.7;
+    --max-prose: 720px;
+
+    /* Motion — jamais bouncy (UX-DR-43) */
+    --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-default: 200ms;
+}
