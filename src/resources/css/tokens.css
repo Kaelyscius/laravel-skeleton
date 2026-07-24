@@ -51,8 +51,17 @@
     --state-warn: #F59E0B;
     --state-err: #EF4444;
 
-    /* Typographie (fichiers woff2 → Story 1.9) */
-    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    /*
+     * Typographie (fichiers woff2 → Story 1.9).
+     *
+     * Les 4 familles emoji terminant --font-sans sont volontaires. Tailwind pose
+     * `--default-font-family: var(--font-sans)` et son preflight écrit
+     * `font-family: var(--default-font-family, …liste emoji…)` : cette liste de
+     * secours ne sert QUE si la variable est indéfinie. Elle est définie ici, donc
+     * sans ces 4 familles les emoji du corps de texte retomberaient sur la fonte
+     * sans-serif de la plateforme — rendu incohérent, notamment Windows/Linux.
+     */
+    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
     --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
 
     /* Lecture longue (corps d'article, Epic 5) */

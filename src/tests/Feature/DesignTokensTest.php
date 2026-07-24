@@ -42,7 +42,10 @@ $canonicalTokens = static fn (): array => [
     '--state-ok' => '#22C55E',
     '--state-warn' => '#F59E0B',
     '--state-err' => '#EF4444',
-    '--font-sans' => "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif",
+    // Variance assumée vs AC1, qui pinnait la valeur sans les familles emoji : sans
+    // elles, Tailwind fait perdre les emoji du corps de texte (cf. commentaire dans
+    // tokens.css). Corrigé suite au code review de la Story 1.8.
+    '--font-sans' => "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
     '--font-mono' => "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace",
     '--leading-prose' => '1.7',
     '--max-prose' => '720px',
@@ -66,45 +69,146 @@ $readCss = static function (string $relativePath): string {
 };
 
 /**
- * Drop CSS comments so assertions inspect declarations, not documentation.
+ * Drop comments so assertions inspect code, not documentation.
  *
- * A stylesheet is allowed — encouraged, even — to write about the things it must
- * not do ("no light theme, no prefers-color-scheme"). Matching raw substrings
- * across comments would turn that documentation into a failure.
+ * A file is allowed — encouraged, even — to write about the things it must not do
+ * ("no light theme, no prefers-color-scheme", "never use max-w-prose"). Matching
+ * raw substrings across comments would turn that documentation into a failure.
+ *
+ * Handles CSS (slash-star), Blade ({{-- --}}) and HTML (<!-- -->) so the same
+ * helper serves the stylesheet and template scans alike.
  */
-$stripComments = static fn (string $css): string => (string) preg_replace('#/\*.*?\*/#s', '', $css);
+$stripComments = static function (string $source): string {
+    $patterns = [
+        '#/\*.*?\*/#s',
+        '#\{\{--.*?--\}\}#s',
+        '#<!--.*?-->#s',
+    ];
+
+    return (string) preg_replace($patterns, '', $source);
+};
 
 /**
- * Find hex colour literals that are NOT inside a var() reference and NOT inside
- * a CSS comment. Those are the hardcodes the design system forbids.
+ * Assert a needle is absent, with a message that actually reaches the reporter.
+ *
+ * NOT a style preference — a correctness fix. Pest's `toContain()` is variadic
+ * over NEEDLES, so `expect($x)->not->toContain('foo', 'my message')` negates
+ * "contains foo AND my message". The message never appears in the file, so the
+ * conjunction is always false and the negation always passes: the assertion can
+ * never fail. Two guards here shipped vacuous exactly that way and were caught
+ * only by mutation-testing them. `toBeFalse()` does take a real message.
+ */
+$expectAbsent = static function (string $haystack, string $needle, string $message): void {
+    expect(str_contains($haystack, $needle))->toBeFalse($message);
+};
+
+/**
+ * Find hardcoded colours — literals that are NOT inside a var() reference and NOT
+ * inside a CSS comment. Those are what the design system forbids.
+ *
+ * Covers every notation a colour can arrive in, not just hex: `oklch(...)`,
+ * `rgb(...)`, `hsl(...)`, `color(...)`, `lab/lch(...)` and the named colours that
+ * actually get typed by hand. A guard that only knows `#RRGGBB` would wave
+ * `background: oklch(0.7 0.21 41)` straight through — Tailwind's own palette is
+ * authored in oklch, so that notation is the likeliest one to be pasted in.
+ *
+ * `currentColor`, `transparent` and `inherit` are deliberately allowed: they carry
+ * no design decision of their own.
  *
  * @return list<string>
  */
-$findHardcodedHex = static function (string $css) use ($stripComments): array {
-    // Comments may legitimately cite a hex (e.g. documenting the Lava value).
+$findHardcodedColours = static function (string $css) use ($stripComments): array {
+    // Comments may legitimately cite a colour (e.g. documenting the Lava value).
     $stripped = $stripComments($css);
 
     // var(--token) and var(--token, fallback) are the sanctioned way to use a colour.
     $stripped = (string) preg_replace('#\bvar\(\s*--[^)]*\)#', '', $stripped);
 
-    preg_match_all('/#[0-9A-Fa-f]{3,8}\b/', $stripped, $matches);
+    $patterns = [
+        '/#[0-9A-Fa-f]{3,8}\b/',
+        '/\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\s*\(/i',
+        '/\b(?:white|black|red|green|blue|yellow|orange|purple|pink|gray|grey|silver|maroon|navy|teal|olive|lime|aqua|fuchsia)\b/i',
+    ];
 
-    return $matches[0];
+    $found = [];
+
+    foreach ($patterns as $pattern) {
+        preg_match_all($pattern, $stripped, $matches);
+        foreach ($matches[0] as $match) {
+            $found[] = trim($match);
+        }
+    }
+
+    return $found;
 };
 
 /**
- * Design-system stylesheets subject to the anti-hex guard (tokens.css is the one
- * file allowed to hold raw hex — it is where the values are defined).
+ * Design-system stylesheets subject to the guard (tokens.css is the one file
+ * allowed to hold raw colour values — it is where they are defined).
+ *
+ * The walk is RECURSIVE on purpose: Filament conventionally puts panel themes at
+ * `resources/css/filament/<panel>/theme.css` (arriving in Story 1.10). A flat
+ * glob would skip them while the anti-vacuity check still passed on app.css —
+ * a blind spot that looks exactly like coverage.
  *
  * @return list<string>
  */
 $guardedStylesheets = static function (): array {
-    $found = glob(base_path('resources/css/*.css'));
+    $root = base_path('resources/css');
 
-    $files = array_values(array_filter(
-        $found === false ? [] : $found,
-        static fn (string $path): bool => basename($path) !== 'tokens.css',
-    ));
+    if (! is_dir($root)) {
+        return [];
+    }
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+    );
+
+    $files = [];
+
+    foreach ($iterator as $file) {
+        if (! $file instanceof SplFileInfo || $file->getExtension() !== 'css') {
+            continue;
+        }
+
+        if ($file->getFilename() === 'tokens.css') {
+            continue;
+        }
+
+        $files[] = $file->getPathname();
+    }
+
+    sort($files);
+
+    return $files;
+};
+
+/**
+ * Every Blade template, recursively. Fonts are requested from HTML and utility
+ * classes are written in HTML, so template scans are not optional extras here.
+ *
+ * @return list<string>
+ */
+$blades = static function (): array {
+    $root = base_path('resources/views');
+
+    if (! is_dir($root)) {
+        return [];
+    }
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+    );
+
+    $files = [];
+
+    foreach ($iterator as $file) {
+        if ($file instanceof SplFileInfo && str_ends_with($file->getFilename(), '.blade.php')) {
+            $files[] = $file->getPathname();
+        }
+    }
+
+    sort($files);
 
     return $files;
 };
@@ -162,10 +266,69 @@ it('maps every Tailwind theme variable onto a token rather than a literal', func
         '--font-sans' => '--font-sans',
         '--font-mono' => '--font-mono',
         '--ease-default' => '--ease-default',
+        // Bridged after the Story 1.8 code review — see the test below for why.
+        '--leading-prose' => '--leading-prose',
+        '--container-measure' => '--max-prose',
+        '--default-transition-duration' => '--duration-default',
+        '--default-transition-timing-function' => '--ease-default',
     ];
 
     foreach ($bridges as $themeVariable => $token) {
         expect($css)->toContain("{$themeVariable}: var({$token});");
+    }
+});
+
+it('leaves no token declared but ungoverned — every token reaches a utility or a default', function () use ($readCss, $canonicalTokens): void {
+    /*
+     * The failure this prevents is the one the whole story exists to prevent: a
+     * value that LOOKS like the single source of truth while governing nothing.
+     *
+     * Three tokens shipped that way in the first cut of Story 1.8, because AC2
+     * listed only 12 bridges for 15 tokens:
+     *   - --leading-prose  : `leading-prose` emitted no rule whatsoever.
+     *   - --max-prose      : `max-w-prose` fell through to Tailwind's built-in 65ch.
+     *   - --duration-default: `transition` ran at Tailwind's 150ms default.
+     * None of it errored. Nothing went red. The stylesheet simply lied.
+     *
+     * Every token must therefore be reachable, either through the @theme bridge
+     * or by being consumed directly (the raw palette values feed --color-*).
+     */
+    $appCss = $readCss('resources/css/app.css');
+
+    $consumedDirectly = ['--bg', '--surface', '--border', '--text-primary', '--text-secondary'];
+
+    foreach (array_keys($canonicalTokens()) as $token) {
+        if (in_array($token, $consumedDirectly, true)) {
+            continue;
+        }
+
+        expect($appCss)->toContain("var({$token});");
+    }
+});
+
+it('bans max-w-prose, which silently resolves to Tailwind\'s 65ch instead of the token', function () use ($guardedStylesheets, $blades, $stripComments, $expectAbsent): void {
+    /*
+     * `max-w-prose` is a HARDCODED Tailwind built-in (65ch). Unlike every other
+     * container name it cannot be overridden — verified against the compiled CSS
+     * with both `@theme` and `@theme inline`, while the very same namespace
+     * generates any other name correctly. So --max-prose is exposed as
+     * `max-w-measure`, and typing the intuitive `max-w-prose` would quietly give
+     * 65ch instead of the 720px pinned by §2.5.
+     *
+     * Renaming alone leaves the trap armed. This turns it into a loud failure.
+     */
+    $sources = array_merge($guardedStylesheets(), $blades());
+
+    expect($sources)->not->toBeEmpty('Nothing was scanned for the max-w-prose ban.');
+
+    foreach ($sources as $source) {
+        $code = $stripComments((string) file_get_contents($source));
+
+        $expectAbsent(
+            $code,
+            'max-w-prose',
+            basename($source) . ' uses max-w-prose (65ch); use max-w-measure for the 720px token.',
+        );
     }
 });
 
@@ -195,8 +358,32 @@ it('imports the tokens UNLAYERED so they outrank Tailwind self-referencing theme
     expect($css)->toMatch("#@import\s+'\./tokens\.css'\s*;#");
 });
 
-it('no longer ships the Laravel starter kit font (Instrument Sans)', function () use ($readCss): void {
-    expect($readCss('resources/css/app.css'))->not->toContain('Instrument Sans');
+it('serves no Instrument Sans and no third-party font host anywhere in the app', function () use ($blades, $stripComments, $expectAbsent): void {
+    /*
+     * The first cut of this test only read app.css and was therefore vacuous: the
+     * app still shipped Instrument Sans, because welcome.blade.php pulled it from
+     * fonts.bunny.net on every page load. The stylesheet was clean; the app was
+     * not. Scanning the templates too is the whole point — fonts are requested
+     * from HTML, not from CSS.
+     *
+     * Third-party font hosts are banned outright: IBM Plex is self-hosted in
+     * Story 1.9 (SIL OFL), and a remote font is both a privacy leak and a render
+     * blocker for every fork-streamer deployment.
+     */
+    $sources = array_merge(glob(base_path('resources/css/*.css')) ?: [], $blades());
+
+    expect($sources)->not->toBeEmpty('Nothing was scanned for the font ban.');
+
+    $banned = ['Instrument Sans', 'fonts.bunny.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+
+    foreach ($sources as $source) {
+        $code = $stripComments((string) file_get_contents($source));
+        $name = basename($source);
+
+        foreach ($banned as $needle) {
+            $expectAbsent($code, $needle, "{$name} references {$needle}; IBM Plex is self-hosted (Story 1.9).");
+        }
+    }
 });
 
 it('keeps the four @source directives that drive Tailwind class detection', function () use ($readCss): void {
@@ -205,38 +392,40 @@ it('keeps the four @source directives that drive Tailwind class detection', func
     expect(substr_count($css, '@source '))->toBe(4);
 });
 
-it('flags a hardcoded hex (guard self-check — the detector must be able to fail)', function () use ($findHardcodedHex): void {
-    $offending = <<<'CSS'
-        .promo {
-            background-color: #AABBCC;
-        }
-        CSS;
-
-    expect($findHardcodedHex($offending))->toContain('#AABBCC');
+it('flags a hardcoded colour in every notation (guard self-check — it must be able to fail)', function () use ($findHardcodedColours): void {
+    /*
+     * One case per notation. A guard that only knew #RRGGBB would wave the other
+     * three through — and oklch() is the likeliest paste of all, since Tailwind's
+     * own palette is authored in it.
+     */
+    expect($findHardcodedColours('.a { background-color: #AABBCC; }'))->toContain('#AABBCC');
+    expect($findHardcodedColours('.b { background: oklch(0.7 0.21 41); }'))->not->toBeEmpty();
+    expect($findHardcodedColours('.c { color: rgb(255 87 34); }'))->not->toBeEmpty();
+    expect($findHardcodedColours('.d { color: white; }'))->not->toBeEmpty();
 });
 
-it('does not flag hex inside var() references or comments (guard self-check, no false positive)', function () use ($findHardcodedHex): void {
+it('does not flag colours inside var() references or comments (guard self-check, no false positive)', function () use ($findHardcodedColours): void {
     $clean = <<<'CSS'
-        /* Lava is #FF5722 — documented here on purpose. */
+        /* Lava is #FF5722 — documented here on purpose, and white is fine in prose. */
         .badge-live {
             background-color: var(--accent-lava);
             color: var(--text-primary, #FFFFFF);
         }
         CSS;
 
-    expect($findHardcodedHex($clean))->toBeEmpty();
+    expect($findHardcodedColours($clean))->toBeEmpty();
 });
 
-it('finds no hardcoded hex in any design-system stylesheet (real scan)', function () use ($guardedStylesheets, $findHardcodedHex): void {
+it('finds no hardcoded colour in any design-system stylesheet (real scan, recursive)', function () use ($guardedStylesheets, $findHardcodedColours): void {
     $files = $guardedStylesheets();
 
     // Anti-vacuity: a scan over zero files would be green and worthless.
-    expect($files)->not->toBeEmpty('The anti-hex scan found no stylesheet to inspect.');
+    expect($files)->not->toBeEmpty('The colour scan found no stylesheet to inspect.');
 
     foreach ($files as $file) {
         $contents = (string) file_get_contents($file);
 
-        expect($findHardcodedHex($contents))
-            ->toBeEmpty(basename($file) . ' hardcodes a hex colour — use var(--token) instead.');
+        expect($findHardcodedColours($contents))
+            ->toBeEmpty(basename($file) . ' hardcodes a colour — use var(--token) instead.');
     }
 });

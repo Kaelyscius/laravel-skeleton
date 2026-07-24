@@ -48,5 +48,29 @@
     --font-sans: var(--font-sans);
     --font-mono: var(--font-mono);
 
+    /*
+     * Lecture longue. Sans ces mappings les tokens --leading-prose et --max-prose
+     * existeraient sans rien gouverner : `leading-prose` n'émettrait AUCUNE règle.
+     * `--container-*` est le namespace Tailwind qui produit les utilities max-w-*.
+     *
+     * ⚠️ Le nom `measure` (terme typographique pour la longueur de ligne) n'est PAS
+     * un caprice : `max-w-prose` est un built-in Tailwind CODÉ EN DUR à 65ch, et il
+     * est impossible à surcharger — vérifié, ni `@theme` ni `@theme inline` ne le
+     * remplacent, alors que le même namespace génère correctement n'importe quel
+     * autre nom. Utiliser `max-w-prose` donnerait donc 65ch au lieu des 720px de
+     * §2.5, sans erreur. Un test interdit `max-w-prose` dans tout le code.
+     */
+    --leading-prose: var(--leading-prose);
+    --container-measure: var(--max-prose);
+
+    /*
+     * Motion (UX-DR-43). Mapper --ease-default ne suffit pas : les utilities
+     * `transition` / `transition-colors` lisent --default-transition-*, donc sans
+     * ces deux lignes elles tournent aux défauts Tailwind (150ms, cubic-bezier
+     * (.4,0,.2,1)) et il faudrait penser à écrire `ease-default` à chaque appel.
+     * Ici le token gouverne par défaut : `transition` seul respecte §2.5.
+     */
     --ease-default: var(--ease-default);
+    --default-transition-duration: var(--duration-default);
+    --default-transition-timing-function: var(--ease-default);
 }
