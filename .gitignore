@@ -34,6 +34,14 @@ config/*.p12
 secrets/
 auth.json
 
+# ⚠️ Les 3 patterns ci-dessus sont des règles SECRETS, mais ils matchent le NOM
+# de n'importe quel fichier — y compris du code source parfaitement légitime.
+# Chaque faux positif doit être ré-autorisé explicitement ici, sinon le fichier
+# disparaît du dépôt SANS erreur : build vert en local, absent après un clone.
+# Cas connus à venir : migration Sanctum create_personal_access_tokens_table
+# et le modèle PersonalAccessToken (Story 1.10).
+!src/resources/css/tokens.css
+
 # Certificats SSL (sauf .gitkeep)
 docker/apache/conf/ssl/*.crt
 docker/apache/conf/ssl/*.key
