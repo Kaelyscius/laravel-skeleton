@@ -6,16 +6,47 @@ namespace App\Providers;
 
 use App\HealthChecks\DatabaseHealthCheck;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use Spatie\Health\Facades\Health;
 
 class AppServiceProvider extends ServiceProvider
 {
     /**
      * Register any application services.
+     *
+     * Conditionally registers each deactivatable module's service provider
+     * based on config/modules.php (ADR-0001/0009). Core stays unconditional in
+     * bootstrap/providers.php. The class_exists() guard keeps a fork that
+     * removed a module directory from fataling.
      */
     public function register(): void
     {
-        //
+        $modules = config('modules');
+
+        foreach (self::moduleProviders(is_array($modules) ? $modules : []) as $provider) {
+            if (class_exists($provider)) {
+                $this->app->register($provider);
+            }
+        }
+    }
+
+    /**
+     * Map enabled module config keys to their service-provider FQCNs.
+     *
+     * Falsy values (false / 0 / '' / null) are dropped, so a disabled module is
+     * never registered. Snake_case keys are Studly-cased (press_kit → PressKit).
+     *
+     * @param  array<string, mixed>  $modules
+     * @return array<int, string>
+     */
+    public static function moduleProviders(array $modules): array
+    {
+        return collect($modules)
+            ->filter()
+            ->keys()
+            ->map(fn ($key): string => 'App\\Modules\\' . Str::studly((string) $key)
+                . '\\Providers\\' . Str::studly((string) $key) . 'ServiceProvider')
+            ->all();
     }
 
     /**
