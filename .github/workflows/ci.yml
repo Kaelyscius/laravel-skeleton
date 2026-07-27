@@ -25,17 +25,18 @@ jobs:
     timeout-minutes: 25
 
     services:
-      mariadb:
-        image: mariadb:11.8
+      # PostgreSQL 17 — moteur de production (ADR-0007, architecture §9.2).
+      # Doit rester aligné sur l'image du service `postgres` de docker-compose.yml.
+      postgres:
+        image: postgres:17-alpine
         env:
-          MYSQL_ROOT_PASSWORD: laravel_test
-          MYSQL_DATABASE: laravel_test
-          MYSQL_USER: laravel_test
-          MYSQL_PASSWORD: laravel_test
+          POSTGRES_DB: laravel_test
+          POSTGRES_USER: laravel_test
+          POSTGRES_PASSWORD: laravel_test
         ports:
-          - 3306:3306
+          - 5432:5432
         options: >-
-          --health-cmd="mariadb-admin ping --silent"
+          --health-cmd="pg_isready -U laravel_test -d laravel_test"
           --health-interval=10s
           --health-timeout=10s
           --health-retries=5
@@ -62,7 +63,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ env.PHP_VERSION }}
-          extensions: bcmath, ctype, curl, dom, fileinfo, filter, gd, hash, intl, json, libxml, mbstring, openssl, pcre, pdo, pdo_mysql, redis, session, tokenizer, xml, zip
+          extensions: bcmath, ctype, curl, dom, fileinfo, filter, gd, hash, intl, json, libxml, mbstring, openssl, pcre, pdo, pdo_pgsql, redis, session, tokenizer, xml, zip
           coverage: xdebug
           tools: composer:v2
           ini-values: memory_limit=2G, max_execution_time=300, opcache.jit=0
@@ -134,10 +135,12 @@ jobs:
             'APP_ENV=testing' \
             'APP_DEBUG=true' \
             '' \
-            '# Base de données de test' \
-            'DB_CONNECTION=mysql' \
+            '# Base de données de test — PostgreSQL 17 (ADR-0007).' \
+            '# Doit rester cohérent avec src/phpunit.xml, dont les <env> priment' \
+            '# sur ce .env (Dotenv immutable ne surcharge pas une var déjà définie).' \
+            'DB_CONNECTION=pgsql' \
             'DB_HOST=127.0.0.1' \
-            'DB_PORT=3306' \
+            'DB_PORT=5432' \
             'DB_DATABASE=laravel_test' \
             'DB_USERNAME=laravel_test' \
             'DB_PASSWORD=laravel_test' \
@@ -172,9 +175,11 @@ jobs:
       # ==========================================
       - name: 🗄️ Wait for database and run migrations
         working-directory: src
+        env:
+          PGPASSWORD: laravel_test
         run: |
-          # Attendre que MariaDB soit prêt
-          timeout 60 bash -c 'until mysql -h127.0.0.1 -P3306 -ularavel_test -plaravel_test -e "SELECT 1" >/dev/null 2>&1; do sleep 2; done'
+          # Attendre que PostgreSQL accepte les connexions
+          timeout 60 bash -c 'until pg_isready -h 127.0.0.1 -p 5432 -U laravel_test -d laravel_test >/dev/null 2>&1; do sleep 2; done'
           echo "✅ Database connection successful"
           
           # Exécuter les migrations
@@ -183,7 +188,9 @@ jobs:
 
       # ==========================================
       # Garde-fou tenancy v1 (Story 1.5) — gate de déploiement.
-      # NB: Epic 2 (Stories 2.7/2.8 ci-matrix php+postgres) refondra ce workflow.
+      # NB: le volet PostgreSQL de la Story 2.8 est fait. Restent à traiter dans
+      # Epic 2 : matrice PHP 8.4 + 8.5.1, découpage en jobs séparés, et bascule
+      # de Rector/Insights en informatifs (architecture §9.2).
       # ==========================================
       - name: 🔒 Assert tenancy invariant (mono-streamer)
         working-directory: src

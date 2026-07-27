@@ -597,27 +597,34 @@ npm-watch: npm-install ## Mode watch
 # =============================================================================
 # TESTING
 # =============================================================================
+# NB: `-e TELESCOPE_ENABLED=false` est indispensable, pas cosmétique.
+# `php artisan test` boote l'application AVANT que les <env> de phpunit.xml
+# s'appliquent : le process artisan lit donc le .env de dev, où Telescope est
+# actif. Telescope tente ensuite de journaliser la commande dans
+# `telescope_entries` (absente de la base de dev) et `make test` sortait en
+# non-zéro alors que 100 % des tests passaient — un code de sortie qui ment
+# invalide toute automatisation en aval (hook pre-commit, CI, ratchet).
 
 .PHONY: test
 test: ## Lancer tous les tests
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan test
+	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test
 
 .PHONY: test-unit
 test-unit: ## Tests unitaires
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan test --testsuite=Unit
+	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --testsuite=Unit
 
 .PHONY: test-coverage
 test-coverage: ## Tests avec couverture
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan test --coverage-html coverage
+	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --coverage-html coverage
 
 .PHONY: test-drift
 test-drift: ## Tests avec détection de code non couvert (Drift)
 	@echo "$(CYAN)🎯 Exécution des tests avec Drift...$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan test --drift
+	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --drift
 
 .PHONY: test-feature
 test-feature: ## Tests fonctionnels
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan test --testsuite=Feature
+	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --testsuite=Feature
 
 # =============================================================================
 # CODE QUALITY
