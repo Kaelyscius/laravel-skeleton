@@ -23,6 +23,9 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+
 env:
   REGISTRY: docker.io
   NAMESPACE: laravel-skeleton
@@ -142,7 +145,12 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}-${{ matrix.service }}
+          # Le compte propriétaire est OBLIGATOIRE. Sans lui, `docker.io/laravel-skeleton-apache`
+          # n'a qu'un seul segment de chemin : Docker le résout en
+          # `docker.io/library/laravel-skeleton-apache`, l'espace de noms officiel,
+          # où personne ne peut pousser. D'où l'échec constant du workflow :
+          #   push access denied … insufficient_scope: authorization failed
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.NAMESPACE }}-${{ matrix.service }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
