@@ -42,9 +42,15 @@ Ce document planifie les mises à jour futures des images Docker base.
 
 ---
 
-### 📅 **2027 - Node.js 26 LTS**
+### 📅 **2026 - Node.js 26 LTS**
 
-**Date cible :** Octobre 2027 (quand Node.js 26 devient LTS)
+**Date cible :** fin 2026 / début 2027.
+
+Node.js 26 devient LTS le **2026-10-28** (et non octobre 2027 — erreur corrigée le
+2026-07-27 après vérification du calendrier officiel `nodejs/Release`). Node 24
+quitte l'Active LTS le **2026-10-20** : les deux dates se croisent, c'est la
+fenêtre de migration naturelle. En appliquant le principe « attendre 2-3 mois
+après la release LTS » ci-dessous, la bascule se fait donc vers janvier 2027.
 
 **Status :** 🔮 Planifié
 
@@ -95,8 +101,8 @@ Ce document planifie les mises à jour futures des images Docker base.
 
 | Composant | Version | EOL |
 |-----------|---------|-----|
-| Node.js 24 LTS | LTS actif | Avr 2028 |
-| Node.js 22 LTS | LTS actif | Avr 2027 |
+| Node.js 24 LTS | Active LTS jusqu'au 20 oct. 2026, puis maintenance | Avr 2028 |
+| Node.js 22 LTS | Maintenance (depuis oct. 2025) | Avr 2027 |
 | PHP 8.5 | Actif | Nov 2027 |
 | PHP 8.4 | Actif | Nov 2026 |
 | PostgreSQL 17 | Stable actuel | Nov 2029 |

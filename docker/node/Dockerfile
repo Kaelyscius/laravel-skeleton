@@ -1,3 +1,19 @@
+# Node 24 « Krypton » — ligne LTS ACTIVE, pas la version la plus haute.
+#
+# ⚠️ Ne pas bumper vers Node 26 avant le 2026-10-28. Vérifié sur le calendrier
+# officiel (nodejs/Release) le 2026-07-27 :
+#
+#   v24  LTS depuis 2025-10-28 · Active jusqu'au 2026-10-20 · fin 2028-04-30
+#   v26  sortie 2026-05-05 · Current, LTS seulement le 2026-10-28 · fin 2029-04-30
+#   v25  jamais LTS, déjà morte (2026-06-01)
+#
+# « Le plus à jour possible » ne veut pas dire « la version la plus haute » :
+# les majeures impaires ne deviennent jamais LTS, et les paires ne le
+# deviennent qu'en octobre de leur année de sortie.
+#
+# Fenêtre de migration : les deux dates se croisent presque (24 quitte l'Active
+# LTS le 20 octobre, 26 le devient le 28). C'est à ce moment-là qu'il faudra
+# passer à Node 26, et pas avant.
 FROM node:24.18.0-alpine3.23
 
 # Arguments utilisateur
