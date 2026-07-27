@@ -16,11 +16,11 @@
     "laravel/pulse": "^1.0",
     "laravel/sanctum": "^4.0",
     "laravel/telescope": "^5.0",
-    "laravel/tinker": "^2.10.1",
+    "laravel/tinker": "^3",
     "spatie/laravel-activitylog": "^5.0",
     "spatie/laravel-csp": "^3.0",
     "spatie/laravel-health": "^1.0",
-    "spatie/laravel-permission": "^7.0",
+    "spatie/laravel-permission": "^8",
     "spatie/laravel-schedule-monitor": "^4.0"
   },
   "require-dev": {
@@ -141,7 +141,9 @@
     "preferred-install": "dist",
     "sort-packages": true,
     "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true,
       "pestphp/pest-plugin": true,
+      "php-code-archeology/php-code-archeology": true,
       "php-http/discovery": true,
       "phpstan/extension-installer": true
     }
