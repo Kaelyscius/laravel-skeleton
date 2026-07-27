@@ -17,6 +17,8 @@ use Illuminate\Database\Eloquent\Scope;
  * table-qualified to stay unambiguous once joins appear (Epic 6 archive).
  * Resolving CurrentStreamer is fail-loud: a query built without the tenant
  * middleware having run throws rather than leaking every row.
+ *
+ * @implements Scope<Model>
  */
 class BelongsToStreamerScope implements Scope
 {
