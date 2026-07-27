@@ -718,6 +718,22 @@ setup-git-hooks: ## Installer les hooks Git custom
 # QUALITY WORKFLOWS
 # =============================================================================
 
+.PHONY: hooks-install
+hooks-install: ## Activer les hooks git versionnés (.githooks/)
+	@git config core.hooksPath .githooks
+	@chmod +x .githooks/* 2>/dev/null || true
+	@echo "$(GREEN)✓ core.hooksPath = .githooks$(NC)"
+	@echo "$(YELLOW)💡 .git/hooks/ n'est jamais cloné : cette commande est à relancer sur chaque fork$(NC)"
+
+.PHONY: hooks-check
+hooks-check: ## Vérifier que les hooks versionnés sont bien actifs
+	@if [ "$$(git config core.hooksPath)" = ".githooks" ] && [ -x .githooks/pre-commit ]; then \
+		echo "$(GREEN)✓ hooks versionnés actifs et exécutables$(NC)"; \
+	else \
+		echo "$(RED)✗ hooks inactifs — lancez : make hooks-install$(NC)"; \
+		exit 1; \
+	fi
+
 .PHONY: quality-ratchet
 quality-ratchet: ## Vérifier le plafond de dette qualité (ECS + PHPStan, monotone)
 	@./scripts/quality-ratchet.sh

@@ -212,6 +212,23 @@ EOF
     fi
 }
 
+install_git_hooks() {
+    log_info "🪝 Activation des hooks git versionnés..."
+
+    # .git/hooks/ n'est JAMAIS cloné : sans core.hooksPath, un fork n'hérite
+    # d'aucun hook. C'est précisément ce qui s'est passé sur ce dépôt — le hook
+    # existait, en mode 644, et n'a jamais tourné de toute l'Epic 1.
+    local root
+    root="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+    if [ -d "$root/.githooks" ]; then
+        (cd "$root" && git config core.hooksPath .githooks && chmod +x .githooks/* 2>/dev/null || true)
+        log_success "✅ Hooks git activés (core.hooksPath = .githooks)"
+    else
+        log_warn "⚠️ Répertoire .githooks/ introuvable — hooks non activés"
+    fi
+}
+
 configure_test_database() {
     log_info "🗄️ Configuration de la base de données de test..."
     
@@ -386,8 +403,11 @@ main() {
     final_optimizations
     create_security_txt
     
-    # Configuration base de données de test (remplacer SQLite)
+    # Configuration base de données de test
     configure_test_database
+
+    # Hooks git versionnés — indispensable pour qu'un fork les hérite
+    install_git_hooks
     
     # Vérifications finales
     local checks_passed=true

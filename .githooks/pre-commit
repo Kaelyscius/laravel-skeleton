@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# =============================================================================
+# HOOK PRE-COMMIT — versionné, rapide, et réellement exécuté
+# =============================================================================
+#
+# Pourquoi ce fichier existe (et pourquoi il vit ICI)
+# ---------------------------------------------------
+# L'ancien hook était dans .git/hooks/, en mode 644 : git l'a ignoré à CHAQUE
+# commit du projet, en affichant un avertissement que personne n'a lu. Tous les
+# commits des Stories 1.1 à 1.8 sont passés sans la moindre vérification.
+#
+# Et même corrigé, il n'aurait protégé que la machine d'Alex : .git/hooks/ n'est
+# PAS cloné. Pour un projet dont la thèse est la forkabilité (ADR-0001), un
+# garde-fou que le fork n'hérite pas n'est pas un garde-fou, c'est un artefact
+# local. D'où .githooks/ versionné + core.hooksPath (make hooks-install).
+#
+# Pourquoi il est court
+# ---------------------
+# L'ancien hook enchaînait `make ecs` (projet entier), `make phpstan` et
+# `make test-unit`. Sur une baseline qui portait 28 violations, chaque commit
+# aurait échoué, et le réflexe serait devenu `--no-verify` — c'est-à-dire pire
+# que pas de hook du tout.
+#
+# Règle retenue : le hook ne fait que du RAPIDE et du LOCAL au commit.
+# PHPStan, la suite de tests et le ratchet sont le travail de la CI. Un hook
+# lent est un hook contourné.
+
+set -uo pipefail
+
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; RED='\033[0;31m'; NC='\033[0m'
+ok()   { echo -e "${GREEN}  ✅ $*${NC}"; }
+info() { echo -e "${BLUE}  → $*${NC}"; }
+warn() { echo -e "${YELLOW}  ⚠️  $*${NC}"; }
+fail() { echo -e "${RED}  ❌ $*${NC}"; }
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+echo ""
+echo "🔍 pre-commit — vérifications rapides"
+
+FAILED=0
+
+# --- 1. Secrets --------------------------------------------------------------
+# Le seul contrôle dont l'échec est IRRÉVERSIBLE : un secret poussé sur un dépôt
+# public ne se rattrape pas, seule la rotation aide.
+info "Secrets (gitleaks)…"
+GITLEAKS_BIN="$(command -v gitleaks || echo "$HOME/.local/bin/gitleaks")"
+if [ -x "$GITLEAKS_BIN" ]; then
+    if "$GITLEAKS_BIN" git --pre-commit --staged --redact --no-banner >/dev/null 2>&1; then
+        ok "aucun secret détecté"
+    else
+        fail "gitleaks a détecté un secret dans les fichiers indexés"
+        "$GITLEAKS_BIN" git --pre-commit --staged --redact --no-banner 2>&1 | sed 's/^/      /' | tail -20
+        FAILED=1
+    fi
+else
+    # Volontairement non bloquant : un forkeur qui n'a pas encore installé
+    # gitleaks ne doit pas être empêché de committer. La CI, elle, est bloquante.
+    warn "gitleaks introuvable — contrôle ignoré (la CI le fera)"
+    warn "installation : https://github.com/gitleaks/gitleaks/releases"
+fi
+
+# --- 2. Fichiers exclus du dépôt --------------------------------------------
+# 6 fichiers légitimes ont déjà disparu ainsi, dont toute la stratégie ADR-0003.
+info "Fichiers source/doc exclus du dépôt…"
+if ./scripts/assert-tracked-files.sh >/dev/null 2>&1; then
+    ok "aucun fichier attendu n'est exclu"
+else
+    fail "des fichiers sont ignorés alors qu'ils devraient être versionnés"
+    ./scripts/assert-tracked-files.sh 2>&1 | sed 's/^/      /' | tail -15
+    FAILED=1
+fi
+
+# --- 3. Style, sur les fichiers INDEXÉS uniquement ---------------------------
+STAGED_PHP="$(git diff --cached --name-only --diff-filter=ACMR -- 'src/**/*.php' | sed 's|^src/||')"
+if [ -n "$STAGED_PHP" ]; then
+    info "Style ECS ($(echo "$STAGED_PHP" | wc -l) fichier(s) indexé(s))…"
+    if docker compose ps --status running --services 2>/dev/null | grep -qx php; then
+        # shellcheck disable=SC2086
+        if docker compose exec -T -u 1000:1000 -w /var/www/html php \
+             vendor/bin/ecs check $STAGED_PHP --no-progress-bar >/dev/null 2>&1; then
+            ok "style conforme"
+        else
+            fail "violations de style dans les fichiers indexés"
+            echo -e "${YELLOW}      correction : make ecs-fix${NC}"
+            FAILED=1
+        fi
+    else
+        warn "conteneur php arrêté — contrôle de style ignoré (la CI le fera)"
+    fi
+else
+    info "Aucun fichier PHP indexé — style non vérifié"
+fi
+
+echo ""
+if [ "$FAILED" -ne 0 ]; then
+    echo -e "${RED}✖ Commit refusé.${NC}"
+    echo ""
+    echo "  Contournement possible : git commit --no-verify"
+    echo "  Mais lisez d'abord ce qui précède — ces contrôles existent parce que"
+    echo "  chacun d'eux correspond à un incident réel de ce dépôt."
+    exit 1
+fi
+
+echo -e "${GREEN}✔ Commit autorisé.${NC}"
+echo ""
+exit 0
