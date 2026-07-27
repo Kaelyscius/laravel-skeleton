@@ -1,0 +1,16 @@
+# Empreintes gitleaks allowlistées — faux positifs vérifiés un par un.
+#
+# Format : <commit>:<chemin>:<règle>:<ligne>
+# L'empreinte épingle le couple exact. Un NOUVEAU secret dans le même fichier
+# reste détecté — une allowlist par chemin l'aurait masqué.
+#
+# Scan de référence : 2026-07-27, 56 commits, 13,16 Mo, 2 findings.
+# Aucun secret réel dans l'historique du dépôt.
+
+# Bloc de documentation illustrant une MAUVAISE pratique — valeurs factices
+# (`sk_live_abc123`, `wJalrXUtnFEMI`) dans un exemple « ne faites pas ça ».
+df527bf20f957418d4e32c33d2e5020538a487cc:src/.claude/skills/laravel-best-practices/rules/config.md:generic-api-key:30
+
+# `SNYK_TOKEN=""` — déclaration VIDE. gitleaks a agrégé la ligne suivante
+# (`SNYK_SEVERITY_THRESHOLD="high"`) et pris `high` pour le secret.
+0fb9db61f982ee5aefd2e1ec1db8f8ca75ad8ab9:scripts/security/snyk-scan.sh:generic-api-key:24

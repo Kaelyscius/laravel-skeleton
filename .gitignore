@@ -26,27 +26,43 @@ config/*.p12
 *.pem
 *.p12
 
-# Tokens et clés API dans tous formats
-*token*
-*secret*
-*password*
+# Tokens et clés API — patterns ANCRÉS par extension et par répertoire.
+#
+# ⚠️ NE PAS réintroduire `*token*`, `*secret*` ou `*password*`.
+#
+# Ces trois patterns ont été retirés le 2026-07-27. Ils filtraient le NOM des
+# fichiers, ce qui a échoué dans les deux sens :
+#   - faux positif : ils ont silencieusement exclu src/resources/css/tokens.css,
+#     livrable central de la Story 1.8. Build vert en local, fichier absent après
+#     un `git clone` — donc cassé pour tout fork-streamer (ADR-0001). Aucune
+#     erreur, aucun signal.
+#   - faux négatif : ils n'ont JAMAIS empêché un secret d'entrer, puisqu'ils ne
+#     regardent pas le contenu. Ils donnaient l'illusion d'une protection.
+#   - et le piège était réarmé : la Story 1.10 (Sanctum) apporte
+#     create_personal_access_tokens_table et PersonalAccessToken, qui auraient
+#     tous deux disparu du dépôt en silence.
+#
+# La protection par CONTENU est désormais assurée par gitleaks
+# (.gitleaksignore + job CI + hook pre-commit), et un test Pest vérifie
+# qu'aucun fichier attendu n'a disparu du suivi git.
+*.token
+*.secret
+*.pem.key
 .secrets/
 secrets/
 auth.json
-
-# ⚠️ Les 3 patterns ci-dessus sont des règles SECRETS, mais ils matchent le NOM
-# de n'importe quel fichier — y compris du code source parfaitement légitime.
-# Chaque faux positif doit être ré-autorisé explicitement ici, sinon le fichier
-# disparaît du dépôt SANS erreur : build vert en local, absent après un clone.
-# Cas connus à venir : migration Sanctum create_personal_access_tokens_table
-# et le modèle PersonalAccessToken (Story 1.10).
-!src/resources/css/tokens.css
 
 # Certificats SSL (sauf .gitkeep)
 docker/apache/conf/ssl/*.crt
 docker/apache/conf/ssl/*.key
 docker/apache/conf/ssl/*.pem
 !docker/apache/conf/ssl/.gitkeep
+
+# Rotations de certificats produites par le script de génération SSL.
+# Règle ANCRÉE par chemin : elle remplace l'ancien `*backup*` global, qui
+# couvrait bien ces répertoires mais excluait aussi, sans le dire, les ADR et
+# les scripts de sauvegarde du projet.
+docker/apache/conf/ssl/backup-*/
 
 # ===========================================
 # LARAVEL SPÉCIFIQUE
@@ -134,7 +150,17 @@ desktop.ini
 *.orig
 *.tmp
 *.temp
-*backup*
+
+# ⚠️ NE PAS réintroduire `*backup*` (retiré le 2026-07-27).
+#
+# Même défaut que les anciens `*token*` / `*secret*` : il matchait le NOM de
+# n'importe quel fichier, n'importe où. Il a silencieusement exclu
+# docs/adr/ADR-0003-backup-local-only-v1.md — un ADR référencé depuis 4 endroits
+# (index ADR, glossaire, roundtable-decisions, backlog) mais ABSENT du dépôt.
+# Un fork-streamer clonait une documentation aux liens morts.
+#
+# Les extensions ancrées ci-dessus (*.bak, *.backup*) couvrent le vrai besoin :
+# les fichiers de sauvegarde produits par les éditeurs et les scripts.
 
 # ===========================================
 # MONITORING & LOGS SENSIBLES
@@ -169,8 +195,17 @@ config/installer.yml.backup*
 # ===========================================
 # Cache des outils
 .composer/
-vendor/
 node_modules/
+
+# Dépendances Composer — ANCRÉES sur le vrai répertoire.
+#
+# ⚠️ NE PAS remettre `vendor/` sans ancre : le pattern matchait n'importe quel
+# répertoire nommé `vendor` à n'importe quelle profondeur, et excluait donc
+# src/resources/views/vendor/ — la convention Laravel pour les vues de packages
+# PUBLIÉES, qui doivent être versionnées. Le tableau de bord Pulse personnalisé
+# (ADR-0004) était ainsi absent de tout clone.
+/vendor/
+/src/vendor/
 
 # Configuration locale de développement
 .vscode/settings.json

@@ -37,6 +37,42 @@ env:
 
 jobs:
   # ===========================================================================
+  # JOB 0 — INTÉGRITÉ DU DÉPÔT (secrets + fichiers manquants)
+  # ===========================================================================
+  # Bloquant prod n°1 de docs/architecture/7-architecture-scurit.md §7.1.
+  integrity:
+    name: Integrity (gitleaks · fichiers suivis)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # gitleaks scanne l'HISTORIQUE : un clone superficiel ne verrait que
+          # le dernier commit et raterait tout secret introduit puis retiré.
+          fetch-depth: 0
+
+      # Binaire officiel plutôt que gitleaks/gitleaks-action : une action tierce
+      # de moins à qui faire confiance dans le pipeline (même raisonnement que
+      # l'épinglage par SHA), et cela évite la licence que l'action exige pour
+      # les comptes d'organisation.
+      - name: 🔐 Scan de secrets (gitleaks, historique complet)
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -fsSL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks version
+          /tmp/gitleaks git --redact --no-banner --verbose .
+
+      # Attrape les fichiers présents en local mais exclus du dépôt par un
+      # pattern .gitignore trop large — 4 occurrences réelles constatées.
+      - name: 📦 Aucun fichier source/doc exclu du dépôt
+        run: ./scripts/assert-tracked-files.sh
+
+  # ===========================================================================
   # JOB 1 — QUALITÉ (sans base de données)
   # ===========================================================================
   # Vérifié : ECS, PHPStan et Insights tournent tous sans connexion DB.
@@ -269,7 +305,7 @@ jobs:
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [quality, tests]
+    needs: [integrity, quality, tests]
     if: always()
 
     steps:
@@ -279,6 +315,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Résultat |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Integrity (gitleaks · fichiers suivis) | ${{ needs.integrity.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Quality (ECS · PHPStan · Ratchet) | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Pest × PostgreSQL 17) | ${{ needs.tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -286,5 +323,5 @@ jobs:
           echo "leur échec n'arrête pas le pipeline mais reste visible dans le job Quality." >> $GITHUB_STEP_SUMMARY
 
       - name: ❌ Fail if a blocking job failed
-        if: needs.quality.result != 'success' || needs.tests.result != 'success'
+        if: needs.integrity.result != 'success' || needs.quality.result != 'success' || needs.tests.result != 'success'
         run: exit 1
