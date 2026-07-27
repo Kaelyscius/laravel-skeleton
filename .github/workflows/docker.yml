@@ -196,6 +196,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          # Sans `load`, l'image poussée n'existe PAS dans le démon local du
+          # runner : l'étape de test suivante tentait un `docker run` sur une
+          # image absente, d'où « pull access denied ».
+          load: true
           build-args: |
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
             VCS_REF=${{ github.sha }}
@@ -208,24 +212,34 @@ jobs:
           echo "🧪 Testing ${{ matrix.service }} image..."
           
           # Basic smoke test
-          image_name="${{ env.REGISTRY }}/${{ env.NAMESPACE }}-${{ matrix.service }}:${{ github.sha }}"
+          # Le nom doit venir de metadata-action, pas être reconstruit à la main :
+          # la reconstruction omettait le compte propriétaire ET utilisait un tag
+          # `:${{ github.sha }}` qui ne fait pas partie des tags produits
+          # (main, latest, main-<sha-court>).
+          image_name="${{ fromJSON(steps.meta.outputs.json).tags[0] }}"
+          echo "Image testée : $image_name"
           
+          # `--entrypoint` est INDISPENSABLE, pas cosmétique. Ces images ont un
+          # entrypoint qui démarre le service : sans surcharge, la commande
+          # passée est reçue comme argument par l'entrypoint, qui l'ignore et
+          # lance le serveur. Le test affichait alors « Démarrage du container »
+          # au lieu d'exécuter la vérification — un test qui ne testait rien.
           case "${{ matrix.service }}" in
             "php")
               echo "Testing PHP image..."
-              docker run --rm "$image_name" php --version
-              docker run --rm "$image_name" composer --version
+              docker run --rm --entrypoint php "$image_name" --version
+              docker run --rm --entrypoint composer "$image_name" --version
               echo "✅ PHP image test passed"
               ;;
             "apache")
               echo "Testing Apache image..."
-              docker run --rm "$image_name" apache2ctl -v
+              docker run --rm --entrypoint httpd "$image_name" -v
               echo "✅ Apache image test passed"
               ;;
             "node")
               echo "Testing Node.js image..."
-              docker run --rm "$image_name" node --version
-              docker run --rm "$image_name" npm --version
+              docker run --rm --entrypoint node "$image_name" --version
+              docker run --rm --entrypoint npm "$image_name" --version
               echo "✅ Node.js image test passed"
               ;;
           esac
