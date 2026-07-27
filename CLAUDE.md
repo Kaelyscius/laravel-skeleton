@@ -189,7 +189,7 @@ Modules activables au déploiement via variables d'environnement `MODULE_<NAME>_
 - **PHP 8.5** container with FPM, Supervisor, and OPcache
 - **Apache 2.4** with HTTPS/HTTP2 support
 - **PostgreSQL** for database
-- **PostgreSQL 17 (postgres-pulse)** dedicated container for Pulse monitoring (ADR-0004)
+- **PostgreSQL 18 (postgres-pulse)** dedicated container for Pulse monitoring (ADR-0004)
 - **Redis** for caching and sessions
 
 #### Profile "dev" (Outils de développement)
@@ -213,7 +213,7 @@ Modules activables au déploiement via variables d'environnement `MODULE_<NAME>_
 ### Laravel 13 Application Structure
 
 **Stack effective (source de vérité — vérifiée le 2026-07-27)** : PHP 8.5 · Laravel 13 ·
-PostgreSQL 17 · Livewire 4 · Tailwind 4 (CSS-first) · Pest 4 · Vite 8 · Filament v5 *(à
+PostgreSQL 18 · Livewire 4 · Tailwind 4 (CSS-first) · Pest 4 · Vite 8 · Filament v5 *(à
 installer en Story 1.10)*. Le verrou historique « Laravel 12 + Filament v3 » du PRD est levé —
 voir [ADR-0010](docs/adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md).
 
@@ -355,7 +355,7 @@ Si l'application est derrière un load balancer ou un proxy (Nginx, CloudFlare, 
 - Security scanning is integrated with Snyk
 - Watchtower handles automatic updates for standard Docker images
 - Custom images (PHP, Apache, Node) are excluded from auto-updates
-- Database: PostgreSQL 17 for both development and testing (no SQLite)
+- Database: PostgreSQL 18 for both development and testing (no SQLite) — voir ADR-0007 (amendé 2026-07-27)
 - Queue: Redis for job processing, PostgreSQL for job batching and failed jobs
 
 ## PhpStorm + WSL2 Configuration

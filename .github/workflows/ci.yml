@@ -155,7 +155,7 @@ jobs:
       # PostgreSQL 17 — moteur de production (ADR-0007, architecture §9.2).
       # Doit rester aligné sur l'image du service `postgres` de docker-compose.yml.
       postgres:
-        image: postgres:17-alpine
+        image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15 # 18.4 / alpine 3.24.1
         env:
           POSTGRES_DB: laravel_test
           POSTGRES_USER: laravel_test
@@ -170,7 +170,7 @@ jobs:
           --health-start-period=30s
 
       redis:
-        image: redis:8.6-alpine
+        image: redis:8-alpine@sha256:8096655e437712b07503796fb64d81359256cfcff0ab29d95a7da72863786efb # 8.8.1 / alpine 3.23.5
         ports:
           - 6379:6379
         options: >-

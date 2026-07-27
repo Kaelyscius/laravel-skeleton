@@ -283,7 +283,7 @@ Tous les éléments suivants sont **gravés** — ne pas re-débattre en review 
 
 - ~~Stack : PHP 8.4 + Laravel 12 + PostgreSQL 17 + Filament v3 + Livewire 3 + Tailwind 4 + Pest 4~~
   **AMENDÉ 2026-07-27 — voir [ADR-0010](adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md).**
-  Stack effective : **PHP 8.5 + Laravel 13 + PostgreSQL 17 + Filament v5 (Story 1.10) +
+  Stack effective : **PHP 8.5 + Laravel 13 + PostgreSQL 18 + Filament v5 (Story 1.10) +
   Livewire 4 + Tailwind 4 + Pest 4**. Le verrou v12/Filament v3 supposait Filament installé et
   porteur ; il ne l'était pas (0 occurrence dans `composer.json`), et v3 est aujourd'hui deux
   majeures en retard. PostgreSQL 17 reste inchangé (ADR-0007).

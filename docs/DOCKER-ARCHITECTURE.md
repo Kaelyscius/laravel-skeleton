@@ -26,7 +26,7 @@ Services toujours actifs sans profile spécifique :
 |---------|-------------|---------|
 | `apache` | Serveur web Apache 2.4 + HTTPS/HTTP2 | 80, 443 |
 | `php` | PHP 8.5.4 FPM + Supervisor + OPcache | - |
-| `postgres` | Base de données PostgreSQL 17 | 5432 |
+| `postgres` | Base de données PostgreSQL 18 | 5432 |
 | `postgres-pulse` | Base de données dédiée Pulse monitoring (ADR-0004) | - |
 | `redis` | Cache et sessions Redis | 6379 |
 

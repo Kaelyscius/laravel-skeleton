@@ -37,11 +37,13 @@ it('manipule du jsonb natif', function (): void {
         ->toBe(9);
 })->group('sentinel');
 
-it('tourne sur PostgreSQL 17 ou plus récent', function (): void {
+it('tourne sur PostgreSQL 18 ou plus récent', function (): void {
     $row = DB::selectOne("SELECT current_setting('server_version_num')::int AS version");
 
-    // 170000 = 17.0. Le seuil est un plancher : une montée de version majeure
+    // 180000 = 18.0. Le seuil est un plancher : une montée de version majeure
     // reste verte, un retour en arrière sous la version LOCKED rougit.
+    // Relevé de 170000 à 180000 lors de la montée PostgreSQL 18 — sans cela
+    // la sentinelle aurait silencieusement accepté un retour en 17.
     expect((int) $row->version)
-        ->toBeGreaterThanOrEqual(170000);
+        ->toBeGreaterThanOrEqual(180000);
 })->group('sentinel');

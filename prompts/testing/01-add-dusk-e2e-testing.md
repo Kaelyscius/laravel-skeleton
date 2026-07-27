@@ -416,7 +416,7 @@ dusk-tests:
         - 4444:4444
 
     postgres:
-      image: postgres:17-alpine
+      image: postgres:18-alpine
       env:
         POSTGRES_DB: laravel_test
         POSTGRES_USER: laravel

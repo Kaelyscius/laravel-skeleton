@@ -66,3 +66,74 @@ Implications concrètes :
 - `docs/roundtable-decisions.md` §2 (Stack technique LOCKED, ligne Postgres 17 + ligne MariaDB rejetée) et section "Switch Postgres validé end-to-end (2026-05-08)".
 - Mini-round Stack & Modularité 2026-05-08 (Winston vs Amelia, Victor en arbitre via filtre *"Si je ne fais jamais de SaaS, ce code est-il gaspillé ?"* — Postgres passe le test parce que JSONB+FR full-text+RLS justifient même en solo).
 - ADR liés : [ADR-0002](ADR-0002-rls-not-enabled-v1.md) (RLS reportée v2+, mais infrastructure Postgres dispo), [ADR-0003](ADR-0003-backup-local-only-v1.md) (pg_dump/pg_restore).
+
+---
+
+## Amendement 2026-07-27 — PostgreSQL 18
+
+> **Statut** : ✅ Accepted. Le choix de moteur (Postgres contre MariaDB) est
+> inchangé ; seule la version majeure évolue, de 17 à **18.4**.
+
+### Pourquoi
+
+Cet ADR a été écrit le 2026-05-08 et a fixé « PostgreSQL 17 ». Or **PostgreSQL 18
+était sorti depuis le 2025-09-25**, soit huit mois plus tôt. Le débat portait sur
+le moteur, pas sur la version majeure, et le numéro a été figé sur une image de
+l'écosystème déjà datée — le même mécanisme qui a produit « Filament v3 » alors
+que la v5 était courante (cf. [ADR-0010](ADR-0010-laravel-13-supersedes-filament-v3-lock.md)).
+
+Contrairement à Node, **PostgreSQL n'a pas de notion de LTS** : toutes les
+majeures supportées reçoivent les correctifs pendant cinq ans, il n'existe pas de
+branche « Current » instable. L'argument qui justifie de rester sur Node 24
+plutôt que Node 26 n'a donc aucun équivalent ici.
+
+| Majeure | Sortie | Fin de support |
+|---|---|---|
+| **18.4** ← retenue | 2025-09-25 | 2030-11-14 |
+| 17.10 | 2024-09-26 | 2029-11-08 |
+
+Et c'est le moment le moins cher : aucune donnée de production, la base de dev
+est recréable par `migrate:fresh --seed`. Dans six mois, avec des articles en
+base, une montée majeure impose un `pg_upgrade` ou un dump/restore.
+
+### Piège rencontré — changement de point de montage en 18+
+
+L'image officielle `postgres:18` **a changé son point de montage recommandé**.
+Un volume sur `/var/lib/postgresql/data` fait échouer le démarrage :
+
+```
+there appears to be PostgreSQL data in /var/lib/postgresql/data
+(unused mount/volume)
+```
+
+Il faut monter sur **`/var/lib/postgresql`** : l'image y crée un sous-répertoire
+versionné, ce qui permet un `pg_upgrade --link` sans se heurter à une frontière
+de point de montage. `docker-compose.yml` est corrigé pour les deux services
+(`postgres` et `postgres-pulse`), avec le raisonnement en commentaire.
+
+Ce piège n'était visible qu'à l'exécution réelle — aucune analyse statique ne
+l'aurait signalé.
+
+### Garde-fou mis à jour
+
+`src/tests/Feature/DatabaseEngineSentinelTest.php` relève son plancher de
+`170000` à `180000`. Sans cela, la sentinelle aurait silencieusement accepté un
+retour en arrière vers PostgreSQL 17.
+
+### Épinglage par digest
+
+Les images de `docker-compose.yml` et de la CI sont désormais épinglées par
+**digest** (`postgres:18-alpine@sha256:9a8afca…`), pas seulement par tag. Un tag
+reste mutable ; le digest ne l'est pas. C'est le même raisonnement que
+l'épinglage par SHA des actions GitHub — sur un projet destiné à être forké
+(ADR-0001), la chaîne d'approvisionnement fait partie du produit.
+
+### Vérifications
+
+```
+postgres --version        PostgreSQL 18.4
+conteneurs                postgres, postgres-pulse, redis, php, apache : healthy
+migrate:fresh --seed      OK
+tests                     55 passed / 203 assertions, exit 0
+sentinelle                4 passed (dont le plancher 180000)
+```

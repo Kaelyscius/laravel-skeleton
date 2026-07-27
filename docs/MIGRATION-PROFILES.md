@@ -84,7 +84,7 @@ make status
 ### Services toujours actifs (aucun profile)
 - **apache** : Serveur web
 - **php** : PHP-FPM
-- **postgres** : Base de données PostgreSQL 17
+- **postgres** : Base de données PostgreSQL 18
 - **redis** : Cache
 
 ### Profile "dev" (Outils de développement)
