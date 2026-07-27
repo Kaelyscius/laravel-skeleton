@@ -8,6 +8,11 @@ on:
       - 'Dockerfile'
       - '.dockerignore'
       - 'docker-compose*.yml'
+      # Sans cette ligne, modifier CE workflow ne le déclenche pas : un
+      # correctif du pipeline ne pouvait donc jamais être vérifié par le
+      # pipeline. Constaté le 2026-07-27 — le commit 4ea60a2 n'a produit
+      # aucun run.
+      - '.github/workflows/docker.yml'
   pull_request:
     branches: [ main ]
     paths:
@@ -265,11 +270,32 @@ jobs:
         run: |
           echo "🧪 Testing complete Docker environment..."
           
-          # Create test environment
-          cp src/.env.example src/.env || echo "No .env.example found"
-          
-          # Add test configuration
-          cat >> src/.env << 'EOF' || true
+          # DEUX fichiers .env sont nécessaires, et ils doivent CONCORDER.
+          #
+          # docker-compose.yml lit ${DB_DATABASE}, ${DB_USERNAME}, ${DB_PASSWORD}
+          # depuis le .env de la RACINE (substitution de variables Compose) pour
+          # initialiser POSTGRES_DB/USER/PASSWORD. src/.env, lui, ne sert qu'à
+          # Laravel.
+          #
+          # Le job ne copiait que src/.env : les variables Compose restaient
+          # vides, Postgres ne pouvait pas s'initialiser et sortait unhealthy en
+          # une demi-seconde — « dependency failed to start ».
+          #
+          # Et il ne suffit pas de copier les deux : si la racine crée la base
+          # `laravel` et que Laravel se connecte en `laravel_test`, la migration
+          # échoue juste après. Les mêmes valeurs sont donc écrites des deux côtés.
+          cp .env.example .env
+          cp src/.env.example src/.env
+
+          # Racine — consommé par Compose pour initialiser PostgreSQL
+          cat >> .env << 'EOF'
+          DB_DATABASE=laravel_test
+          DB_USERNAME=laravel_test
+          DB_PASSWORD=laravel_test
+          EOF
+
+          # src/ — consommé par Laravel, valeurs identiques
+          cat >> src/.env << 'EOF'
           APP_ENV=testing
           DB_CONNECTION=pgsql
           DB_HOST=postgres
@@ -279,6 +305,9 @@ jobs:
           REDIS_HOST=redis
           CACHE_DRIVER=redis
           SESSION_DRIVER=redis
+          TELESCOPE_ENABLED=false
+          PULSE_ENABLED=false
+          NIGHTWATCH_ENABLED=false
           EOF
           
           # Start services
