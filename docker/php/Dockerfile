@@ -1,8 +1,27 @@
 # Stage 1: Base avec toutes les extensions
-FROM php:8.5.8-fpm-alpine3.24 AS base
+# php 8.5.8 / alpine 3.24.1 — épinglé par digest (le tag reste mutable).
+FROM php:8.5-fpm-alpine@sha256:79def1d16ece3ab1a6656c46a23bfd80ad33887fbd33626e7bd743cef54ef9c6 AS base
 
 ARG UID=1000
 ARG GID=1000
+
+# Correctifs de sécurité de la distribution, appliqués à CHAQUE build.
+#
+# Pourquoi c'est nécessaire malgré une image de base épinglée : une image de
+# base est figée à sa date de publication. Entre deux publications, Alpine
+# corrige des CVE dans son dépôt, et l'image continue d'embarquer les paquets
+# vulnérables. Constaté le 2026-07-27 via Snyk puis la base de sécurité Alpine :
+#
+#   libexpat  2.7.5-r0 installé  ->  2.8.2-r0 disponible   (15 CVE de retard,
+#             dont CVE-2026-50219 Use-After-Free, CVSS 5.9)
+#   libcurl   8.14.1-r2 installé ->  8.21.0-r0 disponible  (~30 CVE de retard)
+#
+# Arbitrage assumé : `apk upgrade` rend le build légèrement moins reproductible,
+# puisque les paquets évoluent entre deux exécutions. C'est le bon compromis
+# pour des correctifs de sécurité — la reproductibilité de la BASE reste
+# assurée par l'épinglage de l'image, et l'alternative (rester sur des paquets
+# vulnérables jusqu'à la prochaine publication amont) est pire.
+RUN apk upgrade --no-cache
 
 # Dépendances système + Node.js pour compatibilité frontend
 RUN apk add --no-cache \
