@@ -22,9 +22,6 @@ use Illuminate\Database\Eloquent\Scope;
  */
 class BelongsToStreamerScope implements Scope
 {
-    /**
-     * @param  Builder<Model>  $builder
-     */
     public function apply(Builder $builder, Model $model): void
     {
         $builder->where(

@@ -1,28 +1,119 @@
 name: Laravel CI/CD Pipeline
 
+# Découpé en jobs séparés conformément à docs/architecture/9-architecture-qualit.md §9.2.
+# L'implémentation précédente était un job monolithique où TOUTES les étapes
+# bloquaient, y compris Rector et PHP Insights que la spec désigne comme
+# informatifs. Cet écart spec <-> implémentation a vécu toute l'Epic 1 sans
+# produire le moindre signal (risque R-009 du test design système).
+#
+# Actions épinglées par SHA : un tag est un pointeur mutable contrôlé par un
+# tiers, exécuté avec le GITHUB_TOKEN du dépôt. Sur un projet destiné à être
+# forké (ADR-0001), la supply chain CI est une surface d'attaque de premier plan.
+# Le commentaire de version à droite du SHA sert à la lisibilité et aux bots de
+# mise à jour.
+
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'src/**'
+      - 'scripts/quality-ratchet.sh'
+      - '.github/workflows/ci.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'src/**'
+      - 'scripts/quality-ratchet.sh'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
+
+# Moindre privilège par défaut. Un job qui a besoin de plus le déclare lui-même.
+permissions:
+  contents: read
 
 env:
   PHP_VERSION: 8.5
   NODE_VERSION: 24
 
 jobs:
-  # ==========================================
-  # JOB 1: TESTS & QUALITÉ
-  # ==========================================
-  tests:
-    name: Tests & Quality
+  # ===========================================================================
+  # JOB 1 — QUALITÉ (sans base de données)
+  # ===========================================================================
+  # Vérifié : ECS, PHPStan et Insights tournent tous sans connexion DB.
+  quality:
+    name: Quality (ECS · PHPStan · Ratchet)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: 🐘 Setup PHP ${{ env.PHP_VERSION }}
+        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: bcmath, ctype, curl, dom, fileinfo, filter, gd, hash, intl, json, libxml, mbstring, openssl, pcre, pdo, pdo_pgsql, redis, session, tokenizer, xml, zip
+          coverage: none
+          tools: composer:v2
+          ini-values: memory_limit=2G, max_execution_time=300, opcache.jit=0
+
+      - name: 📋 Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: 💾 Cache Composer dependencies
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-php-${{ env.PHP_VERSION }}-composer-${{ hashFiles('src/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-${{ env.PHP_VERSION }}-composer-
+
+      - name: 🎵 Install Composer dependencies
+        working-directory: src
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+
+      - name: ⚙️ Minimal Laravel environment
+        working-directory: src
+        run: |
+          cp .env.example .env
+          php artisan key:generate --no-interaction
+
+      # --- Bloquants -------------------------------------------------------
+      - name: 🎨 Code Style (ECS)
+        working-directory: src
+        run: composer run check:cs
+
+      - name: 🔍 Static Analysis (PHPStan L8)
+        working-directory: src
+        run: composer run analyse
+
+      - name: 🔒 Quality ratchet (la dette ne remonte jamais)
+        run: ./scripts/quality-ratchet.sh
+
+      # --- Informatifs (architecture §9.2) ---------------------------------
+      # Rector est cassé par une incompatibilité de configuration connue :
+      # rector.php lie phpstan.neon, qui inclut l'extension Larastan, laquelle
+      # exige une application Laravel bootée. `continue-on-error` est ici un
+      # choix de spec, pas un contournement — la spec le désigne informatif.
+      - name: 🔧 Rector (dry-run, informatif)
+        working-directory: src
+        continue-on-error: true
+        run: composer run refactor
+
+      - name: 💡 PHP Insights (informatif)
+        working-directory: src
+        continue-on-error: true
+        run: composer run insights
+
+  # ===========================================================================
+  # JOB 2 — TESTS (PostgreSQL 17)
+  # ===========================================================================
+  tests:
+    name: Tests (Pest × PostgreSQL 17)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       # PostgreSQL 17 — moteur de production (ADR-0007, architecture §9.2).
@@ -54,13 +145,10 @@ jobs:
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # ==========================================
-      # Setup PHP avec extensions Laravel 12
-      # ==========================================
       - name: 🐘 Setup PHP ${{ env.PHP_VERSION }}
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
         with:
           php-version: ${{ env.PHP_VERSION }}
           extensions: bcmath, ctype, curl, dom, fileinfo, filter, gd, hash, intl, json, libxml, mbstring, openssl, pcre, pdo, pdo_pgsql, redis, session, tokenizer, xml, zip
@@ -68,76 +156,56 @@ jobs:
           tools: composer:v2
           ini-values: memory_limit=2G, max_execution_time=300, opcache.jit=0
 
-      # ==========================================
-      # Setup Node.js (mise à jour vers v22)
-      # ==========================================
       - name: 📦 Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      # ==========================================
-      # Cache Composer optimisé
-      # ==========================================
       - name: 📋 Get Composer Cache Directory
         id: composer-cache
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
 
       - name: 💾 Cache Composer dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-php-${{ env.PHP_VERSION }}-composer-${{ hashFiles('src/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-php-${{ env.PHP_VERSION }}-composer-
-            ${{ runner.os }}-php-${{ env.PHP_VERSION }}-
 
-      # ==========================================
-      # Installation Composer optimisée
-      # ==========================================
       - name: 🎵 Install Composer dependencies
         working-directory: src
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
           composer dump-autoload --optimize
 
-      # ==========================================
-      # Cache NPM optimisé
-      # ==========================================
       - name: 💾 Cache NPM dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: src/node_modules
           key: ${{ runner.os }}-node-${{ env.NODE_VERSION }}-npm-${{ hashFiles('src/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-${{ env.NODE_VERSION }}-npm-
-            ${{ runner.os }}-node-${{ env.NODE_VERSION }}-
 
-      # ==========================================
-      # Installation NPM
-      # ==========================================
       - name: 📦 Install NPM dependencies
         working-directory: src
         run: npm ci --prefer-offline --no-audit
 
-      # ==========================================
-      # Configuration Laravel
-      # ==========================================
       - name: ⚙️ Configure Laravel environment
         working-directory: src
         run: |
-          # Copier .env.example vers .env
           cp .env.example .env
 
-          # Configuration optimisée pour les tests
-          # NOTE: utilisation de printf pour éviter l'indentation YAML dans le heredoc
+          # NOTE : phpunit.xml impose déjà DB_CONNECTION=pgsql et
+          # DB_DATABASE=laravel_test, et ses <env> PRIMENT sur ce .env
+          # (Dotenv immutable ne surcharge pas une variable déjà définie).
+          # Les deux doivent donc rester cohérents — une divergence produirait
+          # des migrations sur une base et des tests sur une autre.
           printf '%s\n' \
             'APP_ENV=testing' \
             'APP_DEBUG=true' \
             '' \
-            '# Base de données de test — PostgreSQL 17 (ADR-0007).' \
-            '# Doit rester cohérent avec src/phpunit.xml, dont les <env> priment' \
-            '# sur ce .env (Dotenv immutable ne surcharge pas une var déjà définie).' \
+            '# Base de données de test — PostgreSQL 17 (ADR-0007)' \
             'DB_CONNECTION=pgsql' \
             'DB_HOST=127.0.0.1' \
             'DB_PORT=5432' \
@@ -152,86 +220,42 @@ jobs:
             'SESSION_DRIVER=redis' \
             'QUEUE_CONNECTION=redis' \
             '' \
-            '# Disable external services in tests' \
+            '# Désactiver les services externes en test' \
             'MAIL_MAILER=array' \
             'BROADCAST_DRIVER=log' \
-            '' \
-            '# Telescope (ne pas persister en test)' \
             'TELESCOPE_ENABLED=false' \
+            'PULSE_ENABLED=false' \
+            'NIGHTWATCH_ENABLED=false' \
             >> .env
 
-          # Générer la clé d'application
           php artisan key:generate --no-interaction
 
-      # ==========================================
-      # Build des assets
-      # ==========================================
       - name: 🏗️ Build assets
         working-directory: src
         run: npm run build
 
-      # ==========================================
-      # Base de données
-      # ==========================================
       - name: 🗄️ Wait for database and run migrations
         working-directory: src
-        env:
-          PGPASSWORD: laravel_test
         run: |
-          # Attendre que PostgreSQL accepte les connexions
           timeout 60 bash -c 'until pg_isready -h 127.0.0.1 -p 5432 -U laravel_test -d laravel_test >/dev/null 2>&1; do sleep 2; done'
           echo "✅ Database connection successful"
-          
-          # Exécuter les migrations
           php artisan migrate --force --no-interaction
           echo "✅ Migrations completed"
 
-      # ==========================================
       # Garde-fou tenancy v1 (Story 1.5) — gate de déploiement.
-      # NB: le volet PostgreSQL de la Story 2.8 est fait. Restent à traiter dans
-      # Epic 2 : matrice PHP 8.4 + 8.5.1, découpage en jobs séparés, et bascule
-      # de Rector/Insights en informatifs (architecture §9.2).
-      # ==========================================
       - name: 🔒 Assert tenancy invariant (mono-streamer)
         working-directory: src
         run: |
           php artisan db:seed --class=StreamerSeeder --force --no-interaction
           php artisan tenancy:assert
 
-      # ==========================================
-      # Outils de qualité (utiliser les scripts Composer)
-      # ==========================================
-      - name: 🎨 Run Code Style Check (ECS)
-        working-directory: src
-        run: composer run check:cs
-
-      - name: 🔍 Run Static Analysis (PHPStan)
-        working-directory: src
-        run: composer run analyse
-
-      - name: 🔧 Run Rector (dry-run)
-        working-directory: src
-        run: composer run refactor
-
-      - name: 💡 Run PHP Insights
-        working-directory: src
-        run: composer run insights
-
-      # ==========================================
-      # Tests avec coverage (Clover XML pour Codecov)
-      # NOTE: test:coverage génère un rapport HTML (usage local).
-      # En CI on génère le format Clover XML requis par Codecov.
-      # ==========================================
       - name: 🧪 Run tests with coverage
         working-directory: src
         run: vendor/bin/pest --coverage-clover coverage.xml
 
-      # ==========================================
-      # Upload coverage report
-      # ==========================================
       - name: 📊 Upload coverage to Codecov
         if: success() && hashFiles('src/coverage.xml') != ''
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
         with:
           file: src/coverage.xml
           fail_ci_if_error: false
@@ -239,23 +263,28 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      # ==========================================
-      # Résumé des tests
-      # ==========================================
-      - name: 📋 Test Summary
-        if: always()
+  # ===========================================================================
+  # RÉSUMÉ
+  # ===========================================================================
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [quality, tests]
+    if: always()
+
+    steps:
+      - name: 📋 Summary
         run: |
           echo "## 🎯 Laravel CI Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Environment" >> $GITHUB_STEP_SUMMARY
-          echo "- **PHP**: ${{ env.PHP_VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Node.js**: ${{ env.NODE_VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Laravel**: $(cd src && php artisan --version | cut -d' ' -f3)" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Résultat |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality (ECS · PHPStan · Ratchet) | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests (Pest × PostgreSQL 17) | ${{ needs.tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Quality Tools" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ ECS (Code Style)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ PHPStan (Static Analysis)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Rector (Refactoring)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ PHP Insights (Quality)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Pest (Tests)" >> $GITHUB_STEP_SUMMARY
+          echo "Rector et PHP Insights sont **informatifs** (architecture §9.2) :" >> $GITHUB_STEP_SUMMARY
+          echo "leur échec n'arrête pas le pipeline mais reste visible dans le job Quality." >> $GITHUB_STEP_SUMMARY
 
+      - name: ❌ Fail if a blocking job failed
+        if: needs.quality.result != 'success' || needs.tests.result != 'success'
+        run: exit 1

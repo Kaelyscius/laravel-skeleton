@@ -718,6 +718,14 @@ setup-git-hooks: ## Installer les hooks Git custom
 # QUALITY WORKFLOWS
 # =============================================================================
 
+.PHONY: quality-ratchet
+quality-ratchet: ## Vérifier le plafond de dette qualité (ECS + PHPStan, monotone)
+	@./scripts/quality-ratchet.sh
+
+.PHONY: quality-ratchet-update
+quality-ratchet-update: ## Figer le plafond de dette sur les compteurs actuels
+	@TODAY=$$(date +%F) ./scripts/quality-ratchet.sh --update
+
 .PHONY: quality-quick
 quality-quick: ecs phpstan ## Vérification rapide
 	@echo "$(GREEN)✓ Quick quality check completed$(NC)"
