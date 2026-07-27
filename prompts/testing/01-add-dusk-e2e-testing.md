@@ -149,9 +149,9 @@ SELENIUM_URL=http://selenium:4444/wd/hub
 DUSK_DRIVER_URL=http://selenium:4444/wd/hub
 
 # Database
-DB_CONNECTION=mysql
-DB_HOST=mariadb
-DB_PORT=3306
+DB_CONNECTION=pgsql
+DB_HOST=postgres
+DB_PORT=5432
 DB_DATABASE=laravel_test
 DB_USERNAME=laravel
 DB_PASSWORD=secret
@@ -415,17 +415,16 @@ dusk-tests:
       ports:
         - 4444:4444
 
-    mariadb:
-      image: mariadb:11.4
+    postgres:
+      image: postgres:17-alpine
       env:
-        MYSQL_ROOT_PASSWORD: root
-        MYSQL_DATABASE: laravel_test
-        MYSQL_USER: laravel
-        MYSQL_PASSWORD: secret
+        POSTGRES_DB: laravel_test
+        POSTGRES_USER: laravel
+        POSTGRES_PASSWORD: secret
       ports:
-        - 3306:3306
+        - 5432:5432
       options: >-
-        --health-cmd="mysqladmin ping"
+        --health-cmd="pg_isready -U laravel -d laravel_test"
         --health-interval=10s
         --health-timeout=5s
         --health-retries=3
@@ -437,7 +436,7 @@ dusk-tests:
       uses: shivammathur/setup-php@v2
       with:
         php-version: '8.5'
-        extensions: mbstring, pdo, pdo_mysql, gd, redis
+        extensions: mbstring, pdo, pdo_pgsql, gd, redis
 
     - name: Install dependencies
       working-directory: src

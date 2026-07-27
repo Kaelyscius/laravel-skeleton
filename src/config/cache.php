@@ -51,6 +51,14 @@ return [
             'lock_path' => storage_path('framework/cache/data'),
         ],
 
+        // Nouveau store du squelette Laravel 13 : cache adossé à un disque
+        // Filesystem plutôt qu'à un chemin local en dur.
+        'storage' => [
+            'driver' => 'storage',
+            'disk' => env('CACHE_STORAGE_DISK'),
+            'path' => env('CACHE_STORAGE_PATH', 'framework/cache/data'),
+        ],
+
         'memcached' => [
             'driver' => 'memcached',
             'persistent_id' => env('MEMCACHED_PERSISTENT_ID'),
@@ -110,4 +118,20 @@ return [
     */
 
     'prefix' => env('CACHE_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')) . '-cache-'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cache Serializable Classes
+    |--------------------------------------------------------------------------
+    |
+    | This value controls which classes may be unserialized when reading from
+    | the cache to prevent gadget chain attacks if your APP_KEY is leaked.
+    |
+    | Aligné sur le squelette Laravel 13 (montée v12 -> v13). Sans cette clé,
+    | CacheManager::getSerializableClasses() retombe sur null, soit aucune
+    | restriction.
+    |
+    */
+
+    'serializable_classes' => false,
 ];

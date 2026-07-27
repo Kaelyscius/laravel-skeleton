@@ -22,6 +22,7 @@
 | [0007](ADR-0007-postgresql-17-over-mariadb.md) | PostgreSQL 17 remplace MariaDB 11.8 | ✅ Accepted | Mini-round Stack & Modularité 2026-05-08 |
 | [0008](ADR-0008-frontend-stack-blade-livewire.md) | Stack frontend Blade + Livewire 3 + Alpine + Tailwind 4 | ✅ Accepted | Mini-round Frontend 2026-05-08 |
 | [0009](ADR-0009-modular-app-modules-psr4.md) | Modularité `app/Modules/*` PSR-4 hand-rolled | ✅ Accepted | Mini-round Modularité 2026-05-08 |
+| [0010](ADR-0010-laravel-13-supersedes-filament-v3-lock.md) | Laravel 13 — levée du verrou « Laravel 12 + Filament v3 » | ✅ Accepted | Session party-mode + montée de dépendances 2026-07-27 |
 
 ## Quand créer un nouvel ADR ?
 

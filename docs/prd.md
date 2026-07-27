@@ -271,7 +271,7 @@ Le détail visuel est dans `docs/architecture/2-stack-technique.md` §2.5. Ici o
 | P5 | JTBD n°3 dev gifting non tracké → impossible de valider l'hypothèse | MOYENNE | MOYEN | UTM auto-généré sur bouton "copier le lien" S5 (~1h dev) | John |
 | P6 | OG images génération lente bloque le publish | FAIBLE | FAIBLE | Job async + retry 3x + fallback OG statique | Sally / Winston |
 | P7 | Reader-Gamer juge la note/10 "vanity" et perd confiance | FAIBLE | MOYEN | Verdict en intro doit justifier la note ; barre Lava 9+ seulement si vraie conviction | Alex |
-| P8 | Filament v3 deprecated par v4 pendant la fenêtre 10-12 sem | FAIBLE | ÉLEVÉ | Pin version exacte Composer ; re-évaluation L13/Filament v4 octobre 2026 (verrou consenti) | Winston |
+| P8 | ~~Filament v3 deprecated par v4 pendant la fenêtre 10-12 sem~~ **CLOS 2026-07-27** | — | — | Risque éteint : Filament n'a jamais été installé, donc aucune migration à subir ; le projet passe directement en Filament v5 (Story 1.10) sur Laravel 13. Voir **ADR-0010** | Alex |
 
 ---
 
@@ -281,7 +281,12 @@ Tous les éléments suivants sont **gravés** — ne pas re-débattre en review 
 
 ### 9.1 Décisions LOCKED (cf. `docs/roundtable-decisions.md`)
 
-- Stack : PHP 8.4 + Laravel 12 + PostgreSQL 17 + Filament v3 + Livewire 3 + Tailwind 4 + Pest 4
+- ~~Stack : PHP 8.4 + Laravel 12 + PostgreSQL 17 + Filament v3 + Livewire 3 + Tailwind 4 + Pest 4~~
+  **AMENDÉ 2026-07-27 — voir [ADR-0010](adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md).**
+  Stack effective : **PHP 8.5 + Laravel 13 + PostgreSQL 17 + Filament v5 (Story 1.10) +
+  Livewire 4 + Tailwind 4 + Pest 4**. Le verrou v12/Filament v3 supposait Filament installé et
+  porteur ; il ne l'était pas (0 occurrence dans `composer.json`), et v3 est aujourd'hui deux
+  majeures en retard. PostgreSQL 17 reste inchangé (ADR-0007).
 - Modularité : Plausible-style — `app/Modules/*` PSR-4 + ENV vars (pas UI user) — **ADR-0001**
 - Tenancy : `streamer_id` partout J1 + Eloquent Global Scope (RLS reportée v2+) — **ADR-0002**
 - Backup : local quotidien + offsite hands-off gratuit — **ADR-0003**

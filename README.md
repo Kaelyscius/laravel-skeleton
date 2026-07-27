@@ -1,6 +1,6 @@
-# 🚀 Environnement Docker Laravel 12
+# 🚀 Environnement Docker Laravel 13
 
-Environnement de développement Docker complet et optimisé pour Laravel 12 avec PHP 8.5.1, PostgreSQL, Redis, Apache, Node.js et des outils de monitoring et d'industrialisation.
+Environnement de développement Docker complet et optimisé pour Laravel 13 avec PHP 8.5, PostgreSQL, Redis, Apache, Node.js et des outils de monitoring et d'industrialisation.
 
 ## 📋 Prérequis
 
@@ -16,7 +16,7 @@ Environnement de développement Docker complet et optimisé pour Laravel 12 avec
 
 ### Containers principaux
 - **Apache 2.4** (HTTPS, HTTP/2, SSL) - Ports 80/443
-- **PHP 8.5.1** (FPM + Supervisor + OPcache)
+- **PHP 8.5** (FPM + Supervisor + OPcache)
 - **PostgreSQL** (dernière version stable)
 - **Redis Alpine** (cache, sessions, queues)
 - **Node.js 24 LTS** (build des assets frontend)
@@ -234,7 +234,7 @@ APP_URL=https://laravel.local
 COMPOSE_PROJECT_NAME=laravel-app
 
 # Base de données
-DB_CONNECTION=mysql
+DB_CONNECTION=pgsql
 DB_HOST=postgres
 DB_PORT=5432
 DB_DATABASE=laravel

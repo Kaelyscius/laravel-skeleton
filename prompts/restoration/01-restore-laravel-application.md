@@ -245,9 +245,9 @@ APP_DEBUG=true
 APP_URL=http://localhost
 
 # Database
-DB_CONNECTION=mysql
-DB_HOST=mariadb
-DB_PORT=3306
+DB_CONNECTION=pgsql
+DB_HOST=postgres
+DB_PORT=5432
 DB_DATABASE=laravel
 DB_USERNAME=laravel
 DB_PASSWORD=secret

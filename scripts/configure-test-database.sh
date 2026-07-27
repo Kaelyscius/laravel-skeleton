@@ -1,10 +1,21 @@
 #!/bin/bash
 
 # =============================================================================
-# CONFIGURATION BASE DE DONNÉES DE TEST (Remplacer SQLite)
+# CONFIGURATION BASE DE DONNÉES DE TEST — PostgreSQL 17 (ADR-0007)
 # =============================================================================
+#
+# Ce script crée la base de test et VÉRIFIE que la configuration Laravel la
+# vise bien. Il ne la réécrit plus.
+#
+# Historique : la version précédente était un hybride cassé. L'étape de création
+# avait été migrée vers psql, mais les étapes suivantes écrivaient encore une
+# connexion « mysql_testing » dans phpunit.xml et l'injectaient dans
+# config/database.php en cherchant le bloc `'mysql' => [`. Depuis que la stack
+# est PostgreSQL-only (ADR-0007), ce bloc n'existe plus et phpunit.xml est
+# versionné avec la bonne configuration : ces étapes ne pouvaient que dégrader
+# un état sain. Elles sont remplacées par des assertions.
 
-set -e
+set -euo pipefail
 
 # Couleurs pour les logs
 GREEN='\033[0;32m'
@@ -17,7 +28,7 @@ log() {
     local level=$1
     shift
     local message="$*"
-    
+
     case $level in
         "INFO")  echo -e "${BLUE}ℹ️  $message${NC}" ;;
         "WARN")  echo -e "${YELLOW}⚠️  $message${NC}" ;;
@@ -26,7 +37,7 @@ log() {
     esac
 }
 
-log "INFO" "🗄️ Configuration de la base de données de test"
+log "INFO" "🗄️ Configuration de la base de données de test (PostgreSQL)"
 echo ""
 
 # Variables
@@ -35,176 +46,92 @@ DB_PORT="${DB_PORT:-5432}"
 DB_USERNAME="${DB_USERNAME:-laravel}"
 DB_PASSWORD="${DB_PASSWORD:-laravel}"
 DB_DATABASE="${DB_DATABASE:-laravel}"
-DB_TEST_DATABASE="${DB_DATABASE}_test"
+DB_TEST_DATABASE="${DB_TEST_DATABASE:-laravel_test}"
 
+# Où trouver psql ?
+#
+# Vérifié à la migration PostgreSQL : le client `psql` est absent de l'hôte ET
+# du conteneur php (qui n'a que l'extension pdo_pgsql). Il n'existe que dans le
+# conteneur postgres. Un fork-streamer sur machine vierge est dans le même cas —
+# c'est la promesse d'ADR-0001. On route donc par le conteneur, avec repli sur
+# un psql local s'il existe.
+if command -v psql >/dev/null 2>&1; then
+    export PGPASSWORD="$DB_PASSWORD"
+    psql_run() { psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" "$@"; }
+    log "INFO" "Client psql local détecté"
+else
+    COMPOSE_BIN="${COMPOSE_BIN:-docker compose}"
+    psql_run() {
+        $COMPOSE_BIN exec -T -e PGPASSWORD="$DB_PASSWORD" postgres \
+            psql -U "$DB_USERNAME" "$@"
+    }
+    log "INFO" "psql absent de l'hôte — passage par le conteneur postgres"
+fi
+
+# -----------------------------------------------------------------------------
 # 1. Créer la base de données de test
-log "INFO" "Création de la base de données de test: $DB_TEST_DATABASE"
+# -----------------------------------------------------------------------------
+log "INFO" "Création de la base de données de test : $DB_TEST_DATABASE"
 
-# Créer la base de données de test dans PostgreSQL
-# Note : on utilise la connexion existante pour CREATE DATABASE (qui ne peut pas tourner dans une transaction)
-PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -tc "SELECT 1 FROM pg_database WHERE datname = '$DB_TEST_DATABASE'" 2>/dev/null | grep -q 1 || \
-PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -c "CREATE DATABASE \"$DB_TEST_DATABASE\" ENCODING 'UTF8' TEMPLATE template0;" 2>/dev/null || {
-    log "ERROR" "Impossible de créer la base de données de test"
-    log "INFO" "Vérifiez que PostgreSQL est démarré et accessible"
+if ! psql_run -d "$DB_DATABASE" -c "SELECT 1" >/dev/null 2>&1; then
+    log "ERROR" "Impossible de joindre PostgreSQL sur $DB_HOST:$DB_PORT"
+    log "INFO" "Vérifiez que le service postgres est démarré (make status)"
     exit 1
-}
+fi
 
-# Granter les privilèges (idempotent — pas d'erreur si déjà fait)
-PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -c "GRANT ALL PRIVILEGES ON DATABASE \"$DB_TEST_DATABASE\" TO \"$DB_USERNAME\";" 2>/dev/null || true
+# CREATE DATABASE ne peut pas tourner dans une transaction : on teste d'abord.
+if psql_run -d "$DB_DATABASE" -tAc \
+        "SELECT 1 FROM pg_database WHERE datname = '$DB_TEST_DATABASE'" | grep -q 1; then
+    log "INFO" "Base déjà présente — rien à faire (idempotent)"
+else
+    psql_run -d "$DB_DATABASE" -c \
+        "CREATE DATABASE \"$DB_TEST_DATABASE\" ENCODING 'UTF8' TEMPLATE template0;" >/dev/null || {
+        log "ERROR" "Échec de la création de $DB_TEST_DATABASE"
+        exit 1
+    }
+    log "SUCCESS" "Base de données de test créée : $DB_TEST_DATABASE"
+fi
 
-log "SUCCESS" "Base de données de test créée: $DB_TEST_DATABASE"
+psql_run -d "$DB_DATABASE" -c \
+    "GRANT ALL PRIVILEGES ON DATABASE \"$DB_TEST_DATABASE\" TO \"$DB_USERNAME\";" >/dev/null 2>&1 || true
 
-# 2. Configurer Laravel pour utiliser la base de données de test
-log "INFO" "Configuration de Laravel pour les tests"
+# -----------------------------------------------------------------------------
+# 2. Vérifier que phpunit.xml vise bien cette base (assertion, pas réécriture)
+# -----------------------------------------------------------------------------
+log "INFO" "Vérification de phpunit.xml"
 
-# Vérifier si phpunit.xml existe
 if [ ! -f "phpunit.xml" ]; then
-    log "INFO" "Création de phpunit.xml depuis phpunit.xml.dist"
-    cp phpunit.xml.dist phpunit.xml 2>/dev/null || {
-        log "WARN" "phpunit.xml.dist non trouvé, création d'un phpunit.xml de base"
-        cat > phpunit.xml << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
-         colors="true">
-    <testsuites>
-        <testsuite name="Unit">
-            <directory suffix="Test.php">./tests/Unit</directory>
-        </testsuite>
-        <testsuite name="Feature">
-            <directory suffix="Test.php">./tests/Feature</directory>
-        </testsuite>
-    </testsuites>
-    <source>
-        <include>
-            <directory suffix=".php">./app</directory>
-        </include>
-    </source>
-    <php>
-        <env name="APP_ENV" value="testing"/>
-        <env name="APP_KEY" value="base64:SGVsbG8gV29ybGQgVGVzdCBLZXkgMTIzNDU2Nzg5"/>
-        <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="CACHE_DRIVER" value="array"/>
-        <env name="DB_CONNECTION" value="mysql_testing"/>
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
-        <env name="TELESCOPE_ENABLED" value="false"/>
-    </php>
-</phpunit>
-EOF
-    }
+    log "ERROR" "phpunit.xml introuvable — il est versionné, un clone devrait le fournir"
+    exit 1
 fi
 
-# Modifier phpunit.xml pour utiliser la base de données de test
-if ! grep -q "mysql_testing" phpunit.xml; then
-    log "INFO" "Mise à jour de phpunit.xml pour la base de données de test"
-    
-    # Backup
-    cp phpunit.xml phpunit.xml.backup
-    
-    # Remplacer SQLite par MySQL de test
-    sed -i 's/<env name="DB_CONNECTION" value="sqlite"\/>/<env name="DB_CONNECTION" value="mysql_testing"\/>/' phpunit.xml
-    sed -i 's/<env name="DB_DATABASE" value=":memory:"\/>/<env name="DB_DATABASE" value="'$DB_TEST_DATABASE'"\/>/' phpunit.xml
-    
-    # Ajouter les variables si elles n'existent pas
-    if ! grep -q "DB_CONNECTION.*mysql_testing" phpunit.xml; then
-        sed -i '/<php>/a\        <env name="DB_CONNECTION" value="mysql_testing"\/>' phpunit.xml
-    fi
-    
-    if ! grep -q "DB_DATABASE.*'$DB_TEST_DATABASE'" phpunit.xml; then
-        sed -i '/<php>/a\        <env name="DB_DATABASE" value="'$DB_TEST_DATABASE'"\/>' phpunit.xml
-    fi
+if ! grep -q '<env name="DB_CONNECTION" value="pgsql"/>' phpunit.xml; then
+    log "ERROR" "phpunit.xml ne déclare pas DB_CONNECTION=pgsql"
+    log "INFO" "La stack est PostgreSQL-only (ADR-0007) — corrigez phpunit.xml"
+    exit 1
 fi
 
-# 3. Configurer la connexion de test dans config/database.php
-log "INFO" "Configuration de la connexion de test dans config/database.php"
+if ! grep -q "<env name=\"DB_DATABASE\" value=\"$DB_TEST_DATABASE\"/>" phpunit.xml; then
+    log "ERROR" "phpunit.xml ne vise pas la base $DB_TEST_DATABASE"
+    exit 1
+fi
 
-if [ -f "config/database.php" ]; then
-    # Backup
-    cp config/database.php config/database.php.backup
-    
-    # Ajouter la connexion mysql_testing si elle n'existe pas
-    if ! grep -q "mysql_testing" config/database.php; then
-        log "INFO" "Ajout de la connexion mysql_testing"
-        
-        # Créer un script PHP temporaire pour modifier le fichier
-        cat > /tmp/add_test_connection.php << 'EOPHP'
-<?php
-$file = 'config/database.php';
-$content = file_get_contents($file);
+log "SUCCESS" "phpunit.xml vise bien pgsql / $DB_TEST_DATABASE"
 
-// Chercher la position après la connexion mysql
-$mysqlPos = strpos($content, "'mysql' => [");
-if ($mysqlPos === false) {
-    echo "Configuration MySQL non trouvée\n";
-    exit(1);
-}
+# -----------------------------------------------------------------------------
+# 3. Vérifier la connexion applicative
+# -----------------------------------------------------------------------------
+log "INFO" "Test de connexion à la base de test"
 
-// Trouver la fin de la configuration mysql
-$braceCount = 0;
-$pos = $mysqlPos;
-$start = false;
-while ($pos < strlen($content)) {
-    if ($content[$pos] === '[') {
-        if (!$start) $start = true;
-        $braceCount++;
-    } elseif ($content[$pos] === ']') {
-        $braceCount--;
-        if ($start && $braceCount === 0) {
-            $pos++;
-            break;
-        }
-    }
-    $pos++;
-}
-
-// Ajouter la connexion de test
-$testConfig = "\n\n        'mysql_testing' => [\n" .
-    "            'driver' => 'mysql',\n" .
-    "            'url' => env('DB_TEST_URL'),\n" .
-    "            'host' => env('DB_HOST', '127.0.0.1'),\n" .
-    "            'port' => env('DB_PORT', '5432'),\n" .
-    "            'database' => env('DB_DATABASE') . '_test',\n" .
-    "            'username' => env('DB_USERNAME', 'forge'),\n" .
-    "            'password' => env('DB_PASSWORD', ''),\n" .
-    "            'charset' => 'utf8',\n" .
-    "            'prefix' => '',\n" .
-    "            'prefix_indexes' => true,\n" .
-    "            'search_path' => 'public',\n" .
-    "            'sslmode' => 'prefer',\n" .
-    "        ],";
-
-$newContent = substr_replace($content, $testConfig, $pos, 0);
-file_put_contents($file, $newContent);
-echo "Connexion pgsql_testing ajoutée avec succès\n";
-EOPHP
-
-        php /tmp/add_test_connection.php
-        rm -f /tmp/add_test_connection.php
-    fi
+if psql_run -d "$DB_TEST_DATABASE" -c "SELECT 1;" >/dev/null 2>&1; then
+    log "SUCCESS" "Connexion à $DB_TEST_DATABASE OK"
 else
-    log "WARN" "config/database.php non trouvé - sera créé lors de l'installation Laravel"
-fi
-
-# 4. Test de connexion
-log "INFO" "Test de connexion à la base de données de test"
-
-# Test de connexion
-if mysql -h"$DB_HOST" -u"$DB_USERNAME" -p"$DB_PASSWORD" "$DB_TEST_DATABASE" -e "SELECT 1;" >/dev/null 2>&1; then
-    log "SUCCESS" "✅ Connexion à la base de données de test OK"
-else
-    log "ERROR" "❌ Impossible de se connecter à la base de données de test"
+    log "ERROR" "Impossible de se connecter à $DB_TEST_DATABASE"
     exit 1
 fi
 
 echo ""
-log "SUCCESS" "🎉 Configuration de la base de données de test terminée !"
+log "SUCCESS" "🎉 Base de données de test prête"
+log "INFO" "   Base       : $DB_TEST_DATABASE"
+log "INFO" "   Connexion  : pgsql (déclarée dans phpunit.xml, versionné)"
 echo ""
-log "INFO" "📋 Résumé:"
-log "INFO" "   Base de données de test: $DB_TEST_DATABASE"
-log "INFO" "   Connexion Laravel: mysql_testing"
-log "INFO" "   Configuration: phpunit.xml et config/database.php"
-echo ""
-log "INFO" "💡 Pour exécuter les tests: php artisan test"

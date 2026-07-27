@@ -61,13 +61,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make test-drift` - Run tests with Drift (detect uncovered code)
 
 ### Diagnostics & Troubleshooting
-- `make diagnostic` - Run complete diagnostic suite (PHP 8.5.1 + Laravel 12)
-- `make quick-check` - Quick test of Laravel + PHP 8.5.1 compatibility
-- `make check-extensions` - Verify PHP 8.5.1 extensions installation
-- `make test-packages` - Test package compatibility with Laravel 12
+- `make diagnostic` - Run complete diagnostic suite (PHP 8.5 + Laravel 13)
+- `make quick-check` - Quick test of Laravel + PHP 8.5 compatibility
+- `make check-extensions` - Verify PHP 8.5 extensions installation
+- `make test-packages` - Test package compatibility with Laravel 13
 - `make fix-composer` - Fix Composer configuration and cache issues
-- `make check-compatibility` - Check if incompatible packages became Laravel 12 compatible
-- `make update-packages` - Auto-install packages that became Laravel 12 compatible
+- `make check-compatibility` - Check if incompatible packages became Laravel 13 compatible
+- `make update-packages` - Auto-install packages that became Laravel 13 compatible
 - `make enable-xdebug` - Enable Xdebug for development (rebuilds containers)
 
 ### Code Quality
@@ -186,7 +186,7 @@ Modules activables au déploiement via variables d'environnement `MODULE_<NAME>_
 **Architecture modulaire avec Docker Compose Profiles** permettant de démarrer uniquement les services nécessaires selon l'environnement.
 
 #### Services essentiels (toujours actifs, aucun profile)
-- **PHP 8.5.1** container with FPM, Supervisor, and OPcache
+- **PHP 8.5** container with FPM, Supervisor, and OPcache
 - **Apache 2.4** with HTTPS/HTTP2 support
 - **PostgreSQL** for database
 - **PostgreSQL 17 (postgres-pulse)** dedicated container for Pulse monitoring (ADR-0004)
@@ -210,7 +210,13 @@ Modules activables au déploiement via variables d'environnement `MODULE_<NAME>_
 - **Production** : `make up-prod` (services essentiels uniquement)
 - **Documentation complète** : Voir [DOCKER-ARCHITECTURE.md](./DOCKER-ARCHITECTURE.md)
 
-### Laravel 12 Application Structure
+### Laravel 13 Application Structure
+
+**Stack effective (source de vérité — vérifiée le 2026-07-27)** : PHP 8.5 · Laravel 13 ·
+PostgreSQL 17 · Livewire 4 · Tailwind 4 (CSS-first) · Pest 4 · Vite 8 · Filament v5 *(à
+installer en Story 1.10)*. Le verrou historique « Laravel 12 + Filament v3 » du PRD est levé —
+voir [ADR-0010](docs/adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md).
+
 - Main application code in `/src` directory
 - Standard Laravel folder structure within `/src`
 - Uses Pest for testing framework
@@ -222,7 +228,7 @@ Modules activables au déploiement via variables d'environnement `MODULE_<NAME>_
 ### Quality Tools Configuration
 - **PHPStan/Larastan** (v3.x) at level 8 for strict type checking
 - **ECS** (Easy Coding Standard v13.x) for PSR-12 compliance
-- **Rector** (v2.x) for automated refactoring — rules PHP 8.5 + Laravel 12
+- **Rector** (v2.x) for automated refactoring — rules PHP 8.5 + Laravel 13
 - **driftingly/rector-laravel** (v2.x) for Laravel-specific Rector rules
 - **PHP Insights** (v2.14+) for code quality metrics
 - **PhpCodeArcheology** (v2.x) for architecture metrics + git churn analysis
@@ -314,7 +320,7 @@ Modules activables au déploiement via variables d'environnement `MODULE_<NAME>_
 ### Quality Tools Packages
 - **larastan/larastan** (^3.0) - PHPStan extension for Laravel (level 8)
 - **symplify/easy-coding-standard** (^13.0) - PSR-12 code style enforcement
-- **rector/rector** (^2.3) - Automated refactoring, PHP 8.5 + Laravel 12 rules
+- **rector/rector** (^2.3) - Automated refactoring, PHP 8.5 + Laravel 13 rules
 - **driftingly/rector-laravel** (^2.0) - Laravel-specific Rector rule sets
 - **nunomaduro/phpinsights** (^2.14) - Code quality metrics (complexity, architecture, style)
 - **php-code-archeology/php-code-archeology** (^2.0) - Architecture metrics + git churn analysis

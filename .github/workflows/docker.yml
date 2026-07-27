@@ -249,8 +249,8 @@ jobs:
           # Add test configuration
           cat >> src/.env << 'EOF' || true
           APP_ENV=testing
-          DB_CONNECTION=mysql
-          DB_HOST=mariadb
+          DB_CONNECTION=pgsql
+          DB_HOST=postgres
           DB_DATABASE=laravel_test
           DB_USERNAME=laravel_test
           DB_PASSWORD=laravel_test
