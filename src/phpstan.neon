@@ -10,11 +10,19 @@ parameters:
         - routes/
         - tests/
 
+    # Le `(?)` marque un chemin OPTIONNEL. Sans lui, PHPStan refuse de démarrer
+    # si le répertoire n'existe pas — « Path … is neither a directory, nor a
+    # file path, nor a fnmatch pattern ».
+    #
+    # Constaté au premier run réel de la CI découpée : le job `quality` n'a pas
+    # besoin de Node, donc il n'exécute pas `npm ci`, donc `node_modules/`
+    # n'existe pas. En local il est toujours présent — le défaut était donc
+    # strictement invisible hors CI.
     excludePaths:
         - bootstrap/
-        - storage/
-        - vendor/
-        - node_modules/
+        - storage/ (?)
+        - vendor/ (?)
+        - node_modules/ (?)
         - database/migrations/
 
     treatPhpDocTypesAsCertain: false
