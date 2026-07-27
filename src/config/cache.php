@@ -3,7 +3,6 @@
 use Illuminate\Support\Str;
 
 return [
-
     /*
     |--------------------------------------------------------------------------
     | Default Cache Store
@@ -33,7 +32,6 @@ return [
     */
 
     'stores' => [
-
         'array' => [
             'driver' => 'array',
             'serialize' => false,
@@ -98,7 +96,6 @@ return [
                 'array',
             ],
         ],
-
     ],
 
     /*
@@ -112,6 +109,5 @@ return [
     |
     */
 
-    'prefix' => env('CACHE_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')).'-cache-'),
-
+    'prefix' => env('CACHE_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')) . '-cache-'),
 ];

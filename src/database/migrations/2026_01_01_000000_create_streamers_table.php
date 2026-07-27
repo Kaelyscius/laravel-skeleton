@@ -20,14 +20,22 @@ return new class() extends Migration {
         Schema::create('streamers', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
-            $table->string('tagline')->nullable();
-            $table->text('bio_fr')->nullable();
-            $table->text('bio_en')->nullable();
-            $table->string('photo_url', 500)->nullable();
-            $table->string('cta_text', 100)->nullable();
-            $table->string('cta_url', 500)->nullable();
-            $table->string('twitter_handle')->nullable();
-            $table->string('discord_url', 500)->nullable();
+            $table->string('tagline')
+                ->nullable();
+            $table->text('bio_fr')
+                ->nullable();
+            $table->text('bio_en')
+                ->nullable();
+            $table->string('photo_url', 500)
+                ->nullable();
+            $table->string('cta_text', 100)
+                ->nullable();
+            $table->string('cta_url', 500)
+                ->nullable();
+            $table->string('twitter_handle')
+                ->nullable();
+            $table->string('discord_url', 500)
+                ->nullable();
             $table->timestamps();
         });
     }

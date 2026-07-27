@@ -16,7 +16,6 @@ declare(strict_types=1);
  *
  * @see docs/process/05-module-boundaries.md
  */
-
 $projectRoot = dirname(__DIR__, 2);
 
 /**
@@ -50,13 +49,16 @@ it('flags another module but allows Core, intra-module and vendor imports (self-
         ->toBe(['App\\Modules\\Live\\Services\\HelixClient']);
 
     // Allowed: Core is the only shared layer.
-    expect(crossModuleUseViolations('use App\\Core\\Models\\Streamer;', 'Reviews'))->toBeEmpty();
+    expect(crossModuleUseViolations('use App\\Core\\Models\\Streamer;', 'Reviews'))
+        ->toBeEmpty();
 
     // Allowed: intra-module import.
-    expect(crossModuleUseViolations('use App\\Modules\\Reviews\\Models\\Game;', 'Reviews'))->toBeEmpty();
+    expect(crossModuleUseViolations('use App\\Modules\\Reviews\\Models\\Game;', 'Reviews'))
+        ->toBeEmpty();
 
     // Allowed: vendor / framework imports.
-    expect(crossModuleUseViolations('use Illuminate\\Support\\Str;', 'Reviews'))->toBeEmpty();
+    expect(crossModuleUseViolations('use Illuminate\\Support\\Str;', 'Reviews'))
+        ->toBeEmpty();
 
     // Aliased import is still detected.
     expect(crossModuleUseViolations('use App\\Modules\\Admin\\Foo as Bar;', 'Reviews'))
@@ -92,5 +94,6 @@ it('finds no cross-module coupling in app/Modules', function () use ($projectRoo
         }
     }
 
-    expect($violations)->toBeEmpty();
+    expect($violations)
+        ->toBeEmpty();
 });

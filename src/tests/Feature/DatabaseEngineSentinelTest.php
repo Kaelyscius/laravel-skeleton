@@ -25,14 +25,16 @@ it('exécute de la syntaxe exclusivement PostgreSQL', function (): void {
     // Sur un de ces moteurs, la requête lève une erreur de syntaxe.
     $row = DB::selectOne("SELECT ('streamer'::text ILIKE 'STREAMER')::int AS ok");
 
-    expect((int) $row->ok)->toBe(1);
+    expect((int) $row->ok)
+        ->toBe(1);
 })->group('sentinel');
 
 it('manipule du jsonb natif', function (): void {
     // jsonb est un type propre à PostgreSQL — l'une des raisons du choix ADR-0007.
     $row = DB::selectOne("SELECT ('{\"note\":9}'::jsonb -> 'note')::int AS note");
 
-    expect((int) $row->note)->toBe(9);
+    expect((int) $row->note)
+        ->toBe(9);
 })->group('sentinel');
 
 it('tourne sur PostgreSQL 17 ou plus récent', function (): void {
@@ -40,5 +42,6 @@ it('tourne sur PostgreSQL 17 ou plus récent', function (): void {
 
     // 170000 = 17.0. Le seuil est un plancher : une montée de version majeure
     // reste verte, un retour en arrière sous la version LOCKED rougit.
-    expect((int) $row->version)->toBeGreaterThanOrEqual(170000);
+    expect((int) $row->version)
+        ->toBeGreaterThanOrEqual(170000);
 })->group('sentinel');

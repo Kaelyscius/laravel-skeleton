@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-/*
+/**
  * Design system tokens — single source of truth (UX-DR-40/41/44/45, ADR-0008,
  * docs/architecture/2-stack-technique.md §2.5).
- *
  * Three things are proven here:
  *   1. resources/css/tokens.css declares the 15 canonical tokens with the exact
  *      values pinned by §2.5.
@@ -13,13 +12,11 @@ declare(strict_types=1);
  *      @theme block (Tailwind 4 is CSS-first — there is no tailwind.config.js).
  *   3. ANTI-HEX GUARD: no design-system stylesheet other than tokens.css may
  *      hardcode a hex literal. Every colour must flow through var(--token).
- *
  * On the guard being self-proven (lesson from Stories 1.5/1.6/1.7): a scanner
  * that walks files can pass by vacuity — green because it found nothing to look
  * at, not because the code is clean. The detector is therefore exercised against
  * synthetic fixtures (one that MUST be flagged, one that MUST NOT), and the real
  * scan asserts it actually opened at least one file.
- *
  * SCOPE LIMIT (deliberate): only `resources/css/*.css` is scanned. Blade
  * templates are NOT audited here — hardcoded hex in Blade is covered by the
  * bounded `grep` audit planned in Story 10.4 (`audit-lava-grep-bounded`), and
@@ -59,11 +56,13 @@ $canonicalTokens = static fn (): array => [
 $readCss = static function (string $relativePath): string {
     $absolute = base_path($relativePath);
 
-    expect(file_exists($absolute))->toBeTrue("Expected {$relativePath} to exist.");
+    expect(file_exists($absolute))
+        ->toBeTrue("Expected {$relativePath} to exist.");
 
     $contents = file_get_contents($absolute);
 
-    expect($contents)->toBeString("Expected {$relativePath} to be readable.");
+    expect($contents)
+        ->toBeString("Expected {$relativePath} to be readable.");
 
     return (string) $contents;
 };
@@ -99,7 +98,8 @@ $stripComments = static function (string $source): string {
  * only by mutation-testing them. `toBeFalse()` does take a real message.
  */
 $expectAbsent = static function (string $haystack, string $needle, string $message): void {
-    expect(str_contains($haystack, $needle))->toBeFalse($message);
+    expect(str_contains($haystack, $needle))
+        ->toBeFalse($message);
 };
 
 /**
@@ -224,11 +224,13 @@ it('declares the 15 canonical design tokens with the exact values pinned by §2.
 it('scopes the tokens to :root and stays dark-only (no light theme, UX-DR-45)', function () use ($readCss, $stripComments): void {
     $css = $readCss('resources/css/tokens.css');
 
-    expect($css)->toContain(':root');
+    expect($css)
+        ->toContain(':root');
 
     // A light-mode branch would break the dark-only identity signal. Comments are
     // stripped first: documenting the ban is not the same as implementing it.
-    expect($stripComments($css))->not->toContain('prefers-color-scheme');
+    expect($stripComments($css))
+        ->not->toContain('prefers-color-scheme');
 });
 
 it('documents its own contract: single source of truth, 90/8/2 and the 4 Lava usages', function () use ($readCss): void {
@@ -302,7 +304,8 @@ it('leaves no token declared but ungoverned — every token reaches a utility or
             continue;
         }
 
-        expect($appCss)->toContain("var({$token});");
+        expect($appCss)
+            ->toContain("var({$token});");
     }
 });
 
@@ -319,7 +322,8 @@ it('bans max-w-prose, which silently resolves to Tailwind\'s 65ch instead of the
      */
     $sources = array_merge($guardedStylesheets(), $blades());
 
-    expect($sources)->not->toBeEmpty('Nothing was scanned for the max-w-prose ban.');
+    expect($sources)
+        ->not->toBeEmpty('Nothing was scanned for the max-w-prose ban.');
 
     foreach ($sources as $source) {
         $code = $stripComments((string) file_get_contents($source));
@@ -333,20 +337,16 @@ it('bans max-w-prose, which silently resolves to Tailwind\'s 65ch instead of the
 });
 
 it('imports the tokens UNLAYERED so they outrank Tailwind self-referencing theme vars', function () use ($readCss): void {
-    /*
+    /**
      * Load-bearing, and subtle enough to deserve its own test.
-     *
      * Two tokens share a name with the Tailwind theme variable they feed
      * (--font-sans, --ease-default). The bridge therefore emits a literal
      * self-reference into the theme layer:
-     *
      *     @layer theme { :root, :host { --font-sans: var(--font-sans) } }
-     *
      * That is harmless ONLY because tokens.css is imported without a layer():
      * an unlayered declaration outranks any layered one, so the real value from
      * tokens.css wins the cascade and the self-reference is discarded before
      * custom-property resolution ever runs — no dependency cycle.
-     *
      * Put tokens.css inside a layer (e.g. `@import './tokens.css' layer(base);`)
      * and the self-reference wins instead, becoming a cycle: --font-sans and
      * --ease-default compute to the guaranteed-invalid value. Typography and
@@ -355,7 +355,8 @@ it('imports the tokens UNLAYERED so they outrank Tailwind self-referencing theme
      */
     $css = $readCss('resources/css/app.css');
 
-    expect($css)->toMatch("#@import\s+'\./tokens\.css'\s*;#");
+    expect($css)
+        ->toMatch("#@import\s+'\./tokens\.css'\s*;#");
 });
 
 it('serves no Instrument Sans and no third-party font host anywhere in the app', function () use ($blades, $stripComments, $expectAbsent): void {
@@ -372,7 +373,8 @@ it('serves no Instrument Sans and no third-party font host anywhere in the app',
      */
     $sources = array_merge(glob(base_path('resources/css/*.css')) ?: [], $blades());
 
-    expect($sources)->not->toBeEmpty('Nothing was scanned for the font ban.');
+    expect($sources)
+        ->not->toBeEmpty('Nothing was scanned for the font ban.');
 
     $banned = ['Instrument Sans', 'fonts.bunny.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
@@ -389,7 +391,8 @@ it('serves no Instrument Sans and no third-party font host anywhere in the app',
 it('keeps the four @source directives that drive Tailwind class detection', function () use ($readCss): void {
     $css = $readCss('resources/css/app.css');
 
-    expect(substr_count($css, '@source '))->toBe(4);
+    expect(substr_count($css, '@source '))
+        ->toBe(4);
 });
 
 it('flags a hardcoded colour in every notation (guard self-check — it must be able to fail)', function () use ($findHardcodedColours): void {
@@ -398,10 +401,14 @@ it('flags a hardcoded colour in every notation (guard self-check — it must be 
      * three through — and oklch() is the likeliest paste of all, since Tailwind's
      * own palette is authored in it.
      */
-    expect($findHardcodedColours('.a { background-color: #AABBCC; }'))->toContain('#AABBCC');
-    expect($findHardcodedColours('.b { background: oklch(0.7 0.21 41); }'))->not->toBeEmpty();
-    expect($findHardcodedColours('.c { color: rgb(255 87 34); }'))->not->toBeEmpty();
-    expect($findHardcodedColours('.d { color: white; }'))->not->toBeEmpty();
+    expect($findHardcodedColours('.a { background-color: #AABBCC; }'))
+        ->toContain('#AABBCC');
+    expect($findHardcodedColours('.b { background: oklch(0.7 0.21 41); }'))
+        ->not->toBeEmpty();
+    expect($findHardcodedColours('.c { color: rgb(255 87 34); }'))
+        ->not->toBeEmpty();
+    expect($findHardcodedColours('.d { color: white; }'))
+        ->not->toBeEmpty();
 });
 
 it('does not flag colours inside var() references or comments (guard self-check, no false positive)', function () use ($findHardcodedColours): void {
@@ -413,14 +420,16 @@ it('does not flag colours inside var() references or comments (guard self-check,
         }
         CSS;
 
-    expect($findHardcodedColours($clean))->toBeEmpty();
+    expect($findHardcodedColours($clean))
+        ->toBeEmpty();
 });
 
 it('finds no hardcoded colour in any design-system stylesheet (real scan, recursive)', function () use ($guardedStylesheets, $findHardcodedColours): void {
     $files = $guardedStylesheets();
 
     // Anti-vacuity: a scan over zero files would be green and worthless.
-    expect($files)->not->toBeEmpty('The colour scan found no stylesheet to inspect.');
+    expect($files)
+        ->not->toBeEmpty('The colour scan found no stylesheet to inspect.');
 
     foreach ($files as $file) {
         $contents = (string) file_get_contents($file);

@@ -21,7 +21,8 @@ beforeEach(function (): void {
     Schema::create('tenant_fixtures', function (Blueprint $table): void {
         $table->id();
         $table->foreignId('streamer_id');
-        $table->string('label')->nullable();
+        $table->string('label')
+            ->nullable();
     });
 });
 
@@ -76,7 +77,8 @@ it('auto-fills streamer_id on creation from the current streamer', function (): 
         'label' => 'x',
     ]);
 
-    expect($model->streamer_id)->toBe($a->id);
+    expect($model->streamer_id)
+        ->toBe($a->id);
 });
 
 it('fails loud when CurrentStreamer is resolved without the middleware', function (): void {
@@ -98,7 +100,8 @@ it('binds the current streamer through the SetCurrentStreamer middleware', funct
     );
 
     expect(app(CurrentStreamer::class)->id())->toBe($streamer->id)
-        ->and($response->getContent())->toBe('ok');
+        ->and($response->getContent())
+        ->toBe('ok');
 });
 
 it('exposes the streamer relation from a tenant model', function (): void {
@@ -109,8 +112,10 @@ it('exposes the streamer relation from a tenant model', function (): void {
         'label' => 'x',
     ]);
 
-    expect($model->streamer)->toBeInstanceOf(Streamer::class)
-        ->and($model->streamer?->id)->toBe($a->id);
+    expect($model->streamer)
+        ->toBeInstanceOf(Streamer::class)
+        ->and($model->streamer?->id)
+        ->toBe($a->id);
 });
 
 it('applies the trait to business models but never to the streamer root', function (): void {

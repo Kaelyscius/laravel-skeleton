@@ -37,13 +37,14 @@ it('maps every enabled module key to its provider FQCN (helper self-check)', fun
         'admin' => true,
     ]);
 
-    expect($all)->toBe([
-        PublicServiceProvider::class,
-        LiveServiceProvider::class,
-        ReviewsServiceProvider::class,
-        PressKitServiceProvider::class,
-        AdminServiceProvider::class,
-    ]);
+    expect($all)
+        ->toBe([
+            PublicServiceProvider::class,
+            LiveServiceProvider::class,
+            ReviewsServiceProvider::class,
+            PressKitServiceProvider::class,
+            AdminServiceProvider::class,
+        ]);
 });
 
 it('drops a disabled module so its provider is never registered (mechanism, not HTTP)', function (): void {
@@ -56,8 +57,10 @@ it('drops a disabled module so its provider is never registered (mechanism, not 
     ]);
 
     // 4 enabled providers, Reviews excluded → nothing from Reviews can load.
-    expect($providers)->toHaveCount(4);
-    expect($providers)->not->toContain(ReviewsServiceProvider::class);
+    expect($providers)
+        ->toHaveCount(4);
+    expect($providers)
+        ->not->toContain(ReviewsServiceProvider::class);
 });
 
 it('Studly-cases snake_case keys (press_kit → PressKitServiceProvider)', function (): void {

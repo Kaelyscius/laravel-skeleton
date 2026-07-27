@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Model;
  * deliberately no migration for it.
  *
  * @property int $streamer_id
- * @property-read \App\Core\Models\Streamer|null $streamer
+ * @property \App\Core\Models\Streamer|null $streamer
  */
 class TenantFixtureModel extends Model
 {

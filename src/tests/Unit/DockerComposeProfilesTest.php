@@ -32,7 +32,8 @@ if (! function_exists('composeYaml')) {
     function composeYaml(string $file): array
     {
         $path = repoRoot() . '/' . $file;
-        expect(file_exists($path))->toBeTrue("Missing {$file}");
+        expect(file_exists($path))
+            ->toBeTrue("Missing {$file}");
 
         return Yaml::parseFile($path);
     }
@@ -45,7 +46,8 @@ it('declares the 5 essential prod services (no profile) in docker-compose.yml', 
         fn (array $svc) => empty($svc['profiles'])
     ));
     sort($noProfile);
-    expect($noProfile)->toBe(['apache', 'php', 'postgres', 'postgres-pulse', 'redis']);
+    expect($noProfile)
+        ->toBe(['apache', 'php', 'postgres', 'postgres-pulse', 'redis']);
 });
 
 it('declares dev profile services correctly', function (): void {
@@ -55,7 +57,8 @@ it('declares dev profile services correctly', function (): void {
         fn (array $svc) => in_array('dev', $svc['profiles'] ?? [], true)
     ));
     sort($dev);
-    expect($dev)->toBe(['adminer', 'mailpit', 'node']);
+    expect($dev)
+        ->toBe(['adminer', 'mailpit', 'node']);
 });
 
 it('declares tools profile services correctly', function (): void {
@@ -65,7 +68,8 @@ it('declares tools profile services correctly', function (): void {
         fn (array $svc) => in_array('tools', $svc['profiles'] ?? [], true)
     ));
     sort($tools);
-    expect($tools)->toBe(['dozzle', 'it-tools', 'watchtower']);
+    expect($tools)
+        ->toBe(['dozzle', 'it-tools', 'watchtower']);
 });
 
 it('declares dev-extra as redis-commander only (legacy MySQL admin tool dropped — D2)', function (): void {
@@ -77,7 +81,8 @@ it('declares dev-extra as redis-commander only (legacy MySQL admin tool dropped 
         fn (array $svc) => in_array('dev-extra', $svc['profiles'] ?? [], true)
     ));
     sort($devExtra);
-    expect($devExtra)->toBe(['redis-commander']);
+    expect($devExtra)
+        ->toBe(['redis-commander']);
 });
 
 it('excludes custom-built images from Watchtower', function (): void {
@@ -91,5 +96,6 @@ it('excludes custom-built images from Watchtower', function (): void {
         }
     }
     sort($excluded);
-    expect($excluded)->toBe(['apache', 'node', 'php']);
+    expect($excluded)
+        ->toBe(['apache', 'node', 'php']);
 });

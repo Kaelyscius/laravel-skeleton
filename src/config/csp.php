@@ -4,7 +4,6 @@
 // use Spatie\Csp\Keyword;
 
 return [
-
     /*
      * Presets will determine which CSP headers will be set. A valid CSP preset is
      * any class that implements `Spatie\Csp\Preset`
@@ -24,9 +23,7 @@ return [
      * These presets which will be put in a report-only policy. This is great for testing out
      * a new policy or changes to existing CSP policy without breaking anything.
      */
-    'report_only_presets' => [
-        //
-    ],
+    'report_only_presets' => [],
 
     /**
      * Register additional global report-only CSP directives here.
@@ -68,9 +65,7 @@ return [
      *
      * Example: ['default' => 'https://example.com/csp-reports']
      */
-    'reporting_endpoints' => [
-        //
-    ],
+    'reporting_endpoints' => [],
 
     /*
      * Headers will only be added if this setting is set to true.

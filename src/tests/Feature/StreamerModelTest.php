@@ -57,17 +57,18 @@ it('enforces the PRD-pinned column types', function (): void {
 it('exposes the editable fields as fillable and is not the tenant trait', function (): void {
     $streamer = new Streamer();
 
-    expect($streamer->getFillable())->toContain(
-        'name',
-        'tagline',
-        'bio_fr',
-        'bio_en',
-        'photo_url',
-        'cta_text',
-        'cta_url',
-        'twitter_handle',
-        'discord_url',
-    );
+    expect($streamer->getFillable())
+        ->toContain(
+            'name',
+            'tagline',
+            'bio_fr',
+            'bio_en',
+            'photo_url',
+            'cta_text',
+            'cta_url',
+            'twitter_handle',
+            'discord_url',
+        );
 
     // The tenant root must not pull in BelongsToStreamer (that trait is for business models).
     // Recursive: also catches the trait being applied via a parent class or a composed trait.
@@ -81,7 +82,8 @@ it('persists a streamer through its explicitly-wired factory', function (): void
         'name' => 'Test Streamer',
     ]);
 
-    expect($streamer->exists)->toBeTrue()
+    expect($streamer->exists)
+        ->toBeTrue()
         ->and(Streamer::query()->where('name', 'Test Streamer')->exists())->toBeTrue();
 });
 

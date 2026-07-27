@@ -31,7 +31,8 @@ class SetCurrentStreamer
     {
         $streamer = Streamer::query()->orderBy('id')->firstOrFail();
 
-        app()->instance(CurrentStreamer::class, new CurrentStreamer($streamer));
+        app()
+            ->instance(CurrentStreamer::class, new CurrentStreamer($streamer));
 
         return $next($request);
     }

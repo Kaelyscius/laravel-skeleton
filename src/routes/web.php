@@ -10,8 +10,9 @@ Route::get('/', function () {
 Route::get('/health', function () {
     return response()->json([
         'status' => 'ok',
-        'timestamp' => now()->toISOString(),
+        'timestamp' => now()
+            ->toISOString(),
         'service' => 'laravel',
-        'app' => config('app.name', 'Laravel')
+        'app' => config('app.name', 'Laravel'),
     ]);
 });

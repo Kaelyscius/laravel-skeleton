@@ -19,7 +19,8 @@ $projectRoot = dirname(__DIR__, 2);
 it('registers the 6 PSR-4 namespaces required by ADR-0009', function () use ($projectRoot): void {
     $composerPath = $projectRoot . '/composer.json';
     $contents = file_get_contents($composerPath);
-    expect($contents)->not->toBeFalse("composer.json missing at {$composerPath}");
+    expect($contents)
+        ->not->toBeFalse("composer.json missing at {$composerPath}");
 
     $composerJson = json_decode(
         json: $contents,
@@ -30,15 +31,22 @@ it('registers the 6 PSR-4 namespaces required by ADR-0009', function () use ($pr
     $psr4 = $composerJson['autoload']['psr-4'] ?? [];
 
     // Laravel native namespace must remain (backward compat).
-    expect($psr4)->toHaveKey('App\\');
+    expect($psr4)
+        ->toHaveKey('App\\');
 
     // 6 ADR-0009 namespaces.
-    expect($psr4)->toHaveKey('App\\Core\\');
-    expect($psr4)->toHaveKey('App\\Modules\\Public\\');
-    expect($psr4)->toHaveKey('App\\Modules\\Live\\');
-    expect($psr4)->toHaveKey('App\\Modules\\Reviews\\');
-    expect($psr4)->toHaveKey('App\\Modules\\PressKit\\');
-    expect($psr4)->toHaveKey('App\\Modules\\Admin\\');
+    expect($psr4)
+        ->toHaveKey('App\\Core\\');
+    expect($psr4)
+        ->toHaveKey('App\\Modules\\Public\\');
+    expect($psr4)
+        ->toHaveKey('App\\Modules\\Live\\');
+    expect($psr4)
+        ->toHaveKey('App\\Modules\\Reviews\\');
+    expect($psr4)
+        ->toHaveKey('App\\Modules\\PressKit\\');
+    expect($psr4)
+        ->toHaveKey('App\\Modules\\Admin\\');
 
     // Mappings exact.
     expect($psr4['App\\Core\\'])->toBe('app/Core/');

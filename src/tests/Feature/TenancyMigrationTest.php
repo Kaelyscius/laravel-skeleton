@@ -70,13 +70,18 @@ function tenantScopedModels(): array
 
 it('detects a non-nullable streamer_id column (guard self-check)', function (): void {
     // Conformant declarations.
-    expect(migrationDeclaresNonNullableStreamerId("\$table->foreignId('streamer_id');"))->toBeTrue()
-        ->and(migrationDeclaresNonNullableStreamerId("\$table->foreignId('streamer_id')->constrained();"))->toBeTrue()
-        ->and(migrationDeclaresNonNullableStreamerId("\$table->unsignedBigInteger('streamer_id')->index();"))->toBeTrue();
+    expect(migrationDeclaresNonNullableStreamerId("\$table->foreignId('streamer_id');"))
+        ->toBeTrue()
+        ->and(migrationDeclaresNonNullableStreamerId("\$table->foreignId('streamer_id')->constrained();"))
+        ->toBeTrue()
+        ->and(migrationDeclaresNonNullableStreamerId("\$table->unsignedBigInteger('streamer_id')->index();"))
+        ->toBeTrue();
 
     // Violations: nullable column, or no streamer_id column at all.
-    expect(migrationDeclaresNonNullableStreamerId("\$table->foreignId('streamer_id')->nullable();"))->toBeFalse()
-        ->and(migrationDeclaresNonNullableStreamerId("\$table->string('title');\n\$table->timestamps();"))->toBeFalse();
+    expect(migrationDeclaresNonNullableStreamerId("\$table->foreignId('streamer_id')->nullable();"))
+        ->toBeFalse()
+        ->and(migrationDeclaresNonNullableStreamerId("\$table->string('title');\n\$table->timestamps();"))
+        ->toBeFalse();
 });
 
 it('requires every tenant-scoped table to declare a non-nullable streamer_id', function (): void {
@@ -89,9 +94,10 @@ it('requires every tenant-scoped table to declare a non-nullable streamer_id', f
         $model = new $class();
         $table = $model->getTable();
 
-        $createMigration = collect($migrations)->first(
-            fn (string $path): bool => str_contains(basename($path), "create_{$table}_table"),
-        );
+        $createMigration = collect($migrations)
+            ->first(
+                fn (string $path): bool => str_contains(basename($path), "create_{$table}_table"),
+            );
 
         $declared = is_string($createMigration)
             && migrationDeclaresNonNullableStreamerId((string) file_get_contents($createMigration));
@@ -101,7 +107,8 @@ it('requires every tenant-scoped table to declare a non-nullable streamer_id', f
         }
     }
 
-    expect($missing)->toBeEmpty();
+    expect($missing)
+        ->toBeEmpty();
 });
 
 it('requires every module model to use the BelongsToStreamer trait', function (): void {
@@ -117,5 +124,6 @@ it('requires every module model to use the BelongsToStreamer trait', function ()
         }
     }
 
-    expect($violations)->toBeEmpty();
+    expect($violations)
+        ->toBeEmpty();
 });
