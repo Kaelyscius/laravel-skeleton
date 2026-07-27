@@ -310,9 +310,33 @@ jobs:
           NIGHTWATCH_ENABLED=false
           EOF
           
+          # Les dépendances DOIVENT être installées avant de démarrer la stack.
+          #
+          # src/vendor/ est gitignoré, donc absent du checkout du runner.
+          # L'entrypoint du conteneur php a `set -e` et lance `php artisan
+          # config:clear` : sans vendor/autoload.php, artisan échoue, l'entrypoint
+          # sort, et le conteneur meurt une demi-seconde après son démarrage —
+          # « dependency failed to start: container laravel-app_php is unhealthy ».
+          #
+          # Reproduit localement :
+          #   require(/var/www/html/vendor/autoload.php): Failed to open stream
+          echo "Building images..."
+          docker compose build
+
+          echo "Installing PHP dependencies..."
+          docker compose run --rm --no-deps --entrypoint composer php \
+            install --no-interaction --prefer-dist --no-progress --no-scripts
+
+          echo "Generating application key..."
+          docker compose run --rm --no-deps --entrypoint php php \
+            artisan key:generate --no-interaction --force
+
+          docker compose run --rm --no-deps --entrypoint composer php \
+            dump-autoload --optimize
+
           # Start services
           echo "Starting Docker services..."
-          docker compose up -d --build
+          docker compose up -d
 
           # Wait for services to be ready
           echo "Waiting for services to start..."
@@ -368,20 +392,20 @@ jobs:
       - name: 📊 Build Summary
         if: always()
         run: |
+          # Ce résumé affichait « ✅ » EN DUR pour chaque ligne, y compris
+          # « ✅ Integration test » — affiché tel quel alors que le job venait
+          # d'échouer. Un rapport qui annonce le succès quoi qu'il arrive est
+          # pire qu'aucun rapport : il entraîne à ne plus le lire.
+          # Les résultats viennent désormais des vrais statuts de jobs.
+          icon() { case "$1" in success) echo "✅";; failure) echo "❌";; skipped) echo "⏭️";; cancelled) echo "🚫";; *) echo "❔";; esac; }
+
           echo "## 🐳 Docker Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Built Images" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ PHP 8.5 (Laravel runtime)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Apache 2.4 (Web server)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Node.js 24 (Asset builder)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Tests Performed" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Dockerfile linting (hadolint)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ docker-compose validation" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Security best practices check" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Image smoke tests" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Integration test" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Vulnerability scan (Trivy)" >> $GITHUB_STEP_SUMMARY
+          echo "| Étape | Résultat |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Validation (hadolint · compose · sécurité) | $(icon '${{ needs.validation.result }}') ${{ needs.validation.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build images + smoke tests (php · apache · node) | $(icon '${{ needs.build.result }}') ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test d'intégration (stack complète) | $(icon '${{ job.status }}') ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.build.result }}" = "success" ]; then
