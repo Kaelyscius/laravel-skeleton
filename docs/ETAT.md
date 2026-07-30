@@ -35,6 +35,27 @@ prescrivait une séquence désormais fausse : elle a été supprimée.
 >
 > **Levée de la règle : quand `epic-1: done`.**
 
+## Pest 5 — instruit et REFUSÉ le 2026-07-31 (ne pas rejouer)
+
+Pest 5.0.2 est sorti. La montée **ne résout pas** sur cette stack :
+
+```
+pestphp/pest 5  →  brianium/paratest ^7.23  →  phpunit/php-file-iterator ^7
+nunomaduro/phpinsights  →  cmgmyr/phploc 8.0.7  →  php-file-iterator ^3|^4|^5|^6
+```
+
+`cmgmyr/phploc` plafonne à `^6`. Vérifié en copie jetable, hors du projet : **en retirant
+phpinsights, Pest 5.0.2 + PHPUnit 13.2.6 + php-file-iterator 7.0.0 résolvent proprement.**
+
+**Décision PO : on reste en Pest 4 et on garde PHP Insights.** Le spike vise donc
+`pest-plugin-browser` **v4.3.1**. À rouvrir quand `nunomaduro/phpinsights` aura monté `phploc` —
+c'est le seul verrou.
+
+> ⚠️ Piège rencontré en instruisant ce point : `composer remove --no-update` lancé dans le
+> conteneur **modifie le vrai `src/composer.json`** (bind mount). Pour tout test de résolution,
+> copier `composer.json` dans un dossier hors projet et utiliser un conteneur `composer:2`
+> jetable.
+
 ## Prochaine action
 
 **Le spike runner navigateur.** Rien d'autre ne commence avant.
