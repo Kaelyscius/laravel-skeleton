@@ -23,6 +23,8 @@
 | [0008](ADR-0008-frontend-stack-blade-livewire.md) | Stack frontend Blade + Livewire 3 + Alpine + Tailwind 4 | ✅ Accepted | Mini-round Frontend 2026-05-08 |
 | [0009](ADR-0009-modular-app-modules-psr4.md) | Modularité `app/Modules/*` PSR-4 hand-rolled | ✅ Accepted | Mini-round Modularité 2026-05-08 |
 | [0010](ADR-0010-laravel-13-supersedes-filament-v3-lock.md) | Laravel 13 — levée du verrou « Laravel 12 + Filament v3 » | ✅ Accepted | Session party-mode + montée de dépendances 2026-07-27 |
+| [0011](ADR-0011-observation-avant-composition.md) | Observation avant composition — réordonnancement d'Epic 1 | ✅ Accepted | Roundtable party-mode 2026-07-30 |
+| [0012](ADR-0012-ecran-offline-et-module-media.md) | Écran offline : vignettes + liens sortants, module `Media`, Twitch seul | ✅ Accepted | Roundtable party-mode 2026-07-30 |
 
 ## Quand créer un nouvel ADR ?
 
