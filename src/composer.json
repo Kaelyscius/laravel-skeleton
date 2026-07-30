@@ -17,6 +17,7 @@
     "laravel/sanctum": "^4.0",
     "laravel/telescope": "^5.0",
     "laravel/tinker": "^3",
+    "livewire/livewire": "^4",
     "spatie/laravel-activitylog": "^5.0",
     "spatie/laravel-csp": "^3.0",
     "spatie/laravel-health": "^1.0",

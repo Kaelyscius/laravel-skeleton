@@ -18,18 +18,60 @@
         </include>
     </source>
     <php>
-        <env name="APP_ENV" value="testing"/>
-        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
-        <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="BROADCAST_CONNECTION" value="null"/>
-        <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="pgsql"/>
-        <env name="DB_DATABASE" value="laravel_test"/>
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
-        <env name="PULSE_ENABLED" value="false"/>
-        <env name="TELESCOPE_ENABLED" value="false"/>
-        <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!--
+            force="true" est OBLIGATOIRE sur chaque entrée, pas cosmétique.
+
+            Sans lui, PHPUnit n'écrase PAS une variable d'environnement déjà
+            définie. Or Laravel charge `.env` avant que ce bloc ne s'applique :
+            `DB_DATABASE=laravel` (la base de DÉVELOPPEMENT) gagnait donc sur
+            `laravel_test`, et TOUTE la suite tournait sur la base de dev,
+            qu'elle vidait à chaque exécution via RefreshDatabase.
+
+            Constaté le 2026-07-31 : `laravel_test` contenait 0 table — elle
+            n'avait jamais servi — pendant que 55 tests passaient au vert.
+            Le contournement `-e TELESCOPE_ENABLED=false` du Makefile traitait
+            le même mécanisme en symptôme plutôt qu'en cause.
+
+            Garde-fou : tests/Feature/TestDatabaseSentinelTest.php échoue si la
+            connexion active ne pointe pas sur une base de test.
+        -->
+        <!--
+            Les <server> ci-dessous ne font PAS doublon avec les <env>.
+
+            PHPUnit peuple getenv() et $_ENV, mais PAS $_SERVER. Or le helper
+            Env de Laravel interroge $_SERVER EN PREMIER : tant que $_SERVER
+            portait la valeur du .env de dev, `force="true"` sur <env> restait
+            sans effet. Sonde du 2026-07-31 :
+                getenv → laravel_test · $_ENV → laravel_test
+                $_SERVER → laravel    · env() → laravel
+            Les deux blocs sont donc nécessaires, et doivent rester synchronisés.
+        -->
+        <server name="APP_ENV" value="testing" force="true"/>
+        <server name="DB_CONNECTION" value="pgsql" force="true"/>
+        <server name="DB_DATABASE" value="laravel_test" force="true"/>
+        <server name="CACHE_STORE" value="array" force="true"/>
+        <server name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <server name="SESSION_DRIVER" value="array" force="true"/>
+        <server name="MAIL_MAILER" value="array" force="true"/>
+        <server name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <server name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <server name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <server name="PULSE_ENABLED" value="false" force="true"/>
+        <server name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <server name="NIGHTWATCH_ENABLED" value="false" force="true"/>
+
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <env name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <env name="DB_DATABASE" value="laravel_test" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="PULSE_ENABLED" value="false" force="true"/>
+        <env name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
     </php>
 </phpunit>

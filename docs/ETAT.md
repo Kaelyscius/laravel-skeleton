@@ -1,4 +1,4 @@
-# État du projet — 2026-07-30 (HEAD `647d276`)
+# État du projet — 2026-07-31 (branche `docs/roundtable-2026-07-30`)
 
 > Point d'entrée de reprise. **Un seul fichier, écrasé à chaque session, jamais accumulé.**
 > Il n'a aucune autorité : il pointe vers `epics.md` et `sprint-status.yaml`, jamais l'inverse.
@@ -15,6 +15,25 @@ Le roundtable du 2026-07-30 a **réordonné le reliquat d'Epic 1** et arbitré l
 l'écran offline : voir [ADR-0011](adr/ADR-0011-observation-avant-composition.md) et
 [ADR-0012](adr/ADR-0012-ecran-offline-et-module-media.md). L'ancienne note `RESUME-1.9.md`
 prescrivait une séquence désormais fausse : elle a été supprimée.
+
+## ⛔ Règle de cadrage — décidée le 2026-07-31
+
+> **Plus aucun roundtable party-mode jusqu'à ce que l'Epic 1 soit terminé.**
+>
+> Motif : 132 stories au plan, **8 `done` (6 %)**, dernière story livrée le **25 juillet**, et
+> **trois sessions consécutives sans qu'une seule story avance**. La dérive est identifiable :
+> l'ADR-0012 a conçu en détail l'écran offline — job, hiérarchie, sources, module `Media`,
+> table `media_items` — c'est-à-dire du **travail d'Epic 4 fait pendant l'Epic 1**, alors qu'il
+> reste 5 stories à livrer.
+>
+> Le mécanisme n'est pas accidentel : convoquer des agents qui font correctement leur métier
+> produit nécessairement plus de décisions que de code. Un PM à qui on demande un avis instruira
+> le produit, pas la livraison.
+>
+> Ce qui reste autorisé : une question ponctuelle à un agent unique sur un point bloquant.
+> Ce qui ne l'est plus : une table de 3-5 voix sur plusieurs tours.
+>
+> **Levée de la règle : quand `epic-1: done`.**
 
 ## Prochaine action
 
@@ -38,14 +57,14 @@ prêt. Seul risque identifié au critère (1) : `symfony/process ^7.4` face à L
 >    `make up-local` — recréer, pas redémarrer.
 > 3. **Base de dev non semée → `/` répond 404** (voir la dette ci-dessous). `php artisan db:seed`.
 
-> ⛔ **À résoudre AVANT la Story 1.12** (trouvé par la passe de relecture des AC) :
-> `livewire/livewire` n'est **pas** dans `src/composer.json` — il n'existe qu'en dépendance
-> **transitive** (v4.3.3, tirée par Pulse / Telescope). `alpinejs` n'est déclaré nulle part.
-> Or les Stories 1.11 et 1.12 en dépendent. Faire `composer require livewire/livewire:^4`
-> explicitement et trancher le chargement d'Alpine.
+> ✅ **Livewire déclaré le 2026-07-31** : `"livewire/livewire": "^4"` est désormais une
+> dépendance directe de `src/composer.json` (v4.3.3). **Ne PAS ajouter `alpinejs` via npm** :
+> Livewire 4 embarque déjà Alpine dans son bundle, et deux Alpine enregistrés en parallèle est
+> un bug classique. Alpine arrive donc avec `@livewireScripts` — à câbler dans le layout
+> (Story 1.13), pas avant.
 
 Critères d'acceptation écrits à l'avance — plugin browser de Pest 4 retenu si les quatre sont
-satisfaits : (1) installe sur PHP 8.5.8 sans `--ignore-platform-reqs` ; (2) pilote un navigateur
+satisfaits : (1) installe sur PHP 8.5.4 sans `--ignore-platform-reqs` ; (2) pilote un navigateur
 hors du conteneur `php`, ou coût confiné à un `Dockerfile.test` sans toucher l'image de prod ;
 (3) un test minimal lit `getComputedStyle(document.body).fontFamily` ; (4) **le même test échoue
 quand on casse la source de la police**. Le (4) est le seul qui compte.
@@ -107,6 +126,40 @@ Les trois trouvailles qui comptent :
 
 **Et une conclusion de séquence** : 7 AC sur 14 exigent une **valeur calculée**. Le spike ne
 conditionne pas la seule Story 1.9 — il conditionne la moitié du reliquat d'Epic 1.
+
+## 🔴 Le défaut le plus grave trouvé jusqu'ici — CORRIGÉ le 2026-07-31
+
+**Toute la suite de tests tournait sur la base de DÉVELOPPEMENT et la vidait à chaque
+exécution.** `laravel_test` contenait **0 table** : elle n'avait jamais servi, depuis le début du
+projet — pendant que 55 tests passaient au vert.
+
+C'est aussi l'explication du « `/` répond 404 » diagnostiqué la veille : la base n'était pas
+« jamais semée », elle était **vidée par le dernier `make test`**.
+
+**Cause racine, établie par sonde et non supposée.** `phpunit.xml` déclarait bien
+`DB_DATABASE=laravel_test`, mais :
+
+1. sans `force="true"`, PHPUnit n'écrase pas une variable déjà définie ;
+2. **et même avec `force="true"`, ça ne suffit pas** — PHPUnit peuple `getenv()` et `$_ENV`,
+   mais **pas `$_SERVER`**, or le helper `Env` de Laravel consulte `$_SERVER` **en premier**.
+
+Sonde du 2026-07-31 :
+
+```
+getenv   → laravel_test      $_SERVER → laravel
+$_ENV    → laravel_test      env()    → laravel      APP_ENV → local
+```
+
+**Correctif** : `<env force="true">` **et** un bloc `<server force="true">` miroir dans
+`src/phpunit.xml`. Les deux sont nécessaires et doivent rester synchronisés.
+
+**Vérifié par mutation** : base de dev semée à 1 streamer → `make test` → toujours 1 streamer,
+et `laravel_test` passe de 0 à **22 tables**. Garde-fou permanent :
+`src/tests/Feature/TestDatabaseSentinelTest.php` (3 tests, groupe `sentinel`) — il porte sur la
+**connexion réellement active**, pas sur le contenu d'un fichier de configuration.
+
+*Reliquat* : le `-e TELESCOPE_ENABLED=false` du Makefile était un contournement du même
+mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à retirer un jour.
 
 ## Ce que je vais oublier
 

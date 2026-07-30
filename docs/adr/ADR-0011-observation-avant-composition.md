@@ -79,7 +79,7 @@ Ce risque est retenu comme **à vérifier lors de la 1.10a**, pas comme acquis.
 
 Le plugin browser de Pest 4 est retenu **si les quatre sont satisfaits** :
 
-1. Il s'installe sur PHP 8.5.8 sans `--ignore-platform-reqs`.
+1. Il s'installe sur PHP 8.5.4 sans `--ignore-platform-reqs`.
 2. Il pilote un navigateur hors du conteneur `php`, ou son coût reste confiné à un
    `Dockerfile.test` **sans toucher à l'image de production**.
 3. Un test minimal charge une page et lit `getComputedStyle(document.body).fontFamily`.

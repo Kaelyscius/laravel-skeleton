@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "31b990e7b23785ed08d0641dc37eddde",
+    "content-hash": "189d58097c07e3391f4006e906080f67",
     "packages": [
         {
             "name": "brick/math",
@@ -1421,16 +1421,16 @@
         },
         {
             "name": "laravel/nightwatch",
-            "version": "v1.28.4",
+            "version": "v1.28.5",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/nightwatch.git",
-                "reference": "c38c1a3eb7dfbaf27023dbf011bf1078fdf28bdb"
+                "reference": "03b8676e383394a0abe195cc7b942da352553825"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/nightwatch/zipball/c38c1a3eb7dfbaf27023dbf011bf1078fdf28bdb",
-                "reference": "c38c1a3eb7dfbaf27023dbf011bf1078fdf28bdb",
+                "url": "https://api.github.com/repos/laravel/nightwatch/zipball/03b8676e383394a0abe195cc7b942da352553825",
+                "reference": "03b8676e383394a0abe195cc7b942da352553825",
                 "shasum": ""
             },
             "require": {
@@ -1511,7 +1511,7 @@
                 "issues": "https://github.com/laravel/nightwatch/issues",
                 "source": "https://github.com/laravel/nightwatch"
             },
-            "time": "2026-06-30T06:54:16+00:00"
+            "time": "2026-07-28T00:33:11+00:00"
         },
         {
             "name": "laravel/prompts",
@@ -10349,16 +10349,16 @@
         },
         {
             "name": "php-code-archeology/php-code-archeology",
-            "version": "v2.11.2",
+            "version": "v2.11.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/PhpCodeArcheology/PhpCodeArcheology.git",
-                "reference": "a810dd9958b0f86e332bd2a10e6656f2214d4731"
+                "reference": "0d2484fdfaa2ac81c5c3355b1a54d7498fba28b1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/PhpCodeArcheology/PhpCodeArcheology/zipball/a810dd9958b0f86e332bd2a10e6656f2214d4731",
-                "reference": "a810dd9958b0f86e332bd2a10e6656f2214d4731",
+                "url": "https://api.github.com/repos/PhpCodeArcheology/PhpCodeArcheology/zipball/0d2484fdfaa2ac81c5c3355b1a54d7498fba28b1",
+                "reference": "0d2484fdfaa2ac81c5c3355b1a54d7498fba28b1",
                 "shasum": ""
             },
             "require": {
@@ -10402,12 +10402,12 @@
                 {
                     "name": "Marcus Kober",
                     "email": "hello@marcuskober.de",
-                    "homepage": "https://marcuskober.com",
+                    "homepage": "https://marcuskober.de",
                     "role": "Copyright Holder"
                 }
             ],
             "description": "Static analyzer for PHP project archeology. Calculates various metrics for your codebase.",
-            "homepage": "https://PhpCodeArcheology.org",
+            "homepage": "https://phpcodearcheology.github.io/",
             "keywords": [
                 "analysis",
                 "architecture",
@@ -10424,7 +10424,7 @@
             ],
             "support": {
                 "issues": "https://github.com/PhpCodeArcheology/PhpCodeArcheology/issues",
-                "source": "https://github.com/PhpCodeArcheology/PhpCodeArcheology/tree/v2.11.2"
+                "source": "https://github.com/PhpCodeArcheology/PhpCodeArcheology/tree/v2.11.3"
             },
             "funding": [
                 {
@@ -10432,7 +10432,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-07-27T12:26:33+00:00"
+            "time": "2026-07-28T08:18:12+00:00"
         },
         {
             "name": "php-debugbar/php-debugbar",
@@ -11962,16 +11962,16 @@
         },
         {
             "name": "rector/rector",
-            "version": "2.5.8",
+            "version": "2.5.9",
             "source": {
                 "type": "git",
                 "url": "https://github.com/rectorphp/rector.git",
-                "reference": "861c77fd2a6d45317a401f4e0b617f947e8b6f96"
+                "reference": "858b1fb95d94f658b54c01080bf7b6ae97274536"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/rectorphp/rector/zipball/861c77fd2a6d45317a401f4e0b617f947e8b6f96",
-                "reference": "861c77fd2a6d45317a401f4e0b617f947e8b6f96",
+                "url": "https://api.github.com/repos/rectorphp/rector/zipball/858b1fb95d94f658b54c01080bf7b6ae97274536",
+                "reference": "858b1fb95d94f658b54c01080bf7b6ae97274536",
                 "shasum": ""
             },
             "require": {
@@ -12010,7 +12010,7 @@
             ],
             "support": {
                 "issues": "https://github.com/rectorphp/rector/issues",
-                "source": "https://github.com/rectorphp/rector/tree/2.5.8"
+                "source": "https://github.com/rectorphp/rector/tree/2.5.9"
             },
             "funding": [
                 {
@@ -12018,7 +12018,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-07-27T06:19:16+00:00"
+            "time": "2026-07-30T22:10:00+00:00"
         },
         {
             "name": "sebastian/cli-parser",
@@ -13943,16 +13943,16 @@
         },
         {
             "name": "symfony/yaml",
-            "version": "v8.1.1",
+            "version": "v8.1.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/yaml.git",
-                "reference": "8e4cdd4311683516be06944f4b85244063cdb886"
+                "reference": "faabdbe998e8c5c599dceffa27aa265b185c0736"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/yaml/zipball/8e4cdd4311683516be06944f4b85244063cdb886",
-                "reference": "8e4cdd4311683516be06944f4b85244063cdb886",
+                "url": "https://api.github.com/repos/symfony/yaml/zipball/faabdbe998e8c5c599dceffa27aa265b185c0736",
+                "reference": "faabdbe998e8c5c599dceffa27aa265b185c0736",
                 "shasum": ""
             },
             "require": {
@@ -13995,7 +13995,7 @@
             "description": "Loads and dumps YAML files",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/yaml/tree/v8.1.1"
+                "source": "https://github.com/symfony/yaml/tree/v8.1.2"
             },
             "funding": [
                 {
@@ -14015,7 +14015,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-06-09T11:06:24+00:00"
+            "time": "2026-07-22T15:42:13+00:00"
         },
         {
             "name": "symplify/easy-coding-standard",
