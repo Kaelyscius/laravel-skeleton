@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Référence 3 — Press kit</title>
+<link rel="stylesheet" href="../../../src/resources/css/tokens.css">
+<link rel="stylesheet" href="_reference.css">
+<style>
+    /*
+        Direction B : hiérarchie VERTICALE STRICTE (mini-round marketing).
+        Pas de colonnes, pas de mosaïque : un journaliste presse scanne de haut
+        en bas et repart avec ce qu'il lui faut. L'ordre est l'information.
+    */
+    .stack > section { padding: 40px 0; border-bottom: 1px solid var(--border); }
+    .stack > section:last-child { border-bottom: 0; }
+
+    dl.stats { margin: 0; display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    dl.stats dt { color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 4px; }
+    dl.stats dd { margin: 0; font-size: 1.5rem; font-weight: 600; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    .dl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .dl-list a { color: var(--text-primary); text-decoration: none; }
+    .dl-list a:hover span:first-child,
+    .dl-list a:focus-visible span:first-child { text-decoration: underline; }
+    .dl-list .meta { color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.8125rem; }
+</style>
+</head>
+<body>
+
+<header class="site">
+    <div class="wrap">
+        <span class="brand">Ponce</span>
+        <nav>
+            <a href="01-home-live.html">Accueil</a>
+            <a href="#">Tests</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+    <div class="wrap prose stack">
+
+        <section style="padding-top: 0;">
+            <h1>Press kit</h1>
+            <p class="secondary">
+                Tout ce qu'il faut pour parler du stream, sans avoir à me le demander.
+                Réutilisable librement, y compris commercialement.
+            </p>
+        </section>
+
+        <!--
+            STATS EN PREMIER, avant la photo et avant la bio (mini-round B).
+            Et des MÉDIANES, pas des vanity metrics : « followers Twitch » ne dit
+            rien à un éditeur, une audience médiane par stream si.
+        -->
+        <section>
+            <h2>Audience</h2>
+            <dl class="stats">
+                <div>
+                    <dt>Spectateurs, médiane par stream</dt>
+                    <dd>1 240</dd>
+                </div>
+                <div>
+                    <dt>Streams par semaine</dt>
+                    <dd>2</dd>
+                </div>
+                <div>
+                    <!--
+                        TIME-AS-TEXTURE — occurrence 1/2 de cet écran.
+                        Conservée : l'ancienneté est un argument de crédibilité
+                        pour un interlocuteur presse. « Depuis 2022 » serait une
+                        date à convertir mentalement ; « 4 ans » est l'information.
+                    -->
+                    <dt>En stream depuis</dt>
+                    <!--
+                        `.temporal` est posée ici bien que le style visuel vienne
+                        de `dl.stats dd` (plus spécifique) : la classe sert à
+                        l'INVENTAIRE de l'audit, pas seulement à l'apparence.
+                        Une mention temporelle non marquée serait invisible au
+                        comptage — donc un audit qui se croit exhaustif sans
+                        l'être.
+                    -->
+                    <dd class="temporal">4 ans</dd>
+                </div>
+            </dl>
+            <!--
+                COUPÉ PAR L'AUDIT : « Bio mise à jour il y a 6 mois ».
+                Motif : dater sa propre bio n'aide personne et se retourne contre
+                l'auteur — six mois, c'est vieux ; deux ans, c'est mort. Aucune
+                décision du lecteur n'en dépend. Voir audit §3.
+            -->
+        </section>
+
+        <section>
+            <h2>Bio courte — FR</h2>
+            <p>
+                Ponce joue en public depuis quatre ans, surtout des jeux exigeants,
+                et écrit des tests quand un jeu mérite plus que trois phrases.
+                Deux streams par semaine, sans montage et sans script.
+            </p>
+
+            <h2 style="margin-top: 32px;">Short bio — EN</h2>
+            <p>
+                Ponce has been streaming for four years, mostly demanding games,
+                and writes long-form reviews when a game deserves more than three
+                sentences. Two streams a week, unedited and unscripted.
+            </p>
+        </section>
+
+        <section>
+            <h2>Médias</h2>
+            <!--
+                Choix multiple de téléchargement, PAS un zip (mini-round B) :
+                un journaliste veut UN fichier, tout de suite, pas une archive
+                à décompresser pour trouver le bon format.
+            -->
+            <ul class="dl-list">
+                <li><a href="#"><span>Portrait — 2000 × 3000</span> <span class="meta">JPG · 1,4 Mo</span></a></li>
+                <li><a href="#"><span>Logo sur fond sombre</span> <span class="meta">SVG · 12 Ko</span></a></li>
+                <li><a href="#"><span>Logo sur fond clair</span> <span class="meta">SVG · 12 Ko</span></a></li>
+                <li><a href="#"><span>Bannière de chaîne</span> <span class="meta">PNG · 780 Ko</span></a></li>
+            </ul>
+            <!--
+                TIME-AS-TEXTURE — occurrence 2/2.
+                Conservée : ici la date engage le lecteur. Un portrait de 2021
+                utilisé en 2026 est un problème pour lui, pas pour nous.
+            -->
+            <p class="temporal" style="margin-top: 16px;">Médias mis à jour il y a 2 mois</p>
+        </section>
+
+        <section>
+            <h2>Contact</h2>
+            <p class="secondary">
+                Pour une interview, un test, ou une clé : <a href="#" style="color: var(--text-primary);">presse@exemple.fr</a>.
+                Je réponds à tout, même quand c'est non.
+            </p>
+        </section>
+
+    </div>
+</main>
+
+</body>
+</html>

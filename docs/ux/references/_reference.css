@@ -1,0 +1,222 @@
+/*
+ * Feuille commune aux 3 écrans de référence (0c, ADR-0011).
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * CE QUE CE FICHIER EST, ET N'EST PAS
+ *
+ * Ces écrans sont des RÉFÉRENCES, pas de la production. Ils existent pour qu'on
+ * puisse REGARDER quelque chose avant de composer des composants Blade — le
+ * design system a été tokenisé (Story 1.8) sans qu'aucun écran n'existe.
+ *
+ * Ils ne sont donc pas un layout jetable au sens refusé par ADR-0011 : ils ne
+ * servent à valider aucun test, ils ne se substituent à aucune production. Ils
+ * servent à VOIR. Le layout réel naîtra en Story 1.13, dans Blade, avec la CSP,
+ * l'ordre réel des balises et Vite.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * RÈGLE ABSOLUE : aucune couleur en dur ici.
+ *
+ * Chaque couleur passe par un var(--token) de src/resources/css/tokens.css.
+ * C'est tout l'intérêt : si un token est mal calibré, ces écrans le montrent
+ * AVANT que la Story 1.11 ne fige des composants dessus. ADR-0011 l'autorise
+ * explicitement — « la Story 1.8 peut être rouverte ».
+ *
+ * Contrôle : docs/ux/references/time-as-texture-audit.md §4.
+ */
+
+/* Les écrans importent tokens.css AVANT ce fichier — voir chaque <head>. */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── Trame ──────────────────────────────────────────────────────────────── */
+
+.wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+.prose {
+    max-width: var(--max-prose);
+    line-height: var(--leading-prose);
+}
+
+header.site {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+}
+
+header.site .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.brand {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+nav a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    margin-left: 24px;
+    font-size: 0.9375rem;
+    transition: color var(--duration-default) var(--ease-default);
+}
+
+nav a:hover,
+nav a:focus-visible {
+    color: var(--text-primary);
+}
+
+main {
+    padding: 64px 0 96px;
+}
+
+/* ── Typographie ────────────────────────────────────────────────────────── */
+
+h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 0 16px;
+    font-weight: 600;
+}
+
+h2 {
+    font-size: 1.25rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 20px;
+    font-weight: 600;
+}
+
+p {
+    margin: 0 0 16px;
+}
+
+.secondary {
+    color: var(--text-secondary);
+}
+
+/*
+ * `.temporal` marque CHAQUE mention temporelle de l'écran.
+ * Elle sert à l'audit : sélectionner `.temporal` donne la liste exhaustive,
+ * ce qui rend la coupe de −50 % mesurable au lieu d'être déclarative.
+ */
+.temporal {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Surfaces ───────────────────────────────────────────────────────────── */
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+/* ── Accent — RÈGLE 2 : 4 usages autorisés, pas un de plus ──────────────── */
+
+/* Usage 1/4 — le badge LIVE. Seul vrai moment d'urgence de l'application. */
+.badge-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-lava);
+    color: var(--bg);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+
+.badge-live::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--bg);
+    animation: pulse 2s var(--ease-default) infinite;
+}
+
+/* Usage 2/4 — le CTA primaire. Un seul par écran. */
+.cta {
+    display: inline-block;
+    background: var(--accent-lava);
+    color: var(--bg);
+    text-decoration: none;
+    font-weight: 600;
+    padding: 12px 22px;
+    border-radius: 8px;
+    transition: opacity var(--duration-default) var(--ease-default);
+}
+
+.cta:hover,
+.cta:focus-visible {
+    opacity: 0.88;
+}
+
+/* Usage 3/4 — les notes >= 9/10. (Usage 4/4 = destructif admin, hors de ces écrans.) */
+.score-high {
+    color: var(--accent-lava);
+    font-weight: 700;
+    font-family: var(--font-mono);
+}
+
+.btn-secondary {
+    display: inline-block;
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    text-decoration: none;
+    padding: 11px 21px;
+    border-radius: 8px;
+    transition: border-color var(--duration-default) var(--ease-default);
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus-visible {
+    border-color: var(--text-secondary);
+}
+
+/* ── Motion — UX-DR-43 : jamais bouncy, et toujours désactivable ────────── */
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}

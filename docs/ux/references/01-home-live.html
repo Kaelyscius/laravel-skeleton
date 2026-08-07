@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Référence 1 — Accueil, état LIVE</title>
+<!--
+    tokens.css est chargé depuis sa VRAIE source, pas recopié.
+    Si un token change, cet écran change. C'est la condition pour qu'il serve
+    de référence plutôt que de capture périmée.
+-->
+<link rel="stylesheet" href="../../../src/resources/css/tokens.css">
+<link rel="stylesheet" href="_reference.css">
+</head>
+<body>
+
+<header class="site">
+    <div class="wrap">
+        <span class="brand">Ponce</span>
+        <nav>
+            <a href="02-home-offline.html">Vidéos</a>
+            <a href="#">Tests</a>
+            <a href="03-press-kit.html">Presse</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+    <div class="wrap">
+
+        <!--
+            LIVE est le SEUL état nommé du site (roundtable 2026-07-30).
+            L'écran offline ne dit pas « hors ligne » : une scène conçue comme
+            état nominal ne s'ouvre pas sur une négation.
+        -->
+        <p><span class="badge-live">En direct</span></p>
+
+        <h1>On teste Silksong,<br>et ça pique.</h1>
+
+        <p class="prose secondary">
+            Stream du mardi. On avance sans guide, on meurt beaucoup, et on
+            commente. Rejoins le chat si tu veux râler avec nous.
+        </p>
+
+        <!--
+            TIME-AS-TEXTURE — occurrence 1/3 de cet écran.
+            Conservée : elle répond à « est-ce que c'est vivant, maintenant ? ».
+            La durée est plus informative que l'heure de début.
+        -->
+        <p class="temporal">En direct depuis 2 h 17</p>
+
+        <p style="margin-top: 32px;">
+            <a class="cta" href="#">Rejoindre le live</a>
+            <a class="btn-secondary" href="#" style="margin-left: 8px;">Voir les VOD</a>
+        </p>
+
+        <!--
+            COUPÉ PAR L'AUDIT : « 247 viewers right now ».
+            Motif : le compteur de spectateurs mesure la performance du stream,
+            pas la vitalité du site. Sur une petite audience il dessert
+            l'objectif — et il rend l'écran dépendant d'un appel API de plus.
+            Détail : time-as-texture-audit.md §3, ligne « viewers ».
+        -->
+
+        <section style="margin-top: 80px;">
+            <h2>Derniers tests</h2>
+            <div class="grid">
+
+                <article class="card">
+                    <h3 style="margin: 0 0 8px; font-size: 1rem;">Silksong</h3>
+                    <p class="secondary" style="font-size: 0.9375rem; margin-bottom: 12px;">
+                        Exigeant, lisible, et enfin sorti.
+                    </p>
+                    <!-- Usage 3/4 de l'accent : note >= 9/10. -->
+                    <p style="margin: 0;"><span class="score-high">9,2</span><span class="secondary">/10</span></p>
+                </article>
+
+                <article class="card">
+                    <h3 style="margin: 0 0 8px; font-size: 1rem;">Pacific Drive</h3>
+                    <p class="secondary" style="font-size: 0.9375rem; margin-bottom: 12px;">
+                        Une bagnole, une zone, et beaucoup de bricolage.
+                    </p>
+                    <p style="margin: 0;"><span style="font-family: var(--font-mono); font-weight: 700;">7,8</span><span class="secondary">/10</span></p>
+                </article>
+
+                <article class="card">
+                    <h3 style="margin: 0 0 8px; font-size: 1rem;">Tactical Breach Wizards</h3>
+                    <p class="secondary" style="font-size: 0.9375rem; margin-bottom: 12px;">
+                        Des sorciers, des fenêtres, de la défenestration.
+                    </p>
+                    <p style="margin: 0;"><span style="font-family: var(--font-mono); font-weight: 700;">8,5</span><span class="secondary">/10</span></p>
+                </article>
+
+            </div>
+
+            <!--
+                TIME-AS-TEXTURE — occurrence 2/3.
+                Conservée : elle répond à « ce site est-il encore entretenu ? ».
+                C'est le job nommé par le PO dans ADR-0012 §1bis — prouver que
+                ça vit. Une seule mention suffit pour dater toute la section :
+                la mettre sur CHAQUE carte serait du bruit.
+            -->
+            <p class="temporal" style="margin-top: 16px;">Dernier test publié il y a 3 jours</p>
+        </section>
+
+    </div>
+</main>
+
+</body>
+</html>
