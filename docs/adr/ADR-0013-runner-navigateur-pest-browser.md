@@ -146,9 +146,13 @@ en a pas. Les tests navigateur se lancent par chemin explicite.
 - Le blocage résiduel n'est pas expliqué. À rouvrir à chaque montée du plugin, et à retirer la
   mitigation dès que l'amont sera corrigé — un contournement qu'on oublie de retirer devient
   une complexité permanente.
-- **CI câblée le 2026-08-06, mais son rouge n'est pas encore prouvé.** Job `browser` séparé,
-  bloquant. Il n'a jamais tourné : un job qu'on n'a pas vu échouer ne garde rien. Le rouge doit
-  être observé sur une exécution réelle avant de considérer ce point clos.
+- ~~CI câblée mais rouge non prouvé.~~ **Clos le 2026-08-06.** Job `browser` séparé et bloquant.
+  Son rouge a été observé sur une exécution réelle, en poussant le token muté sur une branche
+  jetable puis en déclenchant le workflow ([run 31203127602](https://github.com/Kaelyscius/laravel-skeleton/actions/runs/31203127602))
+  — le job a échoué avec le message du verdict, sur une `font-family` calculée par un vrai
+  Chromium GitHub. Vert confirmé après restauration
+  ([run 31203881004](https://github.com/Kaelyscius/laravel-skeleton/actions/runs/31203881004)).
+  La branche a été supprimée : le commit de mutation n'a jamais atteint `main`.
 - **Divergence local ↔ CI, assumée** : le runner GitHub est Ubuntu (glibc), donc la CI utilise le
   Chrome for Testing de Playwright, sans aucun contournement ; en local c'est le Chromium
   d'Alpine. Deux moteurs valident la même cascade. Couverture plus large, mais un échec présent
