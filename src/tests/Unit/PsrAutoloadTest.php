@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Tests\Support\RepoFile;
+
 /**
  * Smoke test for ADR-0009 modular architecture.
  *
@@ -10,58 +12,54 @@ declare(strict_types=1);
  *
  * MUST pass before any other module-specific code is added (Story 1.1 AC #5).
  *
+ * La lecture de composer.json passe par Tests\Support\RepoFile : `json_decode`
+ * renvoie `mixed`, et chaque accès produisait sa propre erreur PHPStan au
+ * niveau 10. Le typage entre une fois, dans le lecteur, et bruyamment — un
+ * composer.json absent lève une exception nommée au lieu de laisser un tableau
+ * vide passer les assertions.
+ *
  * @see docs/adr/ADR-0009-modular-app-modules-psr4.md
  */
 
-// True unit test: resolve project root via filesystem, no Laravel boot dependency.
-$projectRoot = dirname(__DIR__, 2);
+/**
+ * Les 6 namespaces d'ADR-0009 et leur répertoire, plus le namespace natif
+ * Laravel conservé pour compatibilité.
+ *
+ * @return array<string, string>
+ */
+function adr0009Namespaces(): array
+{
+    return [
+        'App\\Core\\' => 'app/Core/',
+        'App\\Modules\\Public\\' => 'app/Modules/Public/',
+        'App\\Modules\\Live\\' => 'app/Modules/Live/',
+        'App\\Modules\\Reviews\\' => 'app/Modules/Reviews/',
+        'App\\Modules\\PressKit\\' => 'app/Modules/PressKit/',
+        'App\\Modules\\Admin\\' => 'app/Modules/Admin/',
+    ];
+}
 
-it('registers the 6 PSR-4 namespaces required by ADR-0009', function () use ($projectRoot): void {
-    $composerPath = $projectRoot . '/composer.json';
-    $contents = file_get_contents($composerPath);
-    expect($contents)
-        ->not->toBeFalse("composer.json missing at {$composerPath}");
+it('registers the 6 PSR-4 namespaces required by ADR-0009', function (): void {
+    $psr4 = RepoFile::section(RepoFile::json('src/composer.json'), 'autoload.psr-4');
 
-    $composerJson = json_decode(
-        json: $contents,
-        associative: true,
-        flags: JSON_THROW_ON_ERROR,
-    );
-
-    $psr4 = $composerJson['autoload']['psr-4'] ?? [];
-
-    // Laravel native namespace must remain (backward compat).
+    // Le namespace natif Laravel doit rester (compatibilité ascendante).
     expect($psr4)
         ->toHaveKey('App\\');
 
-    // 6 ADR-0009 namespaces.
-    expect($psr4)
-        ->toHaveKey('App\\Core\\');
-    expect($psr4)
-        ->toHaveKey('App\\Modules\\Public\\');
-    expect($psr4)
-        ->toHaveKey('App\\Modules\\Live\\');
-    expect($psr4)
-        ->toHaveKey('App\\Modules\\Reviews\\');
-    expect($psr4)
-        ->toHaveKey('App\\Modules\\PressKit\\');
-    expect($psr4)
-        ->toHaveKey('App\\Modules\\Admin\\');
-
-    // Mappings exact.
-    expect($psr4['App\\Core\\'])->toBe('app/Core/');
-    expect($psr4['App\\Modules\\Public\\'])->toBe('app/Modules/Public/');
-    expect($psr4['App\\Modules\\Live\\'])->toBe('app/Modules/Live/');
-    expect($psr4['App\\Modules\\Reviews\\'])->toBe('app/Modules/Reviews/');
-    expect($psr4['App\\Modules\\PressKit\\'])->toBe('app/Modules/PressKit/');
-    expect($psr4['App\\Modules\\Admin\\'])->toBe('app/Modules/Admin/');
+    foreach (adr0009Namespaces() as $namespace => $directory) {
+        expect($psr4)->toHaveKey($namespace);
+        expect($psr4[$namespace])
+            ->toBe($directory, "Le namespace {$namespace} ne pointe pas sur {$directory}.");
+    }
 });
 
-it('has all 6 module directories created on disk', function () use ($projectRoot): void {
-    expect(is_dir($projectRoot . '/app/Core'))->toBeTrue();
-    expect(is_dir($projectRoot . '/app/Modules/Public'))->toBeTrue();
-    expect(is_dir($projectRoot . '/app/Modules/Live'))->toBeTrue();
-    expect(is_dir($projectRoot . '/app/Modules/Reviews'))->toBeTrue();
-    expect(is_dir($projectRoot . '/app/Modules/PressKit'))->toBeTrue();
-    expect(is_dir($projectRoot . '/app/Modules/Admin'))->toBeTrue();
+it('has all 6 module directories created on disk', function (): void {
+    // dirname(__DIR__, 2) = src/ : ce test reste un vrai test unitaire, sans
+    // démarrage de Laravel, donc sans base_path().
+    $appRoot = dirname(__DIR__, 2);
+
+    foreach (adr0009Namespaces() as $namespace => $directory) {
+        expect(is_dir($appRoot . '/' . rtrim($directory, '/')))
+            ->toBeTrue("Répertoire manquant pour {$namespace} : {$directory}");
+    }
 });

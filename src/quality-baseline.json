@@ -1,11 +1,11 @@
 {
     "_comment": "Plafond de dette qualité. Monotone : ces compteurs ne remontent JAMAIS. Toute PR qui les fait descendre doit mettre ce fichier à jour (make quality-ratchet-update). Voir scripts/quality-ratchet.sh.",
-    "_updated": "2026-07-27",
+    "_updated": "2026-08-08",
     "ecs": {
         "errors": 0,
         "diffs": 0
     },
     "phpstan": {
-        "file_errors": 9
+        "file_errors": 0
     }
 }

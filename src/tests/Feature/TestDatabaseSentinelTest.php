@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
+use Tests\Support\Query;
 
 /**
  * Sentinelle de base de test.
@@ -43,7 +44,7 @@ it('rougit si la connexion pointe sur la base de développement', function (): v
 it('écrit dans une base réellement distincte de celle de développement', function (): void {
     // Preuve d'effet, pas de déclaration : on crée une table temporaire et on
     // vérifie qu'elle atterrit dans la base attendue.
-    $current = DB::selectOne('SELECT current_database() AS db')->db;
+    $current = Query::string('SELECT current_database() AS db', 'db');
 
     expect($current)
         ->not->toBe('laravel')

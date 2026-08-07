@@ -41,7 +41,6 @@ expect()
 |
 */
 
-function something()
-{
-    // ..
-}
+// (Le stub `something()` livré par le scaffolding Pest a été retiré : fonction
+// vide, jamais appelée, et sans type de retour — donc une erreur PHPStan pour
+// zéro valeur. Les helpers réels du projet vivent dans tests/Support/.)

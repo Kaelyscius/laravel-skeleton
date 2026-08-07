@@ -38,10 +38,15 @@ use Illuminate\Support\Facades\Facade;
 function bootAppWithModuleEnv(array $env): array
 {
     $previousContainer = Container::getInstance();
+    /** @var array<string, string|null> $previousServer */
     $previousServer = [];
 
     foreach ($env as $key => $value) {
-        $previousServer[$key] = $_SERVER[$key] ?? null;
+        // Resserré en string|null dès la capture : `$_SERVER` est `mixed`, et la
+        // restauration réinjecte cette valeur dans une chaîne interpolée.
+        $previousServer[$key] = isset($_SERVER[$key]) && is_scalar($_SERVER[$key])
+            ? (string) $_SERVER[$key]
+            : null;
         $_SERVER[$key] = $value;
         putenv("{$key}={$value}");
     }

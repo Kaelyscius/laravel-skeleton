@@ -2,7 +2,7 @@ includes:
     - vendor/larastan/larastan/extension.neon
 
 parameters:
-    level: 8
+    level: 10
     paths:
         - app/
         - config/
@@ -18,6 +18,18 @@ parameters:
     # besoin de Node, donc il n'exécute pas `npm ci`, donc `node_modules/`
     # n'existe pas. En local il est toujours présent — le défaut était donc
     # strictement invisible hors CI.
+    # PHP_CodeSniffer n'est pas chargé en PSR-4 : il embarque son propre
+    # autoloader, donc PHPStan ne trouve pas les sniffs référencés par
+    # config/insights.php (LineLengthSniff::class) et les signalait comme
+    # « class not found ». Le fichier existe bien — c'est un problème de
+    # découverte, pas une dépendance manquante.
+    # (Pas de suffixe `(?)` ici : contrairement à `paths` et `excludePaths`,
+    # `scanDirectories` ne l'accepte pas et PHPStan échoue à construire son
+    # conteneur — « Nette\DI\ServiceCreationException ». Le répertoire est de
+    # toute façon garanti par composer.lock.)
+    scanFiles:
+        - vendor/squizlabs/php_codesniffer/src/Standards/Generic/Sniffs/Files/LineLengthSniff.php
+
     excludePaths:
         - bootstrap/
         - storage/ (?)

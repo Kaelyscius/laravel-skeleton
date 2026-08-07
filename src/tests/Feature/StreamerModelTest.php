@@ -42,7 +42,10 @@ it('does not give the tenant-root table a streamer_id column', function (): void
 });
 
 it('enforces the PRD-pinned column types', function (): void {
-    $columns = collect(Schema::getColumns('streamers'))->keyBy('name');
+    // `Schema::getColumns()` renvoie une liste de tableaux non typés : sans cette
+    // annotation, chaque accès `['type']` est un `mixed` (5 erreurs PHPStan L10).
+    /** @var array<string, array{name: string, type: string}> $columns */
+    $columns = collect(Schema::getColumns('streamers'))->keyBy('name')->all();
 
     // Anchor the length in parentheses so the assertion can't false-match an
     // adjacent length — '500' is a substring of '1500', but '(500)' is not a

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
+use Tests\Support\Query;
 
 /**
  * Sentinelle de moteur de base de données.
@@ -23,27 +24,23 @@ it('tourne sur PostgreSQL et pas sur un moteur MySQL-compatible', function (): v
 it('exécute de la syntaxe exclusivement PostgreSQL', function (): void {
     // `::` (cast) et `ILIKE` sont tous deux absents de MySQL et de MariaDB.
     // Sur un de ces moteurs, la requête lève une erreur de syntaxe.
-    $row = DB::selectOne("SELECT ('streamer'::text ILIKE 'STREAMER')::int AS ok");
-
-    expect((int) $row->ok)
+    expect(Query::int("SELECT ('streamer'::text ILIKE 'STREAMER')::int AS ok", 'ok'))
         ->toBe(1);
 })->group('sentinel');
 
 it('manipule du jsonb natif', function (): void {
     // jsonb est un type propre à PostgreSQL — l'une des raisons du choix ADR-0007.
-    $row = DB::selectOne("SELECT ('{\"note\":9}'::jsonb -> 'note')::int AS note");
-
-    expect((int) $row->note)
+    expect(Query::int("SELECT ('{\"note\":9}'::jsonb -> 'note')::int AS note", 'note'))
         ->toBe(9);
 })->group('sentinel');
 
 it('tourne sur PostgreSQL 18 ou plus récent', function (): void {
-    $row = DB::selectOne("SELECT current_setting('server_version_num')::int AS version");
+    $version = Query::int("SELECT current_setting('server_version_num')::int AS version", 'version');
 
     // 180000 = 18.0. Le seuil est un plancher : une montée de version majeure
     // reste verte, un retour en arrière sous la version LOCKED rougit.
     // Relevé de 170000 à 180000 lors de la montée PostgreSQL 18 — sans cela
     // la sentinelle aurait silencieusement accepté un retour en 17.
-    expect((int) $row->version)
+    expect($version)
         ->toBeGreaterThanOrEqual(180000);
 })->group('sentinel');

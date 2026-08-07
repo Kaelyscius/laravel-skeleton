@@ -21,9 +21,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $modules = config('modules');
+        /** @var array<string, mixed> $modules */
+        $modules = is_array(config('modules')) ? config('modules') : [];
 
-        foreach (self::moduleProviders(is_array($modules) ? $modules : []) as $provider) {
+        foreach (self::moduleProviders($modules) as $provider) {
             if (class_exists($provider)) {
                 $this->app->register($provider);
             }

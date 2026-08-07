@@ -32,12 +32,18 @@ uses(RefreshDatabase::class);
 it('resolves --font-sans through the real browser cascade', function (): void {
     Streamer::factory()->create();
 
-    $family = visit('/')
+    $evaluated = visit('/')
         ->script('getComputedStyle(document.body).fontFamily');
 
-    expect(is_string($family))
-        ->toBeTrue('script() n\'a pas renvoyé une chaîne.');
+    // `script()` renvoie `mixed`. On resserre le type ICI plutôt que de caster
+    // à chaque usage : si le navigateur ne renvoie pas une chaîne, l'échec doit
+    // dire « pas de valeur calculée » et non produire un « (string) null » vide
+    // sur lequel le message d'erreur serait illisible.
+    expect(is_string($evaluated))
+        ->toBeTrue('script() n\'a pas renvoyé une chaîne : aucune valeur calculée à comparer.');
 
-    expect(str_contains((string) $family, 'IBM Plex Sans'))
+    $family = is_string($evaluated) ? $evaluated : '';
+
+    expect(str_contains($family, 'IBM Plex Sans'))
         ->toBeTrue("font-family calculée = [{$family}] — le token --font-sans ne gouverne pas la cascade.");
 });
