@@ -12,6 +12,7 @@ use App\Providers\AppServiceProvider;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Bootstrap\LoadEnvironmentVariables;
 use Illuminate\Support\Facades\Facade;
 
 /**
@@ -28,6 +29,16 @@ use Illuminate\Support\Facades\Facade;
  * leaves `env()` returning the old value — the exact mechanism that let the whole
  * suite run on the development database until 2026-07-31.
  *
+ * ⚠️⚠️ Et poser les variables AVANT le bootstrap ne suffit pas : le
+ * bootstrapper `LoadEnvironmentVariables` lit `.env` ensuite et gagne. Or
+ * `.env.example` déclare `MODULE_LIVE_ENABLED=true`, et la CI reconstruit `.env`
+ * à partir de lui — ces trois tests passaient donc en local (dont le `.env` ne
+ * contenait pas ces clés) et échouaient en CI. Un test vert par accident
+ * d'environnement : le motif dominant du projet, appliqué au garde-fou censé le
+ * combattre. Les surcharges sont donc RÉAPPLIQUÉES juste après le chargement du
+ * `.env` et avant `LoadConfiguration`, ce qui les rend indépendantes du contenu
+ * du fichier.
+ *
  * Creating an Application re-binds the global container instance, so the caller's
  * container and facades are restored in `finally`, otherwise every subsequent
  * test in the process would resolve against this throwaway app.
@@ -40,12 +51,21 @@ function bootAppWithModuleEnv(array $env): array
     $previousContainer = Container::getInstance();
     /** @var array<string, string|null> $previousServer */
     $previousServer = [];
+    /** @var array<string, string|null> $previousEnv */
+    $previousEnv = [];
 
     foreach ($env as $key => $value) {
         // Resserré en string|null dès la capture : `$_SERVER` est `mixed`, et la
         // restauration réinjecte cette valeur dans une chaîne interpolée.
         $previousServer[$key] = isset($_SERVER[$key]) && is_scalar($_SERVER[$key])
             ? (string) $_SERVER[$key]
+            : null;
+        // `$_ENV` est capturé AUSSI, et ce n'est pas de la symétrie décorative :
+        // le rappel `afterBootstrapping` y écrit, et ne pas le restaurer faisait
+        // fuiter le module éteint sur le test SUIVANT — qui échouait alors sur
+        // une assertion sans rapport. Constaté le 2026-08-07.
+        $previousEnv[$key] = isset($_ENV[$key]) && is_scalar($_ENV[$key])
+            ? (string) $_ENV[$key]
             : null;
         $_SERVER[$key] = $value;
         putenv("{$key}={$value}");
@@ -54,6 +74,16 @@ function bootAppWithModuleEnv(array $env): array
     try {
         /** @var Application $app */
         $app = require base_path('bootstrap/app.php');
+
+        // Rejoue les surcharges APRÈS que `.env` a été lu, sinon `.env` gagne.
+        $app->afterBootstrapping(LoadEnvironmentVariables::class, function () use ($env): void {
+            foreach ($env as $key => $value) {
+                $_SERVER[$key] = $value;
+                $_ENV[$key] = $value;
+                putenv("{$key}={$value}");
+            }
+        });
+
         $app->make(ConsoleKernel::class)->bootstrap();
 
         return $app->getLoadedProviders();
@@ -65,6 +95,12 @@ function bootAppWithModuleEnv(array $env): array
             } else {
                 $_SERVER[$key] = $previousServer[$key];
                 putenv("{$key}={$previousServer[$key]}");
+            }
+
+            if ($previousEnv[$key] === null) {
+                unset($_ENV[$key]);
+            } else {
+                $_ENV[$key] = $previousEnv[$key];
             }
         }
 
@@ -241,14 +277,20 @@ it('really stops registering several modules at once', function (): void {
 
 it('restores the caller container so the throwaway app leaks nothing', function (): void {
     $before = Container::getInstance();
+    // On capture l'état RÉEL plutôt que de supposer l'absence : selon que `.env`
+    // déclare ou non MODULE_LIVE_ENABLED, la variable existe déjà ou pas. La
+    // propriété à garder est « rendu à l'identique », pas « absent » — supposer
+    // l'absence rendait ce test dépendant du contenu de `.env`, donc vert en
+    // local et rouge en CI.
+    $serverBefore = $_SERVER['MODULE_LIVE_ENABLED'] ?? null;
 
     bootAppWithModuleEnv([
         'MODULE_LIVE_ENABLED' => 'false',
     ]);
 
     expect(Container::getInstance())->toBe($before);
-    expect(array_key_exists('MODULE_LIVE_ENABLED', $_SERVER))
-        ->toBeFalse();
+    expect($_SERVER['MODULE_LIVE_ENABLED'] ?? null)
+        ->toBe($serverBefore, '$_SERVER n\'a pas été rendu dans son état d\'origine.');
     // L'application appelante doit rester utilisable : si les façades pointaient
     // encore sur l'app jetable, tout test ultérieur casserait de façon opaque.
     expect(config('modules.live'))
