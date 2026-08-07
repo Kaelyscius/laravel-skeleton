@@ -31,7 +31,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $twitter_handle
  * @property string|null $discord_url
  */
-class Streamer extends Model
+final class Streamer extends Model
 {
     /** @use HasFactory<StreamerFactory> */
     use HasFactory;

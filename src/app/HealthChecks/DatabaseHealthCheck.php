@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\HealthChecks;
 
+use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use PDOException;
@@ -11,7 +12,7 @@ use Spatie\Health\Checks\Check;
 use Spatie\Health\Checks\Result;
 use Throwable;
 
-class DatabaseHealthCheck extends Check
+final class DatabaseHealthCheck extends Check
 {
     public function run(): Result
     {
@@ -41,13 +42,29 @@ class DatabaseHealthCheck extends Check
             return Result::make()->failed('Database unreachable');
         } finally {
             if ($isPgsql) {
-                try {
-                    $connection->statement('RESET statement_timeout');
-                } catch (Throwable) {
-                    // Silent: connection may be dead. Logging here would amplify
-                    // noise (one warning per probe during outages).
-                }
+                self::resetStatementTimeout($connection);
             }
+        }
+    }
+
+    /**
+     * Remet `statement_timeout` à sa valeur de session par défaut.
+     *
+     * Extrait de `run()` pour deux raisons : la méthode dépassait la longueur
+     * tolérée par PHP Insights, et surtout le `try/catch` silencieux méritait
+     * d'être nommé plutôt que noyé dans un `finally`.
+     *
+     * Le silence est VOLONTAIRE et ne doit pas être « corrigé » : la connexion
+     * peut être morte, et journaliser ici produirait un avertissement par sonde
+     * pendant toute la durée d'une panne — soit exactement le moment où les logs
+     * doivent rester lisibles.
+     */
+    private static function resetStatementTimeout(Connection $connection): void
+    {
+        try {
+            $connection->statement('RESET statement_timeout');
+        } catch (Throwable) {
+            // Voir le docblock : silence assumé, pas un oubli.
         }
     }
 }

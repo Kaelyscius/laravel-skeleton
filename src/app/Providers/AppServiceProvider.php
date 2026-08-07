@@ -9,7 +9,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Spatie\Health\Facades\Health;
 
-class AppServiceProvider extends ServiceProvider
+final class AppServiceProvider extends ServiceProvider
 {
     /**
      * Register any application services.

@@ -15,7 +15,7 @@ use Illuminate\Console\Command;
  * use BelongsToStreamer, so no tenant scope / CurrentStreamer resolution is
  * triggered — the command runs safely outside an HTTP request.
  */
-class TenancyAssertCommand extends Command
+final class TenancyAssertCommand extends Command
 {
     protected $signature = 'tenancy:assert';
 

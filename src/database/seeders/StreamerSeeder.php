@@ -17,7 +17,7 @@ use Illuminate\Database\Seeder;
  * SECOND row, breaking the exactly-one invariant. A fork-streamer replaces these
  * placeholders via Filament (Story 1.10).
  */
-class StreamerSeeder extends Seeder
+final class StreamerSeeder extends Seeder
 {
     public function run(): void
     {

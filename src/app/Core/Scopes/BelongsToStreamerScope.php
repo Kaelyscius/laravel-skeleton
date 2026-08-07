@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Scope;
  *
  * @implements Scope<Model>
  */
-class BelongsToStreamerScope implements Scope
+final class BelongsToStreamerScope implements Scope
 {
     public function apply(Builder $builder, Model $model): void
     {

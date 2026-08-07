@@ -18,7 +18,7 @@ use RuntimeException;
  * never gated by config/modules.php (which is only for deactivatable modules,
  * Story 1.7).
  */
-class CoreServiceProvider extends ServiceProvider
+final class CoreServiceProvider extends ServiceProvider
 {
     /**
      * Fail-loud default for the tenant context: resolving CurrentStreamer before

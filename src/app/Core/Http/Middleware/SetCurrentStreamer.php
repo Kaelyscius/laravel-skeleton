@@ -22,7 +22,7 @@ use Symfony\Component\HttpFoundation\Response;
  * v2+ multi-streamer (Pattern D, ADR-0002) will enrich this with RLS /
  * `SET LOCAL` inside a transaction. NOT implemented here.
  */
-class SetCurrentStreamer
+final class SetCurrentStreamer
 {
     /**
      * @param  Closure(Request): Response  $next
