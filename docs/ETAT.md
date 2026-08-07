@@ -90,6 +90,28 @@ Trois choses à savoir avant d'y retoucher :
 > un bug classique. Alpine arrive donc avec `@livewireScripts` — à câbler dans le layout
 > (Story 1.13), pas avant.
 
+## Rafraîchissement supply chain — 2026-08-06
+
+**Les 7 branches distantes ouvertes ont été fermées, aucune n'était mergeable.** Toutes datent
+d'avant l'épinglage par digest du 2026-07-27 : les fusionner aurait **remplacé un digest par un
+tag mutable**, donc annulé la décision d'architecture §7.1. Leur intention était juste, leur
+forme non — le rattrapage s'est fait en rafraîchissant les épinglages.
+
+| | Avant | Après |
+|---|---|---|
+| PHP | 8.5.4 / Alpine 3.22 | **8.5.9 / Alpine 3.24.1** |
+| Redis | 8.8.1 | **8.10.0** |
+| Apache | 2.4.68 | inchangé — le digest était déjà à jour |
+| Actions GitHub | 9 tags mutables + 6 SHA périmés | **tout en SHA, versions courantes** |
+
+> ⚠️ Rupture silencieuse évitée au passage : `codecov-action` a **supprimé** l'entrée `file`
+> en v5 au profit de `files`. Une entrée inconnue est ignorée sans erreur — la couverture aurait
+> cessé d'être envoyée sans que rien ne rougisse.
+
+> ⚠️ Le commentaire de version du `FROM` PHP annonçait « 8.5.8 » pendant que le digest servait
+> **8.5.4**. Un commentaire n'est contredit par rien : il se vérifie dans l'image
+> (`docker run --rm <image> php -r 'echo PHP_VERSION;'`), il ne se recopie pas du tag.
+
 ## Prochaine action
 
 **Observer `MODULE_LIVE_ENABLED=false`** — le 7ᵉ garde-fou silencieux, resté ouvert : la Story 1.7
@@ -216,9 +238,9 @@ mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à
 | **ADR-0004 non câblé** | `config/pulse.php` attend `PULSE_DB_CONNECTION`, jamais défini, et aucune connexion `pulse` n'existe dans `config/database.php`. Le conteneur `postgres-pulse` tourne pour rien. → Story 3.2. |
 | **PHPStan : 9 erreurs** | Toutes dans `config/*` (scaffolding vendor). Plafonnées par le ratchet, pas résorbées. |
 | **`vite@latest webpack@latest`** | Cible mouvante dans une image figée — même fragilité que le `npm@latest` déjà corrigé. `docker/node/Dockerfile`. |
-| **Node dans l'image PHP de production** | `docker/php/Dockerfile:44` installe `nodejs` → binaire de 55 Mo embarqué dans l'image de prod. Surface d'attaque et poids non justifiés côté runtime PHP. Reliquat ou besoin réel de build ? Trouvé le 2026-07-31. |
-| **Dérive Node entre conteneurs** | Image PHP = **v22.22.2**, conteneur `node` = **v24.18** (LTS épinglé). Deux runtimes Node dans la même stack, à deux majeures d'écart. |
-| **`docker.yml` non épinglé par SHA** | `ci.yml` l'est, `docker.yml` non. Même argument supply chain. |
+| **Node dans l'image PHP de production** | `docker/php/Dockerfile` installe `nodejs` → binaire de **52,5 Mo** embarqué dans l'image de prod. Surface d'attaque et poids non justifiés côté runtime PHP. Reliquat ou besoin réel de build ? Trouvé le 2026-07-31, **toujours ouvert**. |
+| ✅ **Dérive Node — quasi résorbée le 2026-08-06** | Était : image PHP v22.22.2 vs conteneur `node` v24.18, **deux majeures d'écart**. Alpine 3.24 fournit désormais v24.18.1, contre v24.18.0 côté `node`. Effet de bord du rafraîchissement du digest PHP, pas d'une correction ciblée. |
+| ✅ **Épinglage supply chain — COMPLÉTÉ le 2026-08-06** | `docker.yml` et `security.yml` utilisaient **9 tags mutables** (`@v6`, `@v4`, `@v2`…) alors que seul `ci.yml` était épinglé. Tout est désormais en SHA. Contrôle : `grep -rhoE "uses: [^ ]+" .github/workflows/*.yml \| grep -vE "@[a-f0-9]{40}$"` doit ne rien sortir. |
 | 🔴 **`SetCurrentStreamer` : « fail-loud » qui échoue en silence** | `firstOrFail()` lève `ModelNotFoundException` → Laravel rend **404**, indiscernable d'une page inexistante. Le docblock du middleware promet pourtant « an explicit error rather than a silent empty tenant ». Vérifié par mutation : base vide → `/` = 404 ; après `db:seed` → 200. Aucun test ne l'attrape (tous sèment avant). En prod : site entier en 404 silencieux si la base n'est pas semée. Détail + piste de correction dans `deferred-work.md`. |
 | ✅ **7 advisories — CORRIGÉES le 2026-08-06** | `squizlabs/php_codesniffer` 3.13.5 → **3.13.6** (CVE-2026-67434, OS command injection, transitive d'ECS) et `league/commonmark` 2.8.3 → **2.9.0** (6 advisories DoS, transitive de `laravel/framework`). Toutes publiées les 5–6 août, détectées par `composer audit` pendant le spike. `composer audit` = 0, `npm audit` = 0. *Leçon : le seul fait de lancer `composer audit` régulièrement a rapporté 7 trouvailles en une session.* |
 | **CSP non configurée** | `spatie/laravel-csp` installé, jamais paramétré. Modèle de menace (2 pages) à écrire avant l'Epic 4 — sinon la CSP sera calibrée au moment où elle cassera l'embed Twitch, c'est-à-dire desserrée sous pression. ⚠️ **Le runner navigateur ne pourra pas aider** : `bypassCSP => true` est codé en dur dans le plugin (ADR-0013). Il faudra un test HTTP sur les en-têtes. |

@@ -1,6 +1,11 @@
 # Stage 1: Base avec toutes les extensions
-# php 8.5.8 / alpine 3.24.1 — épinglé par digest (le tag reste mutable).
-FROM php:8.5-fpm-alpine@sha256:79def1d16ece3ab1a6656c46a23bfd80ad33887fbd33626e7bd743cef54ef9c6 AS base
+# php 8.5.9 / alpine 3.24.1 — épinglé par digest (le tag reste mutable).
+#
+# ⚠️ Le numéro ci-dessus doit être VÉRIFIÉ dans l'image, pas recopié du tag.
+# Il a annoncé « 8.5.8 » pendant que le digest servait 8.5.4 : un commentaire
+# n'est contredit par rien. Contrôle :
+#   docker run --rm php:8.5-fpm-alpine@<digest> php -r 'echo PHP_VERSION;'
+FROM php:8.5-fpm-alpine@sha256:9dc81f4086ea5402227a6bcc489b04b4baba12394624d9621faa92ed812fb8ee AS base
 
 ARG UID=1000
 ARG GID=1000
