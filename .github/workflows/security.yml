@@ -5,10 +5,18 @@ on:
     branches: [ main, develop ]
     paths:
       - 'src/**'
+      # Le workflow doit se rejouer quand on le modifie lui-même. Sans cette
+      # entrée, on peut casser (ou dépingler) un scan de sécurité sans qu'aucune
+      # exécution ne le montre — un garde-fou modifiable sans être réexécuté.
+      - '.github/workflows/security.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'src/**'
+      # Le workflow doit se rejouer quand on le modifie lui-même. Sans cette
+      # entrée, on peut casser (ou dépingler) un scan de sécurité sans qu'aucune
+      # exécution ne le montre — un garde-fou modifiable sans être réexécuté.
+      - '.github/workflows/security.yml'
   schedule:
     # Run security scan daily at 02:00 UTC
     - cron: '0 2 * * *'
