@@ -1,4 +1,4 @@
-# État du projet — 2026-07-31 (branche `docs/roundtable-2026-07-30`)
+# État du projet — 2026-08-06 (branche `main`)
 
 > Point d'entrée de reprise. **Un seul fichier, écrasé à chaque session, jamais accumulé.**
 > Il n'a aucune autorité : il pointe vers `epics.md` et `sprint-status.yaml`, jamais l'inverse.
@@ -7,9 +7,10 @@
 
 ## Où j'en suis
 
-L'appareil de vérification est réparé — 3 workflows CI verts, 55 tests, ratchet ECS/PHPStan —
-mais **aucun navigateur n'a jamais affiché ce projet**. Epic 1 : stories 1.1 → 1.8 `done`,
-1.9 → 1.13 `backlog`, Epics 2 à 11 non démarrés.
+L'appareil de vérification est réparé — 3 workflows CI verts, **58 tests**, ratchet ECS/PHPStan.
+**Un navigateur affiche désormais ce projet** : le spike runner est fait, `make test-browser`
+existe et son rouge a été observé. Epic 1 : stories 1.1 → 1.8 `done`, 1.9 → 1.13 `backlog`,
+Epics 2 à 11 non démarrés.
 
 Le roundtable du 2026-07-30 a **réordonné le reliquat d'Epic 1** et arbitré la conception de
 l'écran offline : voir [ADR-0011](adr/ADR-0011-observation-avant-composition.md) et
@@ -56,26 +57,31 @@ c'est le seul verrou.
 > copier `composer.json` dans un dossier hors projet et utiliser un conteneur `composer:2`
 > jetable.
 
-## Prochaine action
+## ✅ Spike runner navigateur — FAIT le 2026-08-06 ([ADR-0013](adr/ADR-0013-runner-navigateur-pest-browser.md))
 
-**Le spike runner navigateur.** Rien d'autre ne commence avant.
+Les quatre critères d'ADR-0011 sont satisfaits, **le (4) compris : le rouge a été observé**.
+`make test-browser` existe. Le doute qui justifiait tout le réordonnancement est levé —
+**le token `--font-sans` gouverne bien la cascade réelle**, l'invariant « import sans `layer()` »
+de la Story 1.8 tient dans un vrai navigateur.
 
-👉 **Protocole prêt à exécuter : [`docs/spike-runner-navigateur.md`](spike-runner-navigateur.md)**
-— pré-vol déjà fait (PHP 8.5.4 ✅ · Pest 4.7.5 ✅ · `ext-sockets` ✅ · cible = plugin **v4.3.1**,
-pas v5 qui exige Pest 5), assertion écrite, mutation de preuve-de-rouge écrite, plan B Playwright
-prêt. Seul risque identifié au critère (1) : `symfony/process ^7.4` face à Laravel 13.
+Trois choses à savoir avant d'y retoucher :
 
-> ✅ **Débloqué le 2026-07-30.** Stack montée et vérifiée : 55 tests / 203 assertions exit 0 ·
-> ratchet respecté (ECS 0/0, PHPStan 9/9) · apache `healthy` · `/up` 200 · **`/` sert une page
-> réelle en 200**. Le navigateur a donc enfin quelque chose à charger — le spike peut partir.
->
-> ⚠️ Deux pièges rencontrés au démarrage, à reproduire si ça recommence :
+1. **Le verdict ne vient pas du code de sortie de `pest`.** Le plugin ne rend pas la main
+   ~1 fois sur 2 (mesuré : 6 blocages / 10 runs), verts comme rouges. Le verdict est lu dans le
+   rapport JUnit, écrit avant le teardown qui se bloque. Si `make test-browser` affiche
+   « ⚠️ Le runner n'a pas rendu la main », **ce n'est pas un échec** — c'est le défaut amont.
+2. **Chromium ne peut pas être celui de Playwright** : builds glibc, images Alpine musl.
+   C'est le Chromium natif d'Alpine, lié dans le cache Playwright par un script qui *dérive* la
+   révision au lieu de l'écrire en dur.
+3. **`tests/Browser` n'est pas une testsuite `phpunit.xml`**, délibérément — sinon
+   `php artisan test` l'exécuterait et exigerait un Chromium en CI et en prod.
+
+> ⚠️ Pièges de démarrage, toujours valables :
 > 1. `/usr/bin/docker` est un lien vers `/mnt/wsl/docker-desktop/cli-tools/…`, **cible absente
 >    tant que Docker Desktop ne tourne pas** côté Windows.
-> 2. Des conteneurs créés lors d'une session antérieure et redémarrés après un redémarrage de
->    Docker Desktop peuvent avoir des **bind mounts vides** (`/var/www/html` sans `artisan`,
->    d'où `make test` → « Could not open input file: artisan »). Correctif : `make down` puis
->    `make up-local` — recréer, pas redémarrer.
+> 2. Des conteneurs redémarrés après un redémarrage de Docker Desktop peuvent avoir des **bind
+>    mounts vides** (`/var/www/html` sans `artisan`). Correctif : `make down` puis `make up-local`
+>    — recréer, pas redémarrer.
 > 3. **Base de dev non semée → `/` répond 404** (voir la dette ci-dessous). `php artisan db:seed`.
 
 > ✅ **Livewire déclaré le 2026-07-31** : `"livewire/livewire": "^4"` est désormais une
@@ -84,22 +90,19 @@ prêt. Seul risque identifié au critère (1) : `symfony/process ^7.4` face à L
 > un bug classique. Alpine arrive donc avec `@livewireScripts` — à câbler dans le layout
 > (Story 1.13), pas avant.
 
-Critères d'acceptation écrits à l'avance — plugin browser de Pest 4 retenu si les quatre sont
-satisfaits : (1) installe sur PHP 8.5.4 sans `--ignore-platform-reqs` ; (2) pilote un navigateur
-hors du conteneur `php`, ou coût confiné à un `Dockerfile.test` sans toucher l'image de prod ;
-(3) un test minimal lit `getComputedStyle(document.body).fontFamily` ; (4) **le même test échoue
-quand on casse la source de la police**. Le (4) est le seul qui compte.
+## Prochaine action
 
-Sinon → Playwright TS, service Compose profil `test`, image `mcr.microsoft.com/playwright`
-tirée (pas buildée), `ipc: host` obligatoire, version épinglée sur le package npm.
-**Un seul runner, jamais deux.** Le vhost sert en HTTPS auto-signé → `ignoreHTTPSErrors`.
+**Observer `MODULE_LIVE_ENABLED=false`** — le 7ᵉ garde-fou silencieux, resté ouvert : la Story 1.7
+est `done` et c'est la promesse centrale du produit, mais la désactivation d'un module n'a
+**jamais été exécutée ni observée**. `src/tests/Feature/ModuleActivationTest.php` existe ; reste à
+établir s'il peut rougir.
 
-*Critère d'abandon d'hypothèse* (pas un timebox — le temps n'est pas une contrainte de ce
-projet) : deux contournements documentés sur Pest, puis bascule Playwright sans re-débat.
+Puis, dans cet ordre : les 3 écrans de référence + audit time-as-texture →
+**1.11 → 1.12 → 1.13 → 1.9 → 1.10a**.
 
-Puis, dans cet ordre : observer `MODULE_LIVE_ENABLED=false` → les 3 écrans de référence +
-audit time-as-texture → passe de relecture des AC 1.9→1.13 → **1.11 → 1.12 → 1.13 → 1.9 →
-1.10a**.
+⚠️ **Avant les écrans de référence** : câbler `make test-browser` dans la CI. Tant que la CI ne
+le lance pas, ce runner ne garde rien — c'est très exactement la forme du motif dominant du
+projet, appliquée à l'outil qu'on vient d'installer pour le combattre.
 
 ## Ce qui a changé depuis la dernière fois
 
@@ -217,7 +220,11 @@ mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à
 | **Dérive Node entre conteneurs** | Image PHP = **v22.22.2**, conteneur `node` = **v24.18** (LTS épinglé). Deux runtimes Node dans la même stack, à deux majeures d'écart. |
 | **`docker.yml` non épinglé par SHA** | `ci.yml` l'est, `docker.yml` non. Même argument supply chain. |
 | 🔴 **`SetCurrentStreamer` : « fail-loud » qui échoue en silence** | `firstOrFail()` lève `ModelNotFoundException` → Laravel rend **404**, indiscernable d'une page inexistante. Le docblock du middleware promet pourtant « an explicit error rather than a silent empty tenant ». Vérifié par mutation : base vide → `/` = 404 ; après `db:seed` → 200. Aucun test ne l'attrape (tous sèment avant). En prod : site entier en 404 silencieux si la base n'est pas semée. Détail + piste de correction dans `deferred-work.md`. |
-| **CSP non configurée** | `spatie/laravel-csp` installé, jamais paramétré. Modèle de menace (2 pages) à écrire avant l'Epic 4 — sinon la CSP sera calibrée au moment où elle cassera l'embed Twitch, c'est-à-dire desserrée sous pression. |
+| ✅ **7 advisories — CORRIGÉES le 2026-08-06** | `squizlabs/php_codesniffer` 3.13.5 → **3.13.6** (CVE-2026-67434, OS command injection, transitive d'ECS) et `league/commonmark` 2.8.3 → **2.9.0** (6 advisories DoS, transitive de `laravel/framework`). Toutes publiées les 5–6 août, détectées par `composer audit` pendant le spike. `composer audit` = 0, `npm audit` = 0. *Leçon : le seul fait de lancer `composer audit` régulièrement a rapporté 7 trouvailles en une session.* |
+| **CSP non configurée** | `spatie/laravel-csp` installé, jamais paramétré. Modèle de menace (2 pages) à écrire avant l'Epic 4 — sinon la CSP sera calibrée au moment où elle cassera l'embed Twitch, c'est-à-dire desserrée sous pression. ⚠️ **Le runner navigateur ne pourra pas aider** : `bypassCSP => true` est codé en dur dans le plugin (ADR-0013). Il faudra un test HTTP sur les en-têtes. |
+| ⏳ **CI navigateur : câblée, rouge NON ENCORE PROUVÉ** | Job `browser` ajouté à `ci.yml`, **bloquant** (dans `needs` du summary et dans sa porte d'échec). Mais il n'a **jamais tourné** : tant que son rouge n'a pas été observé sur une vraie exécution, il est exactement ce que le projet appelle un garde-fou silencieux. **Prochaine étape : pousser une branche avec le token muté, observer le job rouge, puis restaurer.** |
+| **Blocage résiduel du runner** | `pest-plugin-browser` ne rend pas la main ~1 run sur 2. Cause partielle : `Process::fromShellCommandline()` fait survivre le `node` au SIGTERM. Mitigé par lecture du rapport JUnit, pas corrigé. Rouvrir à chaque montée du plugin ; **retirer la mitigation dès que l'amont est corrigé**. Voir ADR-0013. |
+| **`POSTGRES_CONTAINER` est faux** | `docker ps -qf "name=laravel-app_postgres"` filtre par sous-chaîne et matche **aussi** `laravel-app_postgres_pulse` : la variable résout vers 2 identifiants. Dormant — elle n'est utilisée nulle part. Même piège évité pour le conteneur de test (d'où `_test_browser`). |
 | **`_bmad-output/` n'est ni versionné ni sauvegardé** | Gitignoré volontairement (`.gitignore:219`) — décision PO du 2026-07-30 : le dépôt est **public**, le planning ne doit pas l'être. Mais `scripts/ops/backup-local.sh` ne fait qu'un `pg_dump` : **le plan-of-record (epics.md, sprint-status.yaml, deferred-work.md, stories) n'existe qu'à un seul endroit, sur le disque.** Un plan sans référent durable, c'est le motif du projet appliqué à lui-même. Options : dépôt git privé séparé, ou élargir le périmètre de `backup-local.sh`. Non tranché. |
 | **À vérifier avant story (ADR-0012)** | Quotas YouTube Data API v3 en 2026 · conditions d'utilisation sur le rehosting des miniatures · état réel des API Instagram / TikTok. Marqués « non vérifiés » dans l'ADR plutôt qu'affirmés. |
 
@@ -225,7 +232,9 @@ mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à
 
 ```bash
 make up-local              # démarrer la stack
-make test                  # 55 tests, exit 0 attendu
+make test                  # 58 tests, exit 0 attendu (Unit + Feature)
+make test-browser          # tests navigateur, conteneur dédié profil `test`
+make test-browser-down     # arrêter le runner navigateur
 make quality-ratchet       # plafond de dette — exit 0 attendu
 make hooks-check           # hooks versionnés actifs ?
 ./scripts/assert-tracked-files.sh

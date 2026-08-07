@@ -36,6 +36,7 @@
     "nunomaduro/collision": "^8.6",
     "nunomaduro/phpinsights": "^2.14",
     "pestphp/pest": "^4.0",
+    "pestphp/pest-plugin-browser": "^4.3",
     "pestphp/pest-plugin-drift": "^4.0",
     "pestphp/pest-plugin-laravel": "^4.0",
     "php-code-archeology/php-code-archeology": "^2.0",

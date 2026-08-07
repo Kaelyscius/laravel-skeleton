@@ -12,7 +12,7 @@
 */
 
 pest()
-    ->extend(Tests\TestCase::class)->in('Feature');
+    ->extend(Tests\TestCase::class)->in('Feature', 'Browser');
 
 /*
 |--------------------------------------------------------------------------

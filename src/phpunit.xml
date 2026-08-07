@@ -11,6 +11,14 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <!--
+            Pas de <testsuite name="Browser"> ici, délibérément.
+
+            La déclarer suffirait à ce que `php artisan test` (sans argument) la
+            lance : elle exige alors un Chromium joignable, absent de la CI et de
+            l'image de production. Les tests navigateur se lancent par chemin
+            explicite (`pest tests/Browser`). Voir ADR-0013.
+        -->
     </testsuites>
     <source>
         <include>

@@ -19,6 +19,11 @@ PHP_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_php
 APACHE_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_apache
 NODE_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_node
 POSTGRES_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_postgres
+BROWSER_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_test_browser
+
+# Borne dure des tests navigateur, en secondes. Voir ADR-0013 : le plugin Pest
+# ne rend pas toujours la main après la fin des tests.
+BROWSER_TEST_TIMEOUT ?= 300
 
 # Colors
 GREEN = \033[0;32m
@@ -625,6 +630,31 @@ test-drift: ## Tests avec détection de code non couvert (Drift)
 .PHONY: test-feature
 test-feature: ## Tests fonctionnels
 	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --testsuite=Feature
+
+# Tests navigateur — délibérément HORS de `make test`.
+#
+# `tests/Browser` n'est pas déclaré comme testsuite dans phpunit.xml : le
+# déclarer suffirait à ce que `php artisan test` le lance, donc à exiger un
+# Chromium là où il n'y en a pas (CI, image de production). Il se lance ici,
+# par chemin explicite, dans son conteneur dédié.
+#
+# Le verdict ne vient PAS du code de sortie de pest : le plugin ne rend pas la
+# main environ une fois sur deux, donc un run vert peut sortir en 137. Il vient
+# du rapport JUnit, écrit avant le teardown qui se bloque.
+# Toute la logique est dans docker/php/scripts/run-browser-tests.sh et
+# browser-verdict.php — commentée, et refusant de conclure au vert faute de
+# preuve. Voir ADR-0013.
+.PHONY: test-browser
+test-browser: ## Tests navigateur (Chromium, profil test)
+	@echo "$(CYAN)🌐 Démarrage du runner navigateur...$(NC)"
+	@$(DOCKER) compose --profile test up -d test-browser
+	@$(DOCKER) exec $(BROWSER_CONTAINER_NAME) /usr/local/bin/link-alpine-chromium.sh
+	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(BROWSER_CONTAINER_NAME) \
+		/usr/local/bin/run-browser-tests.sh $(BROWSER_TEST_TIMEOUT)
+
+.PHONY: test-browser-down
+test-browser-down: ## Arrêter le runner navigateur
+	@$(DOCKER) compose --profile test down test-browser
 
 # =============================================================================
 # CODE QUALITY

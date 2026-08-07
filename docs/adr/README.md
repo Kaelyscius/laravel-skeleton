@@ -25,6 +25,7 @@
 | [0010](ADR-0010-laravel-13-supersedes-filament-v3-lock.md) | Laravel 13 — levée du verrou « Laravel 12 + Filament v3 » | ✅ Accepted | Session party-mode + montée de dépendances 2026-07-27 |
 | [0011](ADR-0011-observation-avant-composition.md) | Observation avant composition — réordonnancement d'Epic 1 | ✅ Accepted | Roundtable party-mode 2026-07-30 |
 | [0012](ADR-0012-ecran-offline-et-module-media.md) | Écran offline : vignettes + liens sortants, module `Media`, Twitch seul | ✅ Accepted | Roundtable party-mode 2026-07-30 |
+| [0013](ADR-0013-runner-navigateur-pest-browser.md) | Runner navigateur : `pest-plugin-browser` sur Chromium natif Alpine | ✅ Accepted | Exécution du spike ADR-0011, 2026-08-06 |
 
 ## Quand créer un nouvel ADR ?
 

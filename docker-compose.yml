@@ -73,6 +73,70 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=false"  # Image custom - pas de mise à jour auto
 
+  # Runner navigateur (ADR-0013). Profil `test` : jamais démarré par
+  # `make up-prod` ni `make up-local`. Cible `make test-browser`.
+  #
+  # ⚠️ Le nom du conteneur ne doit PAS commencer par « <projet>_php » :
+  # le Makefile résout le conteneur PHP avec
+  #     docker ps -qf "name=$(COMPOSE_PROJECT_NAME)_php"
+  # qui filtre par SOUS-CHAÎNE. Un « laravel-app_php_test » matcherait aussi,
+  # `docker exec` recevrait deux identifiants, et toutes les cibles make
+  # casseraient dès que ce service tourne. D'où « _test_browser ».
+  test-browser:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: test          # stage descendant de `development` — prod intacte
+      args:
+        UID: 1000
+        GID: 1000
+    container_name: ${COMPOSE_PROJECT_NAME}_test_browser
+    # `sleep infinity` : ce conteneur n'expose aucun service, on l'exec.
+    # Ni php-fpm ni supervisor ne sont utiles ici.
+    entrypoint: ["sleep", "infinity"]
+    # ─────────────────────────────────────────────────────────────────────────
+    # Les trois réglages ci-dessous ne sont PAS du confort : sans eux, Chromium
+    # se bloque par intermittence dans Docker (constaté 3 fois pendant le spike
+    # du 2026-08-06, sur des runs verts comme rouges).
+    #
+    #   ipc: host   → /dev/shm par défaut = 64 Mo, insuffisant pour Chromium.
+    #                 Correctif recommandé par la documentation Playwright.
+    #   init: true  → dans le conteneur `php`, PID 1 est le master php-fpm, qui
+    #                 ne moissonne pas les enfants : les Chromium terminés
+    #                 restent zombies et le serveur Playwright ne rend pas la
+    #                 main. Docker init (tini) fait la moisson.
+    #   shm_size    → filet si `ipc: host` est indisponible (Docker Desktop,
+    #                 certains runners CI durcis).
+    # ─────────────────────────────────────────────────────────────────────────
+    ipc: host
+    init: true
+    shm_size: 1gb
+    volumes:
+      - ./src:/var/www/html:delegated
+      - .:/var/www/project:ro
+      - ./docker/php/conf/php.ini:/usr/local/etc/php/php.ini
+      - ./docker/scripts:/docker/scripts:ro
+    networks:
+      - app-network
+    working_dir: /var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"  # Image custom - pas de mise à jour auto
+
   postgres:
     image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15  # 18.4 / alpine 3.24.1
     container_name: ${COMPOSE_PROJECT_NAME}_postgres

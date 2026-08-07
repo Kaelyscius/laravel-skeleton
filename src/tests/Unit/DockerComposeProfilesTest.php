@@ -97,5 +97,7 @@ it('excludes custom-built images from Watchtower', function (): void {
     }
     sort($excluded);
     expect($excluded)
-        ->toBe(['apache', 'node', 'php']);
+        // `test-browser` (ADR-0013) est bâti depuis docker/php/Dockerfile, stage
+        // `test` : image custom, donc exclue de Watchtower comme les trois autres.
+        ->toBe(['apache', 'node', 'php', 'test-browser']);
 });

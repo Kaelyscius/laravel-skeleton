@@ -18,12 +18,22 @@ on:
     paths:
       - 'src/**'
       - 'scripts/quality-ratchet.sh'
+      # Les scripts du runner navigateur décident du verdict du job `browser`.
+      # Sans cette entrée, une modification du garde-fou ne déclencherait pas la
+      # CI qui s'en sert — un garde-fou qu'on peut changer sans le réexécuter.
+      - 'docker/php/scripts/run-browser-tests.sh'
+      - 'docker/php/scripts/browser-verdict.php'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main, develop]
     paths:
       - 'src/**'
       - 'scripts/quality-ratchet.sh'
+      # Les scripts du runner navigateur décident du verdict du job `browser`.
+      # Sans cette entrée, une modification du garde-fou ne déclencherait pas la
+      # CI qui s'en sert — un garde-fou qu'on peut changer sans le réexécuter.
+      - 'docker/php/scripts/run-browser-tests.sh'
+      - 'docker/php/scripts/browser-verdict.php'
       - '.github/workflows/ci.yml'
   workflow_dispatch:
 
@@ -310,12 +320,169 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # ===========================================================================
+  # JOB 3 — TESTS NAVIGATEUR (ADR-0013)
+  # ===========================================================================
+  # Pourquoi un job séparé de `tests` : la suite navigateur exige un Chromium et
+  # un build Vite à jour, elle n'est PAS déclarée dans phpunit.xml (sinon
+  # `php artisan test` l'exécuterait partout), et son verdict ne se lit pas dans
+  # le code de sortie de pest. Elle ne partage donc rien avec le job `tests`.
+  #
+  # ⚠️ DIVERGENCE ASSUMÉE ENTRE LOCAL ET CI, à connaître avant de débugger :
+  #   - en local, le runner est le conteneur Alpine `test-browser` et pilote le
+  #     Chromium natif d'Alpine (musl) — les builds de Playwright y sont
+  #     inexécutables, cf. ADR-0013 ;
+  #   - ici, le runner GitHub est Ubuntu (glibc), donc Playwright installe son
+  #     propre Chrome for Testing, sans le moindre contournement.
+  # Deux navigateurs différents valident donc la même cascade CSS. C'est
+  # acceptable — c'est même une couverture plus large — mais un échec présent
+  # d'un seul côté est probablement une différence de moteur, pas une régression.
+  #
+  # La version de Playwright n'est PAS écrite ici : elle vient de
+  # src/package-lock.json, pour qu'il n'existe qu'une seule source de vérité.
+  browser:
+    name: Tests navigateur (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15 # 18.4 / alpine 3.24.1
+        env:
+          POSTGRES_DB: laravel_test
+          POSTGRES_USER: laravel_test
+          POSTGRES_PASSWORD: laravel_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U laravel_test -d laravel_test"
+          --health-interval=10s
+          --health-timeout=10s
+          --health-retries=5
+          --health-start-period=30s
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: 🐘 Setup PHP ${{ env.PHP_VERSION }}
+        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          # `sockets` est exigée par pest-plugin-browser (websocket Playwright).
+          extensions: bcmath, ctype, curl, dom, fileinfo, filter, gd, hash, intl, json, libxml, mbstring, openssl, pcre, pdo, pdo_pgsql, redis, session, sockets, tokenizer, xml, zip
+          coverage: none
+          tools: composer:v2
+          ini-values: memory_limit=2G, max_execution_time=300, opcache.jit=0
+
+      - name: 📦 Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: 📋 Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: 💾 Cache Composer dependencies
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-php-${{ env.PHP_VERSION }}-composer-${{ hashFiles('src/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-${{ env.PHP_VERSION }}-composer-
+
+      - name: 🎵 Install Composer dependencies
+        working-directory: src
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+
+      - name: 💾 Cache NPM dependencies
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: src/node_modules
+          key: ${{ runner.os }}-node-${{ env.NODE_VERSION }}-npm-${{ hashFiles('src/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.NODE_VERSION }}-npm-
+
+      - name: 📦 Install NPM dependencies
+        working-directory: src
+        run: npm ci --prefer-offline --no-audit
+
+      # Le cache est indexé sur package-lock.json : une montée de Playwright
+      # invalide la clé et retélécharge le navigateur correspondant. Sans ça, un
+      # Chromium périmé cohabiterait avec un client plus récent.
+      - name: 💾 Cache Playwright browsers
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('src/package-lock.json') }}
+
+      - name: 🌐 Install Chromium
+        working-directory: src
+        run: npx playwright install --with-deps chromium
+
+      - name: ⚙️ Configure Laravel environment
+        working-directory: src
+        run: |
+          cp .env.example .env
+
+          # Mêmes valeurs que le job `tests` : phpunit.xml prime de toute façon,
+          # mais une divergence ferait migrer une base et tester l'autre.
+          printf '%s\n' \
+            'APP_ENV=testing' \
+            'APP_DEBUG=true' \
+            'DB_CONNECTION=pgsql' \
+            'DB_HOST=127.0.0.1' \
+            'DB_PORT=5432' \
+            'DB_DATABASE=laravel_test' \
+            'DB_USERNAME=laravel_test' \
+            'DB_PASSWORD=laravel_test' \
+            'CACHE_DRIVER=array' \
+            'SESSION_DRIVER=array' \
+            'QUEUE_CONNECTION=sync' \
+            'MAIL_MAILER=array' \
+            'BROADCAST_DRIVER=log' \
+            'TELESCOPE_ENABLED=false' \
+            'PULSE_ENABLED=false' \
+            'NIGHTWATCH_ENABLED=false' \
+            >> .env
+
+          php artisan key:generate --no-interaction
+
+      # Indispensable : le test lit une valeur CALCULÉE par le navigateur à
+      # partir du CSS compilé. Sans build, il mesurerait un manifeste absent.
+      - name: 🏗️ Build assets
+        working-directory: src
+        run: npm run build
+
+      - name: 🗄️ Wait for database and run migrations
+        working-directory: src
+        run: |
+          timeout 60 bash -c 'until pg_isready -h 127.0.0.1 -p 5432 -U laravel_test -d laravel_test >/dev/null 2>&1; do sleep 2; done'
+          php artisan migrate --force --no-interaction
+
+      # Le verdict vient du rapport JUnit, pas du code de sortie de pest :
+      # le plugin ne rend pas la main ~1 run sur 2. Toute la logique — et son
+      # refus de conclure au vert sans preuve — est dans ces deux scripts.
+      - name: 🧪 Run browser tests
+        working-directory: src
+        run: ../docker/php/scripts/run-browser-tests.sh 300
+
+      - name: 📤 Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-junit-report
+          path: /tmp/browser-junit.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ===========================================================================
   # RÉSUMÉ
   # ===========================================================================
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [integrity, quality, tests]
+    needs: [integrity, quality, tests, browser]
     if: always()
 
     steps:
@@ -328,10 +495,11 @@ jobs:
           echo "| Integrity (gitleaks · fichiers suivis) | ${{ needs.integrity.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Quality (ECS · PHPStan · Ratchet) | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Pest × PostgreSQL 18) | ${{ needs.tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests navigateur (Chromium) | ${{ needs.browser.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Rector et PHP Insights sont **informatifs** (architecture §9.2) :" >> $GITHUB_STEP_SUMMARY
           echo "leur échec n'arrête pas le pipeline mais reste visible dans le job Quality." >> $GITHUB_STEP_SUMMARY
 
       - name: ❌ Fail if a blocking job failed
-        if: needs.integrity.result != 'success' || needs.quality.result != 'success' || needs.tests.result != 'success'
+        if: needs.integrity.result != 'success' || needs.quality.result != 'success' || needs.tests.result != 'success' || needs.browser.result != 'success'
         run: exit 1

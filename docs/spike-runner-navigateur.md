@@ -1,6 +1,29 @@
 # Spike — choix du runner navigateur
 
-> Préparé le 2026-07-31. **À exécuter à la prochaine session.**
+> ## ✅ EXÉCUTÉ le 2026-08-06 — décision consignée en [ADR-0013](adr/ADR-0013-runner-navigateur-pest-browser.md)
+>
+> **Ce fichier est conservé comme protocole d'origine. Il n'a plus autorité : l'ADR-0013 l'a.**
+>
+> Résultat : les 4 critères sont satisfaits, **le (4) compris — le rouge a été observé**.
+> Runner retenu : `pest-plugin-browser` v4.3.1 sur le **Chromium natif d'Alpine**.
+>
+> **Les deux tentatives de contournement, que ce fichier demandait d'écrire ici :**
+> 1. Chromium de Playwright dans le conteneur Alpine → **échec** : builds `linux64`/glibc, image
+>    musl, interpréteur ELF absent. Aucune variante musl publiée.
+> 2. Chromium natif d'Alpine lié dans le cache Playwright → **succès**. Le plugin n'accepte pas
+>    d'`executablePath` (options codées en dur), le lien est la seule voie.
+>
+> **Le plan B (Playwright TS) a été écarté malgré le critère d'abandon**, sur un fait inconnu à
+> la rédaction : `LaravelHttpServer` est *in-process*, donc les tests navigateur héritent de
+> `RefreshDatabase` et de la base de test. Playwright TS taperait Apache, donc la base de **dev** —
+> ce qui réintroduirait la classe de défaut corrigée le 2026-07-31. Arbitré par le PO.
+>
+> Deux prévisions de ce document se sont révélées fausses, et une omission a compté :
+> - le conflit `symfony/process ^7.4` redouté au critère (1) **n'existe pas** ;
+> - `ignoreHTTPSErrors` n'a demandé aucun réglage : le plugin le force déjà ;
+> - en revanche, **rien ici n'anticipait que le runner ne rendrait pas la main** (~1 run sur 2).
+
+> Préparé le 2026-07-31.
 > Critères d'acceptation figés par [ADR-0011](adr/ADR-0011-observation-avant-composition.md) —
 > ils ont été écrits **avant** toute installation et ne se renégocient pas en séance.
 

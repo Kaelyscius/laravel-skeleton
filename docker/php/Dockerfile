@@ -226,3 +226,32 @@ RUN rm -f "$PHP_INI_DIR/conf.d/xdebug.ini" && \
 
 # Ajuster la limite mémoire pour le dev
 RUN sed -i 's/memory_limit=2G/memory_limit=4G/' /usr/local/etc/php/conf.d/composer-optimizations.ini
+
+# Stage 6: Test navigateur — JAMAIS déployé
+#
+# Ce stage descend de `development`, donc ni `production` ni `development` ne
+# portent Chromium. C'est la condition (2) du spike ADR-0011 : le coût du
+# navigateur reste confiné à une image de test.
+#
+# Le service qui l'utilise est `php-test`, sous profil Compose `test` : il n'est
+# démarré ni par `make up-prod`, ni par `make up-local`.
+FROM development AS test
+
+# Chromium natif Alpine, compilé contre musl.
+# Les builds distribués par `playwright install` sont linux64/glibc et NE
+# S'EXÉCUTENT PAS ici — ELF valide, interpréteur absent. Voir ADR-0013.
+RUN apk add --no-cache chromium
+
+# Chemin partagé, hors de /root : les tests tournent en uid 1000 alors que
+# l'image est bâtie en root, et /root/.cache leur serait illisible.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+COPY docker/php/scripts/link-alpine-chromium.sh /usr/local/bin/link-alpine-chromium.sh
+COPY docker/php/scripts/run-browser-tests.sh /usr/local/bin/run-browser-tests.sh
+COPY docker/php/scripts/browser-verdict.php /usr/local/bin/browser-verdict.php
+RUN chmod +x /usr/local/bin/link-alpine-chromium.sh /usr/local/bin/run-browser-tests.sh \
+    && mkdir -p /opt/ms-playwright
+
+# Le lien est posé au démarrage, pas au build : il dépend de la révision
+# déclarée par le Playwright installé dans node_modules, qui est un bind mount.
