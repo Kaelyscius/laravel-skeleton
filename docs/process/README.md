@@ -10,6 +10,7 @@ Ce dossier documente le **process de travail** sur le projet `myLaravelSkeleton`
 |---|---|---|
 | **[01-getting-started.md](01-getting-started.md)** | Comment lancer le projet (premier déploiement, install, config, premier dev) | Première fois sur le projet OU après une longue pause |
 | **[02-bmad-workflow.md](02-bmad-workflow.md)** | Workflow BMAD complet : skills à utiliser pour passer des décisions au code | Pour comprendre comment piloter le projet via BMAD au quotidien |
+| **[03-boucle-qualite.md](03-boucle-qualite.md)** | La boucle par story : definition-of-ready, revue dosée selon le risque (S/R/C), sécurité, couverture | **À chaque story.** C'est le document opérationnel — le 02 dit quels skills existent, le 03 dit quand les appliquer et quand s'en abstenir |
 
 ## 🎯 Quick start
 

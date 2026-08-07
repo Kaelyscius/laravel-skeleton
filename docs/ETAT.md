@@ -112,19 +112,44 @@ forme non — le rattrapage s'est fait en rafraîchissant les épinglages.
 > **8.5.4**. Un commentaire n'est contredit par rien : il se vérifie dans l'image
 > (`docker run --rm <image> php -r 'echo PHP_VERSION;'`), il ne se recopie pas du tag.
 
+## Boucle qualité par story — écrite le 2026-08-07
+
+👉 **[`docs/process/03-boucle-qualite.md`](process/03-boucle-qualite.md)** est
+désormais le document opérationnel à ouvrir à chaque story. Il classe la story
+en **S / R / C** et n'applique la cérémonie que si le niveau l'appelle — une
+boucle qu'on applique intégralement à tout est une boucle qu'on contourne.
+
+La règle sans exception : **aucun garde-fou n'est livré sans avoir été VU rouge.**
+Et pas de seuil de couverture en CI — il aurait été vert pendant tout ce que
+cette session a trouvé.
+
 ## Prochaine action
 
-**Observer `MODULE_LIVE_ENABLED=false`** — le 7ᵉ garde-fou silencieux, resté ouvert : la Story 1.7
-est `done` et c'est la promesse centrale du produit, mais la désactivation d'un module n'a
-**jamais été exécutée ni observée**. `src/tests/Feature/ModuleActivationTest.php` existe ; reste à
-établir s'il peut rougir.
+👉 **Story 1.11 — composants Blade de base.** Tous ses prérequis sont levés.
 
-Puis, dans cet ordre : les 3 écrans de référence + audit time-as-texture →
-**1.11 → 1.12 → 1.13 → 1.9 → 1.10a**.
+C'est la **première vraie story depuis le 25 juillet** : tout ce qui précédait
+(spike, observations, écrans de référence) était du déblocage. Appliquer
+[`docs/process/03-boucle-qualite.md`](process/03-boucle-qualite.md), niveau **S**.
 
-⚠️ **Avant les écrans de référence** : câbler `make test-browser` dans la CI. Tant que la CI ne
-le lance pas, ce runner ne garde rien — c'est très exactement la forme du motif dominant du
-projet, appliquée à l'outil qu'on vient d'installer pour le combattre.
+Le reliquat d'Epic 1 ensuite : **1.12 → 1.13 → 1.9 → 1.10a** (1.10a est de
+niveau **C** — Filament + Sanctum + Permission).
+
+Ce qui a débloqué 1.11, dans l'ordre où c'est arrivé :
+
+| | |
+|---|---|
+| `0` spike runner | ✅ ADR-0013, rouge observé **en local et en CI** |
+| `0b` module désactivé | ✅ mécanisme observé fonctionnel — et son absence de garde-fou corrigée |
+| `0c` écrans de référence | ✅ `docs/ux/references/` + audit time-as-texture |
+| `0d` relecture des AC | ✅ 2026-07-30 |
+| `0e` Livewire déclaré | ✅ 2026-07-31 — le verrou qui bloquait 1.11 et 1.12 |
+
+> ⚠️ **Rappel avant d'écrire les AC de la 1.11** : la passe de relecture avait
+> trouvé une contradiction sur `--accent-lava`. L'AC dit « réservé LIVE
+> uniquement », `tokens.css` RÈGLE 2 dit « exactement 4 usages ». **Le token fait
+> foi**, et les écrans de référence viennent de confirmer que les 4 usages
+> suffisent sans recours opportuniste. Ils remontent aussi `cta_text` /
+> `cta_url` et `social_links[]` dans le périmètre de la story.
 
 ## Ce qui a changé depuis la dernière fois
 
