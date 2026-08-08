@@ -1,4 +1,4 @@
-# État du projet — 2026-08-06 (branche `main`)
+# État du projet — 2026-08-08 (branche `main`)
 
 > Point d'entrée de reprise. **Un seul fichier, écrasé à chaque session, jamais accumulé.**
 > Il n'a aucune autorité : il pointe vers `epics.md` et `sprint-status.yaml`, jamais l'inverse.
@@ -7,9 +7,9 @@
 
 ## Où j'en suis
 
-L'appareil de vérification est réparé — 3 workflows CI verts, **58 tests**, ratchet ECS/PHPStan.
+L'appareil de vérification est réparé — 3 workflows CI verts, **98 tests**, ratchet ECS/PHPStan.
 **Un navigateur affiche désormais ce projet** : le spike runner est fait, `make test-browser`
-existe et son rouge a été observé. Epic 1 : stories 1.1 → 1.8 `done`, 1.9 → 1.13 `backlog`,
+existe et son rouge a été observé. Epic 1 : stories 1.1 → 1.8 et 1.11 `done`, 1.9 · 1.10a · 1.12 · 1.13 `backlog`,
 Epics 2 à 11 non démarrés.
 
 Le roundtable du 2026-07-30 a **réordonné le reliquat d'Epic 1** et arbitré la conception de
@@ -123,33 +123,47 @@ La règle sans exception : **aucun garde-fou n'est livré sans avoir été VU ro
 Et pas de seuil de couverture en CI — il aurait été vert pendant tout ce que
 cette session a trouvé.
 
+## ✅ Story 1.11 — LIVRÉE le 2026-08-08 (première vraie story depuis le 25 juillet)
+
+6 composants Blade anonymes (`button`, `card`, `badge`, `icon-button`, `divider`,
+`toast`), la migration `social_links` et une galerie de démonstration gardée par
+l'environnement. **98 tests** (67 → 98) et **8 tests navigateur** (1 → 8),
+ratchet **0/0/0**, PHPStan niveau 10.
+
+**21 garde-fous, tous VUS ROUGES** en 6 lots de mutation — aucun déclaré opérant
+sur supposition. Détail dans le Debug Log de la story.
+
+Trois choses à retenir, qui resserviront :
+
+1. **`:active` s'observe sans hack** : focaliser l'élément puis MAINTENIR la barre
+   d'espace (`withKeyDown`). Chromium applique alors `:active` comme sur un vrai
+   appui — un `dispatchEvent` ne l'aurait jamais fait.
+2. **Muter le token à chaud est la seule assertion qui distingue « c'est orange »
+   de « c'est lava »** : `document.documentElement.style.setProperty('--accent-lava', …)`
+   doit déplacer la valeur calculée. Un `#FF5722` en dur passe tout le reste.
+3. **`outline-offset` sur un `outline-none` ne décale rien.** En Tailwind 4,
+   `outline-none` pose `outline-style: none` ; l'anneau visible est une
+   box-shadow, donc `outline-offset` est calculé à 2px et ne peint rien. Le
+   décalage réel vient de `ring-offset-*`, et `outline-hidden` (et non
+   `outline-none`) conserve un indicateur en contrastes forcés. **Trouvé par la
+   revue de code, pas par les tests** — l'assertion, elle, était verte.
+
+> `tokens.css` RÈGLE 2 a été **amendée dans le même commit** : l'anneau de focus
+> lava sur tout élément focusable y est désormais inscrit comme exemption (c'est
+> un état, pas une 5ᵉ surface). Le code la commentait sans que le document le
+> dise — forme exacte du motif dominant.
+
 ## Prochaine action
 
-👉 **Story 1.11 — composants Blade de base.** Tous ses prérequis sont levés.
+👉 **Story 1.12 — composants time-as-texture.** Puis **1.13 → 1.9 → 1.10a**
+(1.10a est de niveau **C** — Filament + Sanctum + Permission).
 
-C'est la **première vraie story depuis le 25 juillet** : tout ce qui précédait
-(spike, observations, écrans de référence) était du déblocage. Appliquer
-[`docs/process/03-boucle-qualite.md`](process/03-boucle-qualite.md), niveau **S**.
-
-Le reliquat d'Epic 1 ensuite : **1.12 → 1.13 → 1.9 → 1.10a** (1.10a est de
-niveau **C** — Filament + Sanctum + Permission).
-
-Ce qui a débloqué 1.11, dans l'ordre où c'est arrivé :
-
-| | |
-|---|---|
-| `0` spike runner | ✅ ADR-0013, rouge observé **en local et en CI** |
-| `0b` module désactivé | ✅ mécanisme observé fonctionnel — et son absence de garde-fou corrigée |
-| `0c` écrans de référence | ✅ `docs/ux/references/` + audit time-as-texture |
-| `0d` relecture des AC | ✅ 2026-07-30 |
-| `0e` Livewire déclaré | ✅ 2026-07-31 — le verrou qui bloquait 1.11 et 1.12 |
-
-> ⚠️ **Rappel avant d'écrire les AC de la 1.11** : la passe de relecture avait
-> trouvé une contradiction sur `--accent-lava`. L'AC dit « réservé LIVE
-> uniquement », `tokens.css` RÈGLE 2 dit « exactement 4 usages ». **Le token fait
-> foi**, et les écrans de référence viennent de confirmer que les 4 usages
-> suffisent sans recours opportuniste. Ils remontent aussi `cta_text` /
-> `cta_url` et `social_links[]` dans le périmètre de la story.
+⚠️ **Rendez-vous pris pour la Story 1.13** : `BladeComponentsTest` contient un
+test daté qui interdit `x-data`, `x-init`, `setTimeout`, `addEventListener`,
+`wire:` et `Alpine` dans `toast.blade.php`. Il **doit être supprimé** en 1.13 et
+remplacé par le test de comportement d'auto-fermeture, une fois Alpine chargé par
+`@livewireScripts`. Le voir rougir alors n'est pas une régression, c'est le
+rendez-vous.
 
 ## Ce qui a changé depuis la dernière fois
 
@@ -279,8 +293,8 @@ mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à
 
 ```bash
 make up-local              # démarrer la stack
-make test                  # 58 tests, exit 0 attendu (Unit + Feature)
-make test-browser          # tests navigateur, conteneur dédié profil `test`
+make test                  # 98 tests, exit 0 attendu (Unit + Feature)
+make test-browser          # 8 tests navigateur, conteneur dédié profil `test``test`
 make test-browser-down     # arrêter le runner navigateur
 make quality-ratchet       # plafond de dette — exit 0 attendu
 make hooks-check           # hooks versionnés actifs ?

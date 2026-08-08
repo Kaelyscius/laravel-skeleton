@@ -23,6 +23,15 @@
  *   Un orange qui apparaît partout n'est plus un signal, c'est du bruit — et le
  *   badge LIVE, seul vrai moment d'urgence de l'app, perd son pouvoir.
  *
+ *   EXEMPTION, une seule, inscrite ici plutôt que re-débattue à chaque story :
+ *   l'anneau de :focus-visible (`ring-lava/40`) s'applique à TOUT élément
+ *   focusable, quel que soit son variant. Ce n'est pas une 5ᵉ surface — c'est un
+ *   état, donc les 2 % de 90/8/2, au même titre que --state-ok ou --state-err.
+ *   Un indicateur de focus qui changerait de couleur selon le composant serait
+ *   une régression d'accessibilité, pas une discipline chromatique.
+ *   Décidée en Story 1.11 (AC6). Le code la commentait sans que ce fichier le
+ *   dise : une décision qui contredit un document se règle dans le document.
+ *
  * RÈGLE 3 — Dark-only (UX-DR-45).
  *   Pas de thème clair, pas de toggle, pas de @media (prefers-color-scheme).
  *   Les valeurs ci-dessous sont dark par construction, pas par défaut.

@@ -32,6 +32,20 @@ final class StreamerFactory extends Factory
             'cta_url' => $this->faker->url(),
             'twitter_handle' => $this->faker->userName(),
             'discord_url' => $this->faker->url(),
+            // Fixture uniquement. Les libellés sont configurés par le streamer :
+            // rien ici ne remonte dans le code applicatif (ADR-0012, AC8).
+            'social_links' => [
+                [
+                    'label' => 'Twitch',
+                    'url' => $this->faker->url(),
+                    'order' => 1,
+                ],
+                [
+                    'label' => 'YouTube',
+                    'url' => $this->faker->url(),
+                    'order' => 2,
+                ],
+            ],
         ];
     }
 }

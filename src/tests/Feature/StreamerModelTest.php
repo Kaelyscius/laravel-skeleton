@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
 
-it('creates the streamers table with all 12 expected columns', function (): void {
+it('creates the streamers table with all 13 expected columns', function (): void {
     expect(Schema::hasTable('streamers'))->toBeTrue();
 
     expect(Schema::hasColumns('streamers', [
@@ -27,13 +27,18 @@ it('creates the streamers table with all 12 expected columns', function (): void
         'cta_url',
         'twitter_handle',
         'discord_url',
+        // Ajoutée par la Story 1.11 (ADR-0012, sortie ≠ retour). Ce test a
+        // rougi sur la migration avant d'être mis à jour : c'est exactement ce
+        // que l'assertion de comptage ci-dessous existe pour provoquer — une
+        // colonne n'entre pas dans la table tenant-root sans qu'on le décide.
+        'social_links',
         'created_at',
         'updated_at',
     ]))->toBeTrue();
 
     // Assert the count too: presence-only checks would not catch an unexpected
     // extra column (e.g. a stray streamer_id or deleted_at) sneaking in.
-    expect(Schema::getColumnListing('streamers'))->toHaveCount(12);
+    expect(Schema::getColumnListing('streamers'))->toHaveCount(13);
 });
 
 it('does not give the tenant-root table a streamer_id column', function (): void {
