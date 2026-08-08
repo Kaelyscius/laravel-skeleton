@@ -1,9 +1,59 @@
 # ADR-0011 — Observation avant composition : réordonnancement d'Epic 1
 
-> **Statut** : ✅ Accepted — 2026-07-30
+> **Statut** : ✅ Accepted — 2026-07-30 · **amendé le 2026-08-08** (§1 uniquement, voir ci-dessous)
 > **Décideurs** : Alex (PO), roundtable party-mode (Winston, Murat, Amelia, Sally, John, Mary, Paige, Caravaggio)
 > **Supersède** : l'ordre des stories 1.9 → 1.13 dans `_bmad-output/planning-artifacts/epics.md`, et la note de reprise `docs/RESUME-1.9.md` (supprimée)
-> **Voir aussi** : [ADR-0009](ADR-0009-modular-app-modules-psr4.md), [ADR-0012](ADR-0012-ecran-offline-et-module-media.md)
+> **Voir aussi** : [ADR-0009](ADR-0009-modular-app-modules-psr4.md), [ADR-0012](ADR-0012-ecran-offline-et-module-media.md), [ADR-0013](ADR-0013-runner-navigateur-pest-browser.md)
+
+---
+
+## ⚠️ Amendement du 2026-08-08 — les layouts (1.13) passent AVANT les composants time-as-texture (1.12)
+
+> **Décideur** : Alex (PO), question ponctuelle à agent unique — la règle de cadrage interdisant
+> les roundtables jusqu'à `epic-1: done` a été respectée.
+> **Portée** : §1 « Réordonnancement d'Epic 1 » **uniquement**. La doctrine (§3, règles R1/R2/R3),
+> les écartements (§4) et la hiérarchie documentaire (§5) sont **inchangés** — c'est d'ailleurs
+> R1 qui produit cet amendement.
+
+**Nouvel ordre du reliquat** : `1.11 ✅ → 1.13 → 1.12 → 1.9 → 1.10a`.
+
+**Fait nouveau, découvert en livrant la Story 1.11.** Alpine n'est pas une dépendance qu'on
+installe : il arrive dans le bundle de Livewire 4, donc **uniquement sur les pages qui appellent
+`@livewireScripts`** — ce que câble la Story **1.13**. Toute story antérieure qui affirme un
+comportement client se retrouve donc avec un AC sans référent, au sens exact du tableau du
+Contexte ci-dessus.
+
+Ce n'est pas une hypothèse : le cas s'est produit en 1.11. L'AC7 de `<x-toast>` exigeait une
+auto-fermeture ; il a fallu l'arbitrer en cours de story (structure en 1.11, comportement en
+1.13). La Story 1.12 porte **le même défaut**, à l'identique — « refresh Alpine 60 s pour
+`<x-time-relative>` », déjà classé `SANS-RÉFÉRENT` par la passe de relecture du 2026-07-30.
+
+**Pourquoi inverser plutôt que re-scinder.** Scinder une deuxième fois était possible et
+cohérent avec le précédent. Deux raisons l'ont emporté :
+
+1. **La 1.13 devenait le point de concentration du risque.** Elle porterait alors les layouts
+   public + minimal, `@livewireScripts`, l'articulation avec la CSP de `spatie/laravel-csp`,
+   l'auto-fermeture du toast **et** le refresh du temps. Une story de niveau R qui accumule les
+   reports de trois autres stories n'est plus une story, c'est un point de rupture.
+2. **Un temps relatif qui ne se rafraîchit pas vide la story de sa substance.** « Time as
+   texture » (Direction C) repose sur une durée vivante ; la reporter, c'est livrer la forme
+   sans la fonction, puis vérifier la fonction ailleurs — exactement ce que §3/R3 refuse.
+
+**Ce que l'inversion ne coûte pas.** L'argument d'origine — *observation avant composition* —
+portait sur l'impossibilité de vérifier un rendu sans navigateur. Ce verrou est levé depuis
+ADR-0013 : `make test-browser` existe et son rouge est prouvé en local et en CI. Et un layout
+n'a besoin d'aucun composant pour naître : les 6 primitives de la 1.11 existent déjà, donc la
+1.13 a de quoi se remplir pour être vérifiée.
+
+**Ce que l'inversion ne change pas.** La 1.9 ferme toujours la marche (elle seule dépend de
+l'état **final** du `<head>`), et la 1.10a la suit toujours pour la même raison qu'avant : le
+pipeline Vite de Filament v5 risquerait de réécrire la configuration sous les preloads.
+
+**Conséquence sur la dette ouverte par la 1.11 :** `src/tests/Feature/BladeComponentsTest.php`
+contient un test daté qui interdit `x-data`, `x-init`, `setTimeout`, `addEventListener`, `wire:`
+et `Alpine` dans `toast.blade.php`. Il **doit être supprimé en Story 1.13** et remplacé par le
+test de comportement d'auto-fermeture. Le voir rougir alors n'est pas une régression : c'est le
+rendez-vous qu'il a lui-même inscrit dans son message d'échec.
 
 ---
 
@@ -57,14 +107,18 @@ fois le vrai layout arrivé. Le test mesurerait l'échafaudage, pas la fonctionn
 
 ### 1. Réordonnancement d'Epic 1
 
+> ⚠️ **Les étapes 4 et 5 ont été INVERSÉES le 2026-08-08** — voir l'amendement en tête de
+> document. Le bloc ci-dessous est conservé tel qu'il a été décidé le 2026-07-30 ; il n'est
+> plus l'ordre applicable.
+
 ```
 0.  spike runner navigateur                    ← prérequis de tout le reste
 0b. observer MODULE_LIVE_ENABLED=false         ← observation, pas test
 1.  3 écrans de référence (docs/ux/references/)  + audit time-as-texture
 2.  passe de relecture des AC 1.9 → 1.13
 3.  1.11  composants Blade de base   (+ cta_text / cta_url)
-4.  1.12  composants time-as-texture
-5.  1.13  layouts
+4.  1.12  composants time-as-texture           ← devient 5 (amendement 2026-08-08)
+5.  1.13  layouts                              ← devient 4 (amendement 2026-08-08)
 6.  1.9   self-host IBM Plex
 7.  1.10a Filament v5 + Sanctum + Spatie Permission
     1.10b SettingsResource  → déplacée en Epic 5

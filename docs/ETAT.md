@@ -153,17 +153,71 @@ Trois choses à retenir, qui resserviront :
 > un état, pas une 5ᵉ surface). Le code la commentait sans que le document le
 > dise — forme exacte du motif dominant.
 
-## Prochaine action
+## Prochaine action — Story 1.13 (layouts). ORDRE INVERSÉ le 2026-08-08.
 
-👉 **Story 1.12 — composants time-as-texture.** Puis **1.13 → 1.9 → 1.10a**
-(1.10a est de niveau **C** — Filament + Sanctum + Permission).
+👉 **`1.13 → 1.12 → 1.9 → 1.10a`.** La 1.13 passe **avant** la 1.12 : décision PO
+du 2026-08-08, inscrite en amendement à
+[ADR-0011 §1](adr/ADR-0011-observation-avant-composition.md).
 
-⚠️ **Rendez-vous pris pour la Story 1.13** : `BladeComponentsTest` contient un
-test daté qui interdit `x-data`, `x-init`, `setTimeout`, `addEventListener`,
-`wire:` et `Alpine` dans `toast.blade.php`. Il **doit être supprimé** en 1.13 et
-remplacé par le test de comportement d'auto-fermeture, une fois Alpine chargé par
-`@livewireScripts`. Le voir rougir alors n'est pas une régression, c'est le
-rendez-vous.
+**Motif** : Alpine n'entre dans le DOM qu'avec `@livewireScripts`, câblé par la
+1.13. L'AC « refresh Alpine 60 s » de la 1.12 était donc `SANS-RÉFÉRENT` — le
+même défaut que l'AC7 du toast en 1.11. Plutôt que de scinder une deuxième fois
+et de faire de la 1.13 le dépotoir des reports (layouts + CSP + toast + temps),
+on livre les layouts d'abord. Un layout n'a besoin d'aucun composant pour naître,
+et les 6 primitives de la 1.11 existent déjà.
+
+### Commande d'ouverture de la prochaine session
+
+```bash
+make up-local && make test && make quality-ratchet
+# attendu : 98 tests exit 0 · ratchet 0/0/0
+```
+
+Puis, **dans cet ordre** :
+
+```
+/bmad-create-story 1.13          # le fichier de story n'existe pas encore
+                                 # → relire les AC AVANT de lancer le dev (étape 0 de la boucle)
+/bmad-dev-story _bmad-output/implementation-artifacts/1-13-*.md
+make test && make quality-ratchet && make test-browser
+/bmad-code-review
+```
+
+Boucle qualité : la 1.13 est de **niveau R**, pas S (elle touche un invariant
+transverse — la CSP et le `<head>` dont dépendent toutes les stories suivantes).
+Donc `/bmad-code-review` **+ relecture ciblée de l'invariant touché**, et
+l'étape 4 s'ajoute : `/security-review` + `composer audit && npm audit`.
+
+### Passe de definition-of-ready — FAITE le 2026-08-08, avant d'écrire la story
+
+La requalification des AC de la 1.13 était déjà portée dans `epics.md` (passe du
+2026-07-30 + l'AC toast ajouté le 2026-08-08). Vérification des référents faite
+ce soir :
+
+| Nom cité dans un AC | Résout ? |
+|---|---|
+| `@livewireScripts` / Alpine | ✅ `livewire/livewire ^4` en dépendance directe (0e) |
+| `<x-toast>`, `<x-button>`, … | ✅ livrés et testés par la 1.11 |
+| preload fonts dans le `<head>` | ⚠️ **point d'insertion seulement** — renseigné par la 1.9. Ne PAS affirmer présent, sinon l'AC se valide sur un `<head>` vide |
+| bandeau cookie consent | ⚠️ **emplacement seulement** — rempli en Epic 4. Un bandeau factice serait un échafaudage plus permissif que la prod |
+| `sr-only focus:not-sr-only` | ✅ utilities Tailwind natives |
+| header sticky 48/56 px | ✅ valeur calculée → `make test-browser` existe (ADR-0013) |
+| `prefers-reduced-motion` | ✅ **vérifié ce soir** : `visit('/x', ['reducedMotion' => 'reduce'])` — les options de `visit()` sont étalées dans `newContext()` de Playwright, qui le supporte. ⚠️ Réserve : le même tableau est aussi passé à `goto()`, à valider en 5 min avant d'écrire l'AC |
+
+### Trois pièges qui coûteront cher si oubliés
+
+1. **⛔ Le runner navigateur ne validera JAMAIS la CSP** : `bypassCSP => true` est
+   codé en dur dans le plugin (ADR-0013). Or la 1.13 est la première story à
+   confronter `spatie/laravel-csp` à de vraies balises. Les en-têtes CSP se
+   testent par un **test HTTP**, pas dans le navigateur.
+2. **Rendez-vous du toast** : `src/tests/Feature/BladeComponentsTest.php` contient
+   un test daté qui interdit `x-data`, `x-init`, `setTimeout`,
+   `addEventListener`, `wire:` et `Alpine` dans `toast.blade.php`. Il **doit être
+   supprimé** en 1.13 et remplacé par le test de comportement d'auto-fermeture.
+   Le voir rougir alors n'est pas une régression — son propre message d'échec le
+   dit.
+3. **Ne PAS ajouter `alpinejs` via npm** : Livewire 4 l'embarque. Deux Alpine
+   enregistrés en parallèle est un bug classique.
 
 ## Ce qui a changé depuis la dernière fois
 
