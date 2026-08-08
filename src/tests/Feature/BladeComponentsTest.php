@@ -7,6 +7,7 @@ use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
+use Tests\Support\BladeTemplates;
 use Tests\Support\RouteTable;
 
 uses(RefreshDatabase::class);
@@ -145,39 +146,15 @@ $stripComments = static function (string $source): string {
  * (`components/forms/input.blade.php`) — le contrôle de comptage serait resté
  * vert en n'inspectant rien de nouveau.
  *
+ * ⚠️ LA MARCHE ELLE-MÊME VIT DANS Tests\Support\BladeTemplates. Elle était
+ * recopiée à l'identique ici et dans LayoutsTest, avec le même nombre écrit
+ * deux fois — deux comptages indépendants qui peuvent diverger. Extraite à la
+ * revue du 2026-08-08, pour la raison exacte qui avait fait extraire
+ * BrowserAssertions dans cette même story.
+ *
  * @return list<string>
  */
-$storyTemplates = static function (): array {
-    $root = base_path('resources/views/components');
-
-    $files = [];
-
-    if (is_dir($root)) {
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
-        );
-
-        foreach ($iterator as $file) {
-            if ($file instanceof SplFileInfo && str_ends_with($file->getFilename(), '.blade.php')) {
-                $files[] = $file->getPathname();
-            }
-        }
-    }
-
-    /*
-     * Les pages de démonstration sont ramassées par MOTIF, pas nommées une à
-     * une. La Story 1.13 en a ajouté deux : avec une liste écrite en dur, elles
-     * seraient sorties du périmètre de la RÈGLE 1 sans que rien ne rougisse —
-     * le comptage plus bas serait resté vert en n'inspectant rien de nouveau.
-     */
-    foreach (glob(base_path('resources/views/_*demo*.blade.php')) ?: [] as $demo) {
-        $files[] = $demo;
-    }
-
-    sort($files);
-
-    return $files;
-};
+$storyTemplates = static fn (): array => BladeTemplates::scanned();
 
 /**
  * Détecte une couleur en dur ou une arbitrary value Tailwind (RÈGLE 1).
@@ -604,7 +581,7 @@ it('ne hardcode ni couleur ni arbitrary value dans les composants de la story (R
         ->not->toBeEmpty('Le scan RÈGLE 1 n\'a trouvé aucun template à inspecter.');
 
     expect($templates)
-        ->toHaveCount(11, 'Les 8 composants (dont les 2 layouts) + les 3 pages de démonstration sont attendus : un fichier a été ajouté ou retiré sans mettre ce garde-fou à jour.');
+        ->toHaveCount(BladeTemplates::EXPECTED_COUNT, 'Les 12 composants (dont les 2 layouts et les 4 <x-time-*>) + les 4 pages de démonstration sont attendus : un fichier a été ajouté ou retiré sans mettre ce garde-fou à jour.');
 
     foreach ($templates as $template) {
         expect($findHardcodedValues((string) file_get_contents($template)))

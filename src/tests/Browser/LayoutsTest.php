@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Core\Models\Streamer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\BrowserAssertions;
 
 uses(RefreshDatabase::class);
 
@@ -36,114 +37,30 @@ uses(RefreshDatabase::class);
 | stabilisation, ou jusqu'à une condition, avec une BORNE.
 */
 
-/**
- * Le <body>, écrit sous une forme que le plugin reconnaît comme du CSS.
+/*
+ * Les cinq aides de ce fichier vivent désormais dans Tests\Support\BrowserAssertions
+ * (Story 1.12) : un SECOND fichier de tests navigateur les emploie, et les
+ * dupliquer aurait garanti qu'une des deux copies dérive en silence. Le
+ * raisonnement est celui qui a fait extraire Tests\Support\RouteTable en 1.13.
  *
- * ⚠️ Piège coûteux, trouvé en écrivant ce fichier : `keys('body', 'Tab')` échoue
- * sur un « Timeout 5000ms exceeded » qui ne nomme rien. `GuessLocator` ne traite
- * une chaîne comme un sélecteur CSS que si elle COMMENCE par `#`, `.`, `[` ou
- * `internal:`, ou si elle CONTIENT un caractère spécial CSS. `body` n'a rien de
- * tout cela : le plugin cherche donc `[id="body"]`, puis `[name="body"]`, puis
- * un élément dont le TEXTE vaut « body » — et attend cinq secondes qu'il
- * apparaisse. `html > body` contient `>`, donc il est reconnu.
+ * Les closures ci-dessous ne sont que des points d'entrée : le corps des tests
+ * n'a pas changé d'une ligne, donc leur verdict non plus.
  */
-const DOCUMENT_BODY = 'html > body';
+$readable = static fn (mixed $value): string => BrowserAssertions::readable($value);
+
+$computed = static fn (string $selector, string $property): string => BrowserAssertions::computed($selector, $property);
+
+$asComputedValue = static fn (mixed $value, string $what): string => BrowserAssertions::asComputedValue($value, $what);
 
 /**
- * Rend un `mixed` lisible DANS UN MESSAGE d'échec, sans prétendre le typer.
- *
- * `script()` renvoie `mixed`. L'interpoler tel quel est une erreur PHPStan au
- * niveau 10, et surtout : un message d'échec qui affiche « Array » ou rien du
- * tout ne dit pas ce qui s'est passé. On nomme donc le type quand ce n'est pas
- * une chaîne.
+ * @param  callable(): mixed  $read
  */
-$readable = static fn (mixed $value): string => is_string($value) ? $value : get_debug_type($value);
+$settled = static fn (callable $read, string $what): string => BrowserAssertions::settled($read, $what);
 
 /**
- * Expression JS renvoyant une propriété calculée, sous forme de chaîne.
+ * @param  callable(): mixed  $read
  */
-$computed = static fn (string $selector, string $property): string => sprintf(
-    "(() => { const el = document.querySelector('%s'); return el === null ? 'ABSENT' : String(getComputedStyle(el).getPropertyValue('%s')); })()",
-    $selector,
-    $property,
-);
-
-/**
- * Resserre le `mixed` de script() en chaîne, ICI plutôt qu'à chaque usage.
- *
- * Trois refus explicites, parce que chacun rendrait une assertion vide de sens :
- * non-chaîne (script() n'a rien renvoyé d'exploitable), 'ABSENT' (le sélecteur
- * ne désigne aucun élément) et '' (propriété non résolue, qui passerait
- * tranquillement un `->not->toBe('none')`).
- */
-$asComputedValue = static function (mixed $value, string $what): string {
-    expect(is_string($value))
-        ->toBeTrue("Aucune valeur calculée pour {$what} : script() n'a pas renvoyé de chaîne.");
-
-    $string = is_string($value) ? $value : '';
-
-    expect($string)
-        ->not->toBe('ABSENT', "L'élément visé par [{$what}] n'existe pas dans la page.");
-
-    expect($string)
-        ->not->toBe('', "Valeur calculée vide pour {$what} : la propriété n'a pas été résolue.");
-
-    return $string;
-};
-
-/**
- * Lit une valeur calculée jusqu'à ce que deux lectures consécutives coïncident.
- *
- * Une temporisation fixe est un pari sur la vitesse de la machine ; un test
- * instable finit désarmé. C'est la raison, pas le confort.
- */
-$settled = static function (callable $read, string $what) use ($asComputedValue): string {
-    $previous = null;
-
-    for ($attempt = 0; $attempt < 15; $attempt++) {
-        $current = $asComputedValue($read(), $what);
-
-        if ($current === $previous) {
-            return $current;
-        }
-
-        $previous = $current;
-        usleep(80_000);
-    }
-
-    expect(false)
-        ->toBeTrue("La valeur calculée de {$what} ne s'est jamais stabilisée (dernière : [{$previous}]).");
-
-    return (string) $previous;
-};
-
-/**
- * Attend qu'une lecture renvoie la valeur attendue, avec une BORNE en millisecondes.
- *
- * Renvoie le temps écoulé : c'est lui qui distingue « fermé par le bouton » de
- * « fermé parce que la durée était courte ».
- */
-$waitUntilValue = static function (callable $read, string $expected, int $boundMs, string $what): int {
-    $waited = 0;
-    $last = null;
-
-    while ($waited <= $boundMs) {
-        $last = $read();
-
-        if ($last === $expected) {
-            return $waited;
-        }
-
-        usleep(50_000);
-        $waited += 50;
-    }
-
-    expect(false)
-        ->toBeTrue("{$what} : la valeur attendue [{$expected}] n'est jamais arrivée en {$boundMs} ms (dernière : ["
-            . (is_string($last) ? $last : gettype($last)) . ']).');
-
-    return $waited;
-};
+$waitUntilValue = static fn (callable $read, string $expected, int $boundMs, string $what): int => BrowserAssertions::waitUntilValue($read, $expected, $boundMs, $what);
 
 /*
 |--------------------------------------------------------------------------
@@ -164,7 +81,7 @@ it('fait du lien de saut le PREMIER élément focusable du document (AC3)', func
 
     $page = visit('/_layouts');
 
-    $page->keys(DOCUMENT_BODY, 'Tab');
+    $page->keys(BrowserAssertions::DOCUMENT_BODY, 'Tab');
 
     $isSkipLink = $page->script(
         "(() => { const a = document.activeElement; return String(a !== null && a.tagName === 'A' && a.getAttribute('href') === '#main'); })()",
@@ -213,7 +130,7 @@ it('garde le lien de saut invisible au repos et le rend visible au focus (AC3)',
     expect((float) $widthAtRest)
         ->toBeLessThan(2.0, "Le lien de saut mesure [{$widthAtRest}] au repos : il n'est pas retiré du flux visuel.");
 
-    $page->keys(DOCUMENT_BODY, 'Tab');
+    $page->keys(BrowserAssertions::DOCUMENT_BODY, 'Tab');
 
     $clipFocused = $settled(
         static fn (): mixed => $page->script($computed('a[href="#main"]', 'clip-path')),
@@ -267,7 +184,7 @@ it('déplace le FOCUS sur le <main> quand le lien de saut est ACTIVÉ (AC3)', fu
     $page = visit('/_layouts');
 
     // Le chemin réel de l'utilisateur : on arrive au lien par Tab, on l'active.
-    $page->keys(DOCUMENT_BODY, 'Tab');
+    $page->keys(BrowserAssertions::DOCUMENT_BODY, 'Tab');
     $page->keys('a[href="#main"]', 'Enter');
 
     $focused = $page->script(
@@ -498,10 +415,17 @@ it('ferme un toast immédiatement au bouton, sans attendre sa durée (AC6)', fun
 
     $page->click('#toast-dismiss [data-toast-dismiss]');
 
-    $elapsed = $waitUntilValue($readDismissable, 'none', 5_000, 'fermeture au bouton');
-
-    expect($elapsed)
-        ->toBeLessThan(5_000, "Le toast ne s'est pas fermé au clic en moins de 5 s alors que sa durée est de 60 s.");
+    /*
+     * ⚠️ LA BORNE *EST* L'ASSERTION, il n'en faut pas une seconde.
+     *
+     * Ce toast a une durée de 60 000 ms : s'il se ferme dans les 5 000 ms de
+     * borne, c'est le bouton, et rien d'autre. `waitUntilValue()` lève elle-même
+     * quand la borne est dépassée — donc un
+     * `expect($elapsed)->toBeLessThan(5_000)` derrière est TOUJOURS vrai, et son
+     * message désigne un coupable que personne n'a mesuré. Retiré à la revue du
+     * 2026-08-08 (il l'était aussi ici et dans le test suivant).
+     */
+    $waitUntilValue($readDismissable, 'none', 5_000, 'fermeture au bouton (durée de 60 s : seul le bouton peut fermer dans cette borne)');
 });
 
 it('laisse un toast à durée invalide ouvert, ET fermable à la main (AC6 — chemin d\'erreur)', function () use (
@@ -557,10 +481,14 @@ it('laisse un toast à durée invalide ouvert, ET fermable à la main (AC6 — c
 
     $page->click('#toast-broken [data-toast-dismiss]');
 
-    $elapsed = $waitUntilValue($readBroken, 'none', 5_000, 'fermeture au bouton d\'un toast à durée invalide');
-
-    expect($elapsed)
-        ->toBeLessThan(5_000, 'Le bouton ne ferme pas un toast dont la durée est invalide : la garde sur la durée a emporté le câblage du bouton.');
+    // La borne EST l'assertion : aucune minuterie n'est programmée sur ce
+    // toast, donc seule la garde qui câble le bouton peut le fermer ici.
+    $waitUntilValue(
+        $readBroken,
+        'none',
+        5_000,
+        'fermeture au bouton d\'un toast à durée invalide (si elle n\'arrive pas, la garde sur la durée a emporté le câblage du bouton)',
+    );
 });
 
 /*

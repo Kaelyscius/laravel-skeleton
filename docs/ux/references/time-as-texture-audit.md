@@ -84,6 +84,25 @@ Chaque mention temporelle des écrans porte la classe `.temporal`, et **elle
 seule** — c'est la raison d'être de cette classe. Elle donne la liste exhaustive
 en une commande, ce qui rend l'audit rejouable quand les écrans évolueront.
 
+> **Depuis la Story 1.12, l'instrument existe aussi côté production.** Les quatre
+> composants `<x-time-relative>`, `<x-time-absolute>`, `<x-time-dual>` et
+> `<x-time-since>` émettent un attribut `data-temporal`, un par mention (un
+> `<x-time-dual>` compte pour **une**, pas deux). Le même inventaire se rejoue
+> donc sur le rendu réel :
+>
+> ```bash
+> grep -c 'data-temporal' <rendu>          # ou, dans le navigateur :
+> document.querySelectorAll('[data-temporal]').length
+> ```
+>
+> Jusqu'ici ce §4 décrivait un instrument qui n'avait de référent que sur les
+> écrans de référence : le jour où les vraies pages les remplacent, le `grep`
+> ci-dessus n'aurait plus rien trouvé et l'audit se serait cru exhaustif en ne
+> comptant rien. Un test assère que les 4 composants le portent
+> (`tests/Feature/TimeAsTextureTest.php`, AC10) — mais, comme le `grep`, il ne
+> juge pas l'INTENTION de la liste : c'est un instrument de relecture, pas un
+> garde-fou. L'audit du rendu réel appartient à la **Story 10.5**.
+
 > ⚠️ Cette vérification n'est **pas** un test automatisé, et ne doit pas être
 > présentée comme tel. Personne n'a su nommer la mutation qui la ferait rougir
 > utilement — le même raisonnement qui a fait écarter, au roundtable du

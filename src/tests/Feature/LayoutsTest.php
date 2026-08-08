@@ -6,6 +6,7 @@ use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
+use Tests\Support\BladeTemplates;
 use Tests\Support\RouteTable;
 
 uses(RefreshDatabase::class);
@@ -115,6 +116,55 @@ $findJavaScriptExpressions = static function (string $source) use ($stripComment
     return $found;
 };
 
+/**
+ * Les templates soumis au scan « zéro expression JS » (Story 1.12, AC9).
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * TOUS LES COMPOSANTS, PAS UN SEUL FICHIER NOMMÉ EN DUR
+ *
+ * La rédaction d'origine lisait `toast.blade.php` et rien d'autre. Le jour où un
+ * second composant est piloté par Alpine — c'est la Story 1.12 — sa contrainte
+ * « zéro expression inline » n'a plus AUCUN garde-fou : celui qui existe regarde
+ * ailleurs, et il est vert.
+ *
+ * La marche est RÉCURSIVE (un `glob` plat raterait `components/layouts/`) et les
+ * pages de démonstration sont ramassées PAR MOTIF, jamais nommées une à une :
+ * une démo ajoutée sortirait sinon du périmètre en silence. Même mécanisme que
+ * le scan RÈGLE 1 de BladeComponentsTest, délibérément.
+ *
+ * ⚠️ AUCUNE EXEMPTION AUJOURD'HUI, ET LE MÉCANISME EXISTE QUAND MÊME.
+ * `_layouts-demo.blade.php` contient `#toast-broken`, un chemin d'erreur écrit
+ * en HTML brut avec `x-data="toast"` : ce sont des références nues, donc il est
+ * conforme et n'a besoin d'aucune exemption. Le jour où il en faudra une, elle
+ * devra être NOMMÉE ici, fichier par fichier — jamais un filtre par préfixe.
+ * Leçon de la Story 1.11 : `$focusRingUtilities` est une liste nommée
+ * précisément parce qu'un filtre par préfixe avait désarmé un garde-fou d'un
+ * seul caractère.
+ *
+ * @return list<string>
+ */
+$scannedTemplates = static function (): array {
+    /*
+     * ⚠️ EXEMPTIONS PAR CHEMIN RELATIF, UNE PAR LIGNE, AVEC SON MOTIF.
+     *
+     * La liste est vide, et le test de comptage plus bas est ce qui l'empêche de
+     * se remplir en silence : exempter un fichier fait tomber le compte de
+     * BladeTemplates::EXPECTED_COUNT, donc rougir. La rédaction d'origine
+     * écrivait « Vide, et c'est vérifié » sans que rien ne le vérifie — une
+     * affirmation sans référent, dans le fichier qui traque ce motif. Le test
+     * ci-dessous l'assère désormais explicitement. (Revue du 2026-08-08.)
+     *
+     * `_layouts-demo.blade.php` n'a PAS besoin d'exemption : son `#toast-broken`
+     * porte `x-data="toast"`, une référence nue, donc conforme.
+     *
+     * Type attendu : une liste de chemins relatifs (`list<string>`), celui que
+     * `BladeTemplates::scanned()` déclare en `@param`.
+     */
+    $exemptions = [];
+
+    return BladeTemplates::scanned($exemptions);
+};
+
 /*
 |--------------------------------------------------------------------------
 | AC8 — Alpine sans expression inline (préparation CSP, sans allumer la CSP)
@@ -162,7 +212,32 @@ it('détecte une expression JS, et seulement elle (auto-contrôle du scanner AC8
     expect($findJavaScriptExpressions("<button onclick='close()'></button>"))
         ->not->toBeEmpty('Un onclick en guillemets simples n\'est pas détecté.');
 
+    /*
+     * ⚠️ LES MÊMES, ÉCRITS SUR PLUSIEURS LIGNES — ajouté par la Story 1.12 (AC9).
+     *
+     * Le scan ne lisait qu'un seul fichier, dont tous les attributs Alpine
+     * tenaient sur une ligne. Les 4 composants <x-time-*> écrivent les leurs un
+     * par ligne, indentés : si le motif exigeait un espace simple avant
+     * l'attribut, il ne verrait plus rien — et le comptage de fichiers, lui,
+     * resterait parfaitement vert. C'est le cas que le scanner ÉLARGI pourrait
+     * manquer, donc c'est celui que son auto-contrôle doit exercer ; l'inverse
+     * (exercer ce qu'il attrape déjà) est la leçon coûteuse de la 1.11.
+     */
+    expect($findJavaScriptExpressions("<time\n    datetime=\"x\"\n    x-init=\"start()\"\n></time>"))
+        ->not->toBeEmpty('Un attribut à instruction écrit sur sa propre ligne n\'est pas détecté.');
+    expect($findJavaScriptExpressions("<time\n    x-text=\"label + ' !'\"\n></time>"))
+        ->not->toBeEmpty('Une expression composée écrite sur sa propre ligne n\'est pas détectée.');
+    expect($findJavaScriptExpressions("<time\n    @click='refresh()'\n></time>"))
+        ->not->toBeEmpty('Un gestionnaire multi-lignes en guillemets simples n\'est pas détecté.');
+
+    // Un accès de propriété n'est PAS une référence nue : `label.value` exige un
+    // évaluateur d'expression, donc 'unsafe-eval'.
+    expect($findJavaScriptExpressions('<time x-text="label.value"></time>'))
+        ->not->toBeEmpty('Un accès de propriété en x-text n\'est pas détecté.');
+
     // Faux positifs à ne pas produire : les références nues, et le PHP alentour.
+    expect($findJavaScriptExpressions("<time\n    x-data=\"timeRelative\"\n    x-text=\"label\"\n></time>"))
+        ->toBeEmpty('Les références nues écrites une par ligne sont pourtant ce que l\'AC8 autorise.');
     expect($findJavaScriptExpressions('<div x-data="toast" x-show="open" x-cloak></div>'))
         ->toBeEmpty('Les références nues sont pourtant ce que l\'AC8 autorise.');
     expect($findJavaScriptExpressions("<div x-data='toast' x-show='open'></div>"))
@@ -171,7 +246,7 @@ it('détecte une expression JS, et seulement elle (auto-contrôle du scanner AC8
         ->toBeEmpty('Le HTML et le Blade ordinaires ne sont pas du JavaScript.');
 });
 
-it('ne laisse AUCUNE expression JS dans toast.blade.php (AC8)', function () use ($findJavaScriptExpressions): void {
+it('ne laisse AUCUNE expression JS dans AUCUN template piloté par Alpine (AC8 — élargi par la Story 1.12, AC9)', function () use ($findJavaScriptExpressions, $scannedTemplates): void {
     /*
      * Ce test REMPLACE le dos-d'âne daté de la Story 1.11
      * (« ne livre AUCUN comportement d'auto-fermeture »), dont le commentaire
@@ -179,19 +254,70 @@ it('ne laisse AUCUNE expression JS dans toast.blade.php (AC8)', function () use 
      *
      * Il n'interdit plus le comportement : il interdit qu'il soit écrit INLINE.
      * La différence est tout l'objet de l'AC8 — la CSP n'est pas allumée
-     * aujourd'hui (CSP_ENABLED=false), et le jour où elle le sera, ce fichier
-     * n'aura rien à réécrire.
+     * aujourd'hui (CSP_ENABLED=false), et le jour où elle le sera, ces fichiers
+     * n'auront rien à réécrire.
      *
-     * Vu rouge : en remplaçant `x-show="open"` par `x-show="open === true"`,
-     * puis en câblant le bouton avec `@click="close()"`.
+     * ⚠️ IL NE LISAIT QU'UN SEUL FICHIER, ÉCRIT EN DUR (`toast.blade.php`).
+     * La Story 1.12 ajoute un second composant piloté par Alpine : la contrainte
+     * « zéro expression inline » de son AC6 n'aurait eu AUCUN garde-fou, puisque
+     * le seul qui existait regardait ailleurs. Ce n'est pas un élargissement de
+     * périmètre, c'est le garde-fou qui rejoint son objet.
+     *
+     * Vu rouge : en remplaçant `x-show="open"` par `x-show="open === true"` dans
+     * toast.blade.php, puis en posant `@click='refresh()'` — EN GUILLEMETS
+     * SIMPLES — dans time-relative.blade.php.
      */
-    $expressions = $findJavaScriptExpressions(
-        (string) file_get_contents(base_path('resources/views/components/toast.blade.php')),
-    );
+    $templates = $scannedTemplates();
 
-    expect($expressions)
-        ->toBeEmpty('toast.blade.php contient des expressions JS : ' . implode(' / ', $expressions)
-            . ' — elles exigeraient \'unsafe-eval\' ou \'unsafe-inline\'. La logique appartient à resources/js/app.js.');
+    foreach ($templates as $template) {
+        $expressions = $findJavaScriptExpressions((string) file_get_contents($template));
+
+        expect($expressions)
+            ->toBeEmpty(basename($template) . ' contient des expressions JS : ' . implode(' / ', $expressions)
+                . ' — elles exigeraient \'unsafe-eval\' ou \'unsafe-inline\'. La logique appartient à resources/js/app.js.');
+    }
+});
+
+it('scanne bien TOUS les templates concernés, sous-dossiers et démos compris (AC9)', function () use ($scannedTemplates): void {
+    /*
+     * Le contrôle de COMPTAGE. Sans lui, un fichier ajouté — ou un `glob` non
+     * récursif qui raterait `components/layouts/` — sortirait du périmètre en
+     * silence : le test ci-dessus resterait vert en n'inspectant rien de
+     * nouveau. C'est la forme exacte du garde-fou qui ne garde plus rien.
+     *
+     * ⚠️ Le comptage seul ne suffit pas : 16 fichiers pourraient être 16 fois le
+     * même. On vérifie donc aussi que la marche atteint les DEUX endroits que le
+     * mécanisme d'origine ne voyait pas — un sous-dossier, et une page de
+     * démonstration ramassée par motif.
+     */
+    $templates = $scannedTemplates();
+
+    expect($templates)
+        ->toHaveCount(BladeTemplates::EXPECTED_COUNT, 'Les 12 composants (dont les 2 layouts et les 4 <x-time-*>) + les 4 pages de démonstration sont attendus : un fichier a été ajouté ou retiré sans mettre ce garde-fou à jour.');
+
+    /*
+     * ⚠️ ET LE PÉRIMÈTRE NON FILTRÉ VAUT LE MÊME NOMBRE.
+     *
+     * Le comptage ci-dessus est fait APRÈS le filtre d'exemptions : il rougirait
+     * bien si quelqu'un exemptait un fichier — mais rien n'empêchait de
+     * « corriger » le rouge en passant 16 à 15, ce qui est la manière dont un
+     * garde-fou meurt en ayant l'air d'être entretenu. On compare donc les deux
+     * périmètres : la liste est vide, et c'est désormais VÉRIFIÉ, pas affirmé.
+     * (Revue du 2026-08-08.)
+     */
+    expect($templates)
+        ->toHaveCount(count(BladeTemplates::scanned()), 'Une exemption a été ajoutée : elle doit être NOMMÉE dans $scannedTemplates avec son motif, et son retrait du périmètre assumé ici.');
+
+    $relative = array_map(BladeTemplates::relative(...), $templates);
+
+    expect(in_array('resources/views/components/layouts/public.blade.php', $relative, true))
+        ->toBeTrue('La marche ne descend pas dans components/layouts/ : un glob non récursif rate les sous-dossiers.');
+
+    expect(in_array('resources/views/_time-demo.blade.php', $relative, true))
+        ->toBeTrue('Les pages de démonstration ne sont pas ramassées par motif : une démo ajoutée sortirait du périmètre sans rien faire rougir.');
+
+    expect(in_array('resources/views/components/time-relative.blade.php', $relative, true))
+        ->toBeTrue('Le composant que l\'AC6 pilote en Alpine n\'est pas scanné : sa contrainte « zéro expression inline » n\'aurait aucun garde-fou.');
 });
 
 it('câble bien le comportement du toast, plutôt que de simplement l\'interdire (AC8)', function () use ($stripComments): void {

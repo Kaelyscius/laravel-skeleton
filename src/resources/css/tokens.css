@@ -77,6 +77,42 @@
     --leading-prose: 1.7;
     --max-prose: 720px;
 
+    /*
+     * Largeur réservée des mentions temporelles (ADR-0012 §7, Story 1.12).
+     *
+     * « Largeur réservée pour que le refresh Alpine 60 s de <x-time-relative>
+     * ne fasse pas tressauter la page » — la phrase est de l'ADR, ce token en
+     * est la transcription. Sans lui, le passage de « il y a 59 minutes » à
+     * « il y a 1 heure » raccourcit la boîte de 3 caractères et décale tout ce
+     * qui suit sur la ligne, une fois par minute, sur une page que personne ne
+     * touche.
+     *
+     * 18ch couvre le plus long libellé que le rafraîchissement peut produire
+     * (« il y a 59 secondes », 18 caractères) : en fonte monospace, `ch` est
+     * exactement l'avance d'un glyphe.
+     *
+     * ⚠️ Ce token existe aussi parce qu'une arbitrary value `min-w-[18ch]` est
+     * ATTRAPÉE par le scanner RÈGLE 1 (BladeComponentsTest). Le garde-fou ne se
+     * contourne pas : il se satisfait.
+     */
+    --width-temporal: 18ch;
+
+    /*
+     * Largeur réservée de la forme COURTE (revue du 2026-08-08).
+     *
+     * `--width-temporal` est dimensionné sur « il y a 59 secondes ». En forme
+     * courte — CELLE DES ÉCRANS DE RÉFÉRENCE — le plus long libellé que le
+     * rafraîchissement peut produire est « il y a 59 min », 13 caractères.
+     * Réserver 18ch sous « il y a 14 h » creuse 5 caractères de vide au milieu
+     * de « Dernier stream il y a 14 h » (02-home-offline.html:85), sur un
+     * élément `inline-block`, donc en plein flux de la phrase.
+     *
+     * Une largeur réservée existe pour empêcher un tressautement, pas pour en
+     * creuser un trou : chaque forme réserve donc la sienne. 14ch laisse un
+     * caractère de marge sur le pire cas, comme 18ch en forme longue.
+     */
+    --width-temporal-short: 14ch;
+
     /* Motion — jamais bouncy (UX-DR-43) */
     --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
     --duration-default: 200ms;

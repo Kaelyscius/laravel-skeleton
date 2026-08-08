@@ -25,6 +25,11 @@
       <x-toast>  → s'affiche, ne se ferme jamais seul, bouton inopérant.
                    (`x-data="toast"` ne résout rien, `x-show="open"` non plus)
 
+      <x-time-relative> → affiche le libellé du serveur et ne le rafraîchit
+                   JAMAIS. (Story 1.12) Le plus sournois des deux : rien n'a
+                   l'air cassé, la durée est simplement fausse à partir de la
+                   minute suivante — « il y a 1 minute » pour l'éternité.
+
     `app.js` est bien chargé par @vite — il enregistre sa fabrique sur
     `alpine:init`, un évènement qui n'est jamais émis ici. Le bundle est donc
     servi pour rien : c'est le prix d'une seule feuille d'entrée, assumé.

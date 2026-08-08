@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Design system tokens — single source of truth (UX-DR-40/41/44/45, ADR-0008,
  * docs/architecture/2-stack-technique.md §2.5).
  * Three things are proven here:
- *   1. resources/css/tokens.css declares the 15 canonical tokens with the exact
+ *   1. resources/css/tokens.css declares the 17 canonical tokens with the exact
  *      values pinned by §2.5.
  *   2. resources/css/app.css imports them and bridges them to Tailwind 4 via an
  *      @theme block (Tailwind 4 is CSS-first — there is no tailwind.config.js).
@@ -25,7 +25,14 @@ declare(strict_types=1);
  */
 
 /**
- * The 15 canonical tokens (AC1) — name => exact declared value.
+ * The 17 canonical tokens (AC1) — name => exact declared value.
+ *
+ * Fifteen at the end of Story 1.8; `--width-temporal` arrived with Story 1.12,
+ * and `--width-temporal-short` with its code review (the short form is the one
+ * the reference screens use, and 18ch under « il y a 14 h » digs a hole).
+ * This table IS the guard: adding a token to tokens.css without
+ * adding it here leaves it unbridged and ungoverned, which is precisely the
+ * failure the story below ("no token declared but ungoverned") exists to catch.
  *
  * @return array<string, string>
  */
@@ -46,6 +53,16 @@ $canonicalTokens = static fn (): array => [
     '--font-mono' => "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace",
     '--leading-prose' => '1.7',
     '--max-prose' => '720px',
+    // Story 1.12 (AC8) — largeur réservée des mentions temporelles. Sans elle,
+    // `<x-time-relative>` rétrécirait à chaque rafraîchissement et décalerait la
+    // ligne ; avec une arbitrary value `min-w-[18ch]`, le scanner RÈGLE 1 de
+    // BladeComponentsTest l'attraperait. Le garde-fou se satisfait, il ne se
+    // contourne pas.
+    '--width-temporal' => '18ch',
+    // Revue du 2026-08-08 — la forme courte (celle des écrans de référence)
+    // réserve sa propre largeur : 18ch sous « il y a 14 h » creuse 5 caractères
+    // de vide au milieu d'une phrase.
+    '--width-temporal-short' => '14ch',
     '--ease-default' => 'cubic-bezier(0.16, 1, 0.3, 1)',
     '--duration-default' => '200ms',
 ];
@@ -213,7 +230,7 @@ $blades = static function (): array {
     return $files;
 };
 
-it('declares the 15 canonical design tokens with the exact values pinned by §2.5', function () use ($readCss, $canonicalTokens): void {
+it('declares the 17 canonical design tokens with the exact values pinned by §2.5', function () use ($readCss, $canonicalTokens): void {
     $css = $readCss('resources/css/tokens.css');
 
     foreach ($canonicalTokens() as $token => $value) {
@@ -271,6 +288,10 @@ it('maps every Tailwind theme variable onto a token rather than a literal', func
         // Bridged after the Story 1.8 code review — see the test below for why.
         '--leading-prose' => '--leading-prose',
         '--container-measure' => '--max-prose',
+        // Bridged in Story 1.12 — `--container-*` is the namespace that produces
+        // the width utilities, so this is what makes `min-w-temporal` exist.
+        '--container-temporal' => '--width-temporal',
+        '--container-temporal-short' => '--width-temporal-short',
         '--default-transition-duration' => '--duration-default',
         '--default-transition-timing-function' => '--ease-default',
     ];

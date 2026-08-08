@@ -65,6 +65,24 @@
     --container-measure: var(--max-prose);
 
     /*
+     * Largeur réservée des mentions temporelles (Story 1.12, AC8). Même
+     * namespace `--container-*` que `measure` ci-dessus : c'est lui qui produit
+     * les utilities de largeur, donc `min-w-temporal`.
+     *
+     * Sans ce pont, --width-temporal existerait sans rien gouverner — le défaut
+     * exact que le test « aucun token déclaré mais ingouverné » de la Story 1.8
+     * existe pour attraper.
+     */
+    --container-temporal: var(--width-temporal);
+
+    /*
+     * Son pendant pour la forme courte (revue du 2026-08-08) : `min-w-temporal`
+     * réserve 18ch, dimensionnés sur « il y a 59 secondes », ce qui creuse un
+     * trou sous « il y a 14 h ». Même namespace, même mécanisme.
+     */
+    --container-temporal-short: var(--width-temporal-short);
+
+    /*
      * Motion (UX-DR-43). Mapper --ease-default ne suffit pas : les utilities
      * `transition` / `transition-colors` lisent --default-transition-*, donc sans
      * ces deux lignes elles tournent aux défauts Tailwind (150ms, cubic-bezier

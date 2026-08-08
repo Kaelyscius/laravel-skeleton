@@ -64,6 +64,35 @@ final class AppServiceProvider extends ServiceProvider
         // Spatie Health route registration; production deployment checklists
         // should verify the env is set.
 
+        /*
+         * ─────────────────────────────────────────────────────────────────────
+         * PAS DE `Carbon::setLocale()` ICI, ET C'EST UNE DÉCISION (Story 1.12, AC1)
+         *
+         * L'AC1 exigeait cette ligne, sur la foi d'un `grep LocaleUpdated`
+         * restreint à `vendor/laravel/framework/`. Le framework, en effet,
+         * n'écoute pas cet évènement. Mais CARBON, LUI, L'ÉCOUTE : il embarque
+         * son propre provider Laravel, auto-découvert par Composer —
+         *
+         *   vendor/nesbot/carbon/src/Carbon/Laravel/ServiceProvider.php
+         *     boot()  → updateLocale() depuis app('translator')
+         *     puis    → listen(LocaleUpdated) → updateLocale()
+         *
+         * Constaté par la campagne de mutation du 2026-08-08 : retirer la ligne
+         * ne faisait rougir AUCUN test. Elle ne gardait rien — la propriété
+         * était déjà vraie, et le référent se trouvait un répertoire plus loin
+         * que là où la story avait regardé.
+         *
+         * La conserver serait donc une SECONDE SOURCE DE VÉRITÉ, et strictement
+         * plus faible que celle qui existe : posée une fois au boot, elle ne
+         * suivrait pas un `app()->setLocale()` à chaud, là où le listener de
+         * Carbon le suit.
+         *
+         * Ce qui manquait vraiment, et qui existe désormais : les DEUX TESTS qui
+         * OBSERVENT la propriété (tests/Feature/TimeAsTextureTest.php, AC1). Ils
+         * rougissent si l'auto-découverte du provider de Carbon est désactivée —
+         * vu rouge via `extra.laravel.dont-discover`.
+         */
+
         Health::checks([
             DatabaseHealthCheck::new(),
         ]);

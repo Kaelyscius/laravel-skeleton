@@ -7,10 +7,10 @@
 
 ## Où j'en suis
 
-L'appareil de vérification est réparé — 3 workflows CI verts, **98 tests**, ratchet ECS/PHPStan.
-**Un navigateur affiche désormais ce projet** : le spike runner est fait, `make test-browser`
-existe et son rouge a été observé. Epic 1 : stories 1.1 → 1.8 et 1.11 `done`, 1.9 · 1.10a · 1.12 · 1.13 `backlog`,
-Epics 2 à 11 non démarrés.
+L'appareil de vérification est réparé — 3 workflows CI verts, **149 tests** + **29 tests
+navigateur**, ratchet ECS/PHPStan 0/0/0. **Un navigateur affiche désormais ce projet** : le spike
+runner est fait, `make test-browser` existe et son rouge a été observé. Epic 1 : stories 1.1 → 1.8,
+1.11 et 1.13 `done`, **1.12 `review`**, 1.9 · 1.10a `backlog`, Epics 2 à 11 non démarrés.
 
 Le roundtable du 2026-07-30 a **réordonné le reliquat d'Epic 1** et arbitré la conception de
 l'écran offline : voir [ADR-0011](adr/ADR-0011-observation-avant-composition.md) et
@@ -153,56 +153,64 @@ Trois choses à retenir, qui resserviront :
 > un état, pas une 5ᵉ surface). Le code la commentait sans que le document le
 > dise — forme exacte du motif dominant.
 
-## Prochaine action — Story 1.13 (layouts). ORDRE INVERSÉ le 2026-08-08.
+## Prochaine action — Story 1.9 (self-hosting IBM Plex).
 
-👉 **`1.13 → 1.12 → 1.9 → 1.10a`.** La 1.13 passe **avant** la 1.12 : décision PO
-du 2026-08-08, inscrite en amendement à
-[ADR-0011 §1](adr/ADR-0011-observation-avant-composition.md).
+👉 **`1.13 ✅ → 1.12 ✅ → 1.9 → 1.10a`.** L'inversion `1.13` avant `1.12`,
+décidée le 2026-08-08 en amendement à
+[ADR-0011 §1](adr/ADR-0011-observation-avant-composition.md), a produit ce
+qu'elle promettait : le rafraîchissement client de la 1.12 a été **observé dans
+un navigateur**, pas déclaré.
 
-**Motif** : Alpine n'entre dans le DOM qu'avec `@livewireScripts`, câblé par la
-1.13. L'AC « refresh Alpine 60 s » de la 1.12 était donc `SANS-RÉFÉRENT` — le
-même défaut que l'AC7 du toast en 1.11. Plutôt que de scinder une deuxième fois
-et de faire de la 1.13 le dépotoir des reports (layouts + CSP + toast + temps),
-on livre les layouts d'abord. Un layout n'a besoin d'aucun composant pour naître,
-et les 6 primitives de la 1.11 existent déjà.
+**La 1.12 est en `review`** (revue de code non faite au moment où ces lignes sont
+écrites). Elle a livré les 4 composants `<x-time-*>`, `Alpine.data('timeRelative')`,
+la table de non-dérive serveur ↔ client, et l'élargissement du scanner
+« zéro expression JS » à tous les templates.
+
+**Ce que la 1.12 rend enfin possible pour la 1.9** : `--font-mono` est désormais
+*consommé* par du code de production et **mesuré** dans le navigateur (mutation
+du token à chaud). Le jour où la 1.9 posera les `@font-face`, un test existe déjà
+pour dire si la police résolue a changé.
 
 ### Commande d'ouverture de la prochaine session
 
 ```bash
-make up-local && make test && make quality-ratchet
-# attendu : 98 tests exit 0 · ratchet 0/0/0
+make up-local && make test && make quality-ratchet && make npm-build && make test-browser
+# attendu : 149 tests exit 0 · ratchet 0/0/0 · 29 tests navigateur verts
 ```
 
 Puis, **dans cet ordre** :
 
 ```
-/bmad-create-story 1.13          # le fichier de story n'existe pas encore
-                                 # → relire les AC AVANT de lancer le dev (étape 0 de la boucle)
-/bmad-dev-story _bmad-output/implementation-artifacts/1-13-*.md
-make test && make quality-ratchet && make test-browser
-/bmad-code-review
+/bmad-code-review                # la 1.12 attend sa revue — en fenêtre NEUVE
+/bmad-create-story 1.9
+/bmad-dev-story _bmad-output/implementation-artifacts/1-9-*.md
 ```
 
-Boucle qualité : la 1.13 est de **niveau R**, pas S (elle touche un invariant
-transverse — la CSP et le `<head>` dont dépendent toutes les stories suivantes).
-Donc `/bmad-code-review` **+ relecture ciblée de l'invariant touché**, et
-l'étape 4 s'ajoute : `/security-review` + `composer audit && npm audit`.
+⛔ **`make npm-build` AVANT chaque `make test-browser`** dès que `app.js` ou la
+CSS bouge — y compris entre deux mutations. Le runner ne construit rien.
 
-### Passe de definition-of-ready — FAITE le 2026-08-08, avant d'écrire la story
+### Ce que la 1.12 a appris, et qui vaut pour la suite
 
-La requalification des AC de la 1.13 était déjà portée dans `epics.md` (passe du
-2026-07-30 + l'AC toast ajouté le 2026-08-08). Vérification des référents faite
-ce soir :
-
-| Nom cité dans un AC | Résout ? |
-|---|---|
-| `@livewireScripts` / Alpine | ✅ `livewire/livewire ^4` en dépendance directe (0e) |
-| `<x-toast>`, `<x-button>`, … | ✅ livrés et testés par la 1.11 |
-| preload fonts dans le `<head>` | ⚠️ **point d'insertion seulement** — renseigné par la 1.9. Ne PAS affirmer présent, sinon l'AC se valide sur un `<head>` vide |
-| bandeau cookie consent | ⚠️ **emplacement seulement** — rempli en Epic 4. Un bandeau factice serait un échafaudage plus permissif que la prod |
-| `sr-only focus:not-sr-only` | ✅ utilities Tailwind natives |
-| header sticky 48/56 px | ✅ valeur calculée → `make test-browser` existe (ADR-0013) |
-| `prefers-reduced-motion` | ✅ **réserve LEVÉE le 2026-08-08 (Story 1.13, T0)** : `visit('/x', ['reducedMotion' => 'reduce'])` fonctionne. Sonde jetable verte **dans les deux sens** — `matchMedia('(prefers-reduced-motion: reduce)').matches` vaut `true` avec l'option et `false` sans. Le fait que le même tableau soit aussi passé à `goto()` est sans effet. Règle CSS en `resources/css/motion.css`, importée **sans `layer()`** dans `app.css` : layer-ifiée, elle perdrait contre les utilities de transition et la préférence serait déclarée sans rien réduire |
+1. **Un `grep` restreint au mauvais répertoire fabrique un AC faux.** L'AC1
+   exigeait `Carbon::setLocale(config('app.locale'))` dans
+   `AppServiceProvider::boot()`, sur la foi d'un `grep LocaleUpdated` limité à
+   `vendor/laravel/framework/`. La campagne de mutation a montré que retirer la
+   ligne ne faisait rougir **aucun** test : **Carbon embarque son propre provider
+   Laravel** (`vendor/nesbot/carbon/src/Carbon/Laravel/ServiceProvider.php`), qui
+   écoute `LocaleUpdated` et fait déjà le travail — mieux, puisqu'il suit aussi
+   les changements à chaud. La ligne a été **retirée** ; les tests, eux, sont
+   restés et gardent désormais le vrai mécanisme (vus rouges via
+   `extra.laravel.dont-discover`). *Le référent existait un répertoire plus loin
+   que là où on avait regardé.*
+2. **Deux implémentations d'une même règle divergent, et la première dérive est
+   invisible.** `Intl.RelativeTimeFormat` sépare le nombre de son unité par une
+   **espace insécable** (`il y a 1 h`, U+00A0) là où Carbon emploie une espace
+   ordinaire. Rendu identique à l'écran, chaînes différentes. Seule la table de
+   cas partagée pouvait le voir.
+3. **Un compteur peut compter la mauvaise chose.** Le compteur de ticks
+   d'Alpine comptait les *réécritures* : la mutation « plafond des 7 jours
+   retiré » lui a survécu, parce qu'un intervalle programmé qui s'arrête à son
+   premier tir ne réécrit rien. Il compte désormais les *déclenchements*.
 
 ### Pièges qui coûteront cher si oubliés
 

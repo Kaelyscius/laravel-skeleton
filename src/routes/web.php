@@ -56,6 +56,46 @@ if (app()->environment(['local', 'testing'])) {
 
         return view('_layouts-demo-minimal');
     })->name('layouts.demo.minimal');
+
+    /*
+     * Démonstration des composants time-as-texture (Story 1.12, T10) — même
+     * double garde, et pour les mêmes raisons.
+     *
+     * Les instants sont calculés ICI plutôt que dans la vue : une page qui
+     * fabrique ses propres données est une page dont on ne sait plus ce qu'elle
+     * observe.
+     */
+    Route::get('/_time', function () {
+        abort_unless(app()->environment(['local', 'testing']), 404);
+
+        return view('_time-demo', [
+            // Une seconde : c'est ce qui rend le rafraîchissement observable en
+            // une seconde plutôt qu'en une minute. Un élément vieux de 59
+            // minutes rendrait le MÊME libellé à chaque tick pendant 60 s, et
+            // « le texte a changé » ne serait jamais vrai.
+            'ticking' => now()
+                ->subSeconds(1),
+            /*
+             * Un instant RÉCENT et lisible pour les deux sondes de chemin
+             * d'erreur (#time-broken-refresh, #time-broken-iso) : il faut qu'un
+             * recalcul réussi soit distinguable du marqueur serveur, donc un
+             * instant que le JS sait formater.
+             *
+             * ⚠️ Ce n'est PAS le référent de l'AC8 — le commentaire d'origine le
+             * disait et c'était faux (relevé à la revue du 2026-08-08). Le test
+             * de largeur pose lui-même 3540 s puis 3600 s sur #time-fast et ne
+             * lit jamais cette valeur.
+             */
+            'recent' => now()
+                ->subMinutes(59),
+            'ancient' => now()
+                ->subMonths(7),
+            'published' => now()
+                ->subMonths(8),
+            'updated' => now()
+                ->subMonths(2),
+        ]);
+    })->name('time.demo');
 }
 
 // Route de healthcheck pour Docker
