@@ -1,4 +1,4 @@
-# État du projet — 2026-08-08 (branche `main`)
+# État du projet — 2026-08-09 (branche `main`)
 
 > Point d'entrée de reprise. **Un seul fichier, écrasé à chaque session, jamais accumulé.**
 > Il n'a aucune autorité : il pointe vers `epics.md` et `sprint-status.yaml`, jamais l'inverse.
@@ -112,6 +112,91 @@ forme non — le rattrapage s'est fait en rafraîchissant les épinglages.
 > **8.5.4**. Un commentaire n'est contredit par rien : il se vérifie dans l'image
 > (`docker run --rm <image> php -r 'echo PHP_VERSION;'`), il ne se recopie pas du tag.
 
+## Supply chain — plan exécuté le 2026-08-09
+
+Le plan §8 de [`supply-chain-2026-08-08.md`](supply-chain-2026-08-08.md) a été exécuté.
+**Lots A, B, C, D faits. Lot E toujours ouvert.** Baseline rejouée avant de toucher quoi que ce
+soit : `composer audit` 0, `npm audit` 0, et les deux listes de retard identiques à celles du
+rapport — **rien n'avait été absorbé en silence** par un `composer update` / `npm install` nu.
+
+| Lot | Fait | Preuve |
+|---|---|---|
+| **A** — digest node | `FROM node:24.19.0-alpine3.23@sha256:244cc2b5…` | build + `node --version` → **v24.19.0**, `npm` → **11.17.0** |
+| **A bis** — digest composer | `FROM composer:2@sha256:4d71c3c2…` (= 2.10.2) | `composer --version` dans le conteneur → **2.10.2** |
+| **B** — composer | les 10 paquets du §5.1, `update` **ciblé** | **149 tests** verts · ratchet **0/0/0** · `composer audit` **0** |
+| **C** — npm | `vite` 8.2.1 puis `playwright` 1.62.1, **un par un** | `npm run build` OK · **29 tests navigateur** verts · `npm audit` **0** |
+| **D** — refus | revérifiés, pas recopiés | ci-dessous |
+| **E** — `@latest` du Dockerfile node | **non fait**, chantier séparé | → Epic 2 |
+
+### 🔴 Ce que le rapport avait manqué : `composer:2`
+
+Le §4.1 affirmait que `docker/node/Dockerfile` était **le seul** `FROM` non épinglé. C'était
+faux. `docker/php/Dockerfile:101` portait `FROM composer:2` — une **majeure flottante**, donc un
+épinglage strictement plus lâche que celui de node (qui avait au moins une version exacte). Le
+binaire qui résout et installe **toutes** les dépendances PHP du projet pouvait changer entre
+deux builds sans qu'aucun fichier du dépôt ne bouge.
+
+C'est le motif du projet appliqué au document qui le traque : **le rapport qui recense les
+affirmations sans référent en a produit une.** Corrigé dans le même passage.
+
+### La phrase fausse du Dockerfile node — corrigée, et datée
+
+`docker/node/Dockerfile` justifiait `apk upgrade` par « la reproductibilité de la BASE reste
+assurée par l'épinglage de l'image », alors qu'il n'épinglait que par tag. La phrase est
+désormais vraie, **et elle dit depuis quand elle l'est** (fausse du 2026-07-27 au 2026-08-09) et
+à quoi elle est suspendue : si le `@sha256:` disparaît, la justification disparaît avec.
+
+### ✅ Le blocage ADR-0013 : 0/10 après la montée de playwright
+
+Mesuré le 2026-08-09, 10 runs consécutifs de `make test-browser` :
+**0 blocage, 10/10 verts, 29 tests à chaque fois.** Référence d'août : **6 blocages / 10**.
+
+Deux choses à savoir avant d'en conclure quoi que ce soit :
+
+1. **La mesure isole bien `playwright`.** L'image du runner (`docker/php/Dockerfile` cible
+   `test`) **n'a pas été rebâtie** — vérifié : image de 27 h, Chromium **150.0.7871.181**
+   inchangé, `apk upgrade` non rejoué. La seule variable qui a bougé dans l'environnement du
+   runner est `playwright` 1.59.1 → 1.62.1, via le bind mount de `node_modules`.
+2. **Ce n'est PAS une comparaison contrôlée.** Le 6/10 d'août portait sur **8** tests navigateur
+   et une autre image ; le 0/10 porte sur **29**. Charge, durée et ordonnancement diffèrent.
+   → **Le bras témoin manque** : 10 runs à `playwright@1.59.1` *aujourd'hui*, même image, même
+   suite. Tant qu'il n'est pas fait, on a une **observation encourageante, pas une preuve que
+   l'amont est réparé** — et **la mitigation JUnit reste en place**. ADR-0013 dit déjà que la
+   retirer est un chantier à part entière ; ce chantier commence par ce bras témoin.
+
+> ⚠️ Au passage, un garde-fou a prouvé sa valeur : la révision Chromium attendue par Playwright
+> est passée de **1217 à 1234**. `link-alpine-chromium.sh` la **dérive** de `browsers.json` au
+> lieu de la coder en dur — la suite navigateur serait rouge à l'instant si le spike avait écrit
+> « 1217 ».
+
+### Lot D — vérifié, refusé, et le motif
+
+| Sujet | Verdict | Motif, **revérifié le 2026-08-09** |
+|---|---|---|
+| **Pest 5** (+ `pest-plugin-*`) | refusé | `composer show cmgmyr/phploc` → toujours **8.0.7**, toujours `php-file-iterator ^3\|^4\|^5\|^6`. Le verrou n'a pas bougé. Décision PO inchangée : Pest 4 + PHP Insights. |
+| **guzzle 8** | refusé | Installé **7.15.3** (monté en transitif). Le forcer, c'est sortir du périmètre testé par `laravel/framework`. Arrivera quand l'amont élargira. |
+| **Node 26** | refusé | v24 Active LTS jusqu'au **2026-10-20**, v26 LTS seulement le **2026-10-28**. Nous sommes le 2026-08-09. Raisonnement complet en tête de `docker/node/Dockerfile`. |
+
+**Et un refus qui s'est levé tout seul** : `laravel/roster` est passé **v0.5.1 → v1.0.0**. Le
+§5.3 le listait parmi les majeures « à ne pas forcer » — il n'a pas été forcé : `laravel/boost`
+2.5.3 exige désormais `^1.0.0`. C'est exactement le mécanisme que le §5.3 décrivait, observé.
+
+### ⚠️ Effet de bord à trancher : `composer update` a réécrit `src/CLAUDE.md`
+
+`laravel/boost` 2.5.3 lance `boost:update` en script post-update, qui a réécrit
+`src/CLAUDE.md` — un fichier **versionné**. Deux changements de sens opposé :
+
+- ✅ **Il supprime la liste de versions en dur** (« laravel/framework v13, pest v4… ») au profit
+  de « vérifie la version installée, ne la suppose pas ». C'est une assertion qui dérivait,
+  retirée.
+- 🔴 **Il ajoute une consigne impérative pointant vers `.ai/rules`, qui n'existe pas ici**
+  (vérifié : ni `.ai/rules`, ni `src/.ai/rules`). La consigne se termine par « si le répertoire
+  n'existe pas, continue » — donc inoffensive, mais c'est **une instruction sans référent
+  introduite par un outil dans un fichier du dépôt**, au neuvième exemplaire du motif.
+
+**Non tranché — décision PO attendue** : garder la réécriture, ou la révoquer et épingler
+`boost` pour que le script n'écrive plus dans un fichier versionné.
+
 ## Boucle qualité par story — écrite le 2026-08-07
 
 👉 **[`docs/process/03-boucle-qualite.md`](process/03-boucle-qualite.md)** est
@@ -155,16 +240,21 @@ Trois choses à retenir, qui resserviront :
 
 ## Prochaine action — Story 1.9 (self-hosting IBM Plex).
 
+> ⚠️ **`origin` est injoignable depuis les sessions d'agent** — `git fetch` répond
+> `Permission denied (publickey)`. Déjà constaté à la revue du 2026-08-08, toujours vrai le
+> 2026-08-09. Conséquence : **rien n'a été poussé**, aucune affirmation sur l'état distant n'est
+> possible, et la CI n'a rien vu de ces commits. `git push` est une action **manuelle d'Alex**.
+
 👉 **`1.13 ✅ → 1.12 ✅ → 1.9 → 1.10a`.** L'inversion `1.13` avant `1.12`,
 décidée le 2026-08-08 en amendement à
 [ADR-0011 §1](adr/ADR-0011-observation-avant-composition.md), a produit ce
 qu'elle promettait : le rafraîchissement client de la 1.12 a été **observé dans
 un navigateur**, pas déclaré.
 
-**La 1.12 est en `review`** (revue de code non faite au moment où ces lignes sont
-écrites). Elle a livré les 4 composants `<x-time-*>`, `Alpine.data('timeRelative')`,
-la table de non-dérive serveur ↔ client, et l'élargissement du scanner
-« zéro expression JS » à tous les templates.
+**La 1.12 est `done`** — la revue a été faite le 2026-08-08 (4 couches, 4 décisions
+PO, 22 correctifs appliqués, 8 reports). Elle a livré les 4 composants `<x-time-*>`,
+`Alpine.data('timeRelative')`, la table de non-dérive serveur ↔ client, et
+l'élargissement du scanner « zéro expression JS » à tous les templates.
 
 **Ce que la 1.12 rend enfin possible pour la 1.9** : `--font-mono` est désormais
 *consommé* par du code de production et **mesuré** dans le navigateur (mutation
@@ -181,10 +271,12 @@ make up-local && make test && make quality-ratchet && make npm-build && make tes
 Puis, **dans cet ordre** :
 
 ```
-/bmad-code-review                # la 1.12 attend sa revue — en fenêtre NEUVE
 /bmad-create-story 1.9
 /bmad-dev-story _bmad-output/implementation-artifacts/1-9-*.md
 ```
+
+*(La revue de la 1.12 est faite — 2026-08-08. Il ne reste plus de `/bmad-code-review` en
+attente.)*
 
 ⛔ **`make npm-build` AVANT chaque `make test-browser`** dès que `app.js` ou la
 CSS bouge — y compris entre deux mutations. Le runner ne construit rien.
@@ -352,7 +444,7 @@ mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à
 | **Sémantique `/health`** | Trois définitions coexistent : route Laravel tenant-gated, `<Location /health>` Apache mod_status, et docs/installeur qui promettent du JSON Laravel. Le critère go/no-go S7 en dépend. → Epic 3. |
 | **ADR-0004 non câblé** | `config/pulse.php` attend `PULSE_DB_CONNECTION`, jamais défini, et aucune connexion `pulse` n'existe dans `config/database.php`. Le conteneur `postgres-pulse` tourne pour rien. → Story 3.2. |
 | **PHPStan : 9 erreurs** | Toutes dans `config/*` (scaffolding vendor). Plafonnées par le ratchet, pas résorbées. |
-| **`vite@latest webpack@latest`** | Cible mouvante dans une image figée — même fragilité que le `npm@latest` déjà corrigé. `docker/node/Dockerfile`. |
+| **`vite@latest webpack@latest`** | Cible mouvante dans une image figée — même fragilité que le `npm@latest` déjà corrigé. `docker/node/Dockerfile:57,73` (+ `pnpm@latest`). **= Lot E du plan supply chain, délibérément non fait le 2026-08-09** : ce n'est pas une montée, c'est supprimer une cible mouvante qui a déjà cassé le build une fois. → Epic 2 (quality gates / installeur). |
 | **Node dans l'image PHP de production** | `docker/php/Dockerfile` installe `nodejs` → binaire de **52,5 Mo** embarqué dans l'image de prod. Surface d'attaque et poids non justifiés côté runtime PHP. Reliquat ou besoin réel de build ? Trouvé le 2026-07-31, **toujours ouvert**. |
 | ✅ **Dérive Node — quasi résorbée le 2026-08-06** | Était : image PHP v22.22.2 vs conteneur `node` v24.18, **deux majeures d'écart**. Alpine 3.24 fournit désormais v24.18.1, contre v24.18.0 côté `node`. Effet de bord du rafraîchissement du digest PHP, pas d'une correction ciblée. |
 | ✅ **Épinglage supply chain — COMPLÉTÉ le 2026-08-06** | `docker.yml` et `security.yml` utilisaient **9 tags mutables** (`@v6`, `@v4`, `@v2`…) alors que seul `ci.yml` était épinglé. Tout est désormais en SHA. Contrôle : `grep -rhoE "uses: [^ ]+" .github/workflows/*.yml \| grep -vE "@[a-f0-9]{40}$"` doit ne rien sortir. |
@@ -360,7 +452,7 @@ mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à
 | ✅ **7 advisories — CORRIGÉES le 2026-08-06** | `squizlabs/php_codesniffer` 3.13.5 → **3.13.6** (CVE-2026-67434, OS command injection, transitive d'ECS) et `league/commonmark` 2.8.3 → **2.9.0** (6 advisories DoS, transitive de `laravel/framework`). Toutes publiées les 5–6 août, détectées par `composer audit` pendant le spike. `composer audit` = 0, `npm audit` = 0. *Leçon : le seul fait de lancer `composer audit` régulièrement a rapporté 7 trouvailles en une session.* |
 | **CSP installée, câblée au groupe `web`, et ÉTEINTE** | *Ligne réécrite le 2026-08-08 (Story 1.13) : la précédente disait « CSP non configurée » et annonçait que la 1.13 serait « la première story à confronter `spatie/laravel-csp` à de vraies balises ». **C'était faux**, et la vérification tient en une commande : `curl -skS -o /dev/null -D - https://localhost/ \| grep -i content-security` ne renvoie rien.* État réel, établi par lecture du code : (1) **éteinte** — `src/.env:107` → `CSP_ENABLED=false`, motif en commentaire ; (2) le middleware **est** câblé (`bootstrap/app.php:41`) mais rend la main aussitôt — `AddCspHeaders` : `if (! config('csp.enabled')) return $response;` ; (3) le scoping « groupe `web` » **ne protège rien** — `horizon.php:85`, `pulse.php:122`, `telescope.php:94` attachent tous `'web'`. **Deux verrous techniques avant de l'allumer** : la build Alpine par défaut de Livewire contient `new Function(` (donc exigerait `'unsafe-eval'` ; la build CSP `dist/livewire.csp.js` n'est servie que si `config('livewire.csp_safe')` vaut `true`, et `config/livewire.php` n'est pas publié) ; et **le nonce n'est branché nulle part** — Livewire lit `Vite::cspNonce()`, Spatie expose `app('csp-nonce')`, rien ne relie les deux. Modèle de menace (2 pages) à écrire avant l'Epic 4 — sinon la CSP sera calibrée au moment où elle cassera l'embed Twitch, c'est-à-dire desserrée sous pression. ⚠️ **Le runner navigateur ne pourra pas aider** : `bypassCSP => true` est codé en dur dans le plugin (ADR-0013). Il faudra un test HTTP sur les en-têtes. ✅ **Le trou ne se creuse plus** : l'AC8 de la 1.13 impose Alpine sans expression inline dès maintenant (`toast.blade.php` ne porte que des références nues, toute la logique est dans `resources/js/app.js`, bundlée donc servie depuis l'origine), avec un test qui rougit si une expression réapparaît. Le jour de l'allumage, rien à réécrire. |
 | ✅ **CI navigateur : câblée ET son rouge PROUVÉ** | Job `browser` dans `ci.yml`, **bloquant**. Rouge observé sur une exécution réelle avec le token muté ([run 31203127602](https://github.com/Kaelyscius/laravel-skeleton/actions/runs/31203127602)) : `❌ Tests navigateur en échec — 1 test(s), 2 assertion(s), 1 échec(s)`. Vert confirmé après restauration ([run 31203881004](https://github.com/Kaelyscius/laravel-skeleton/actions/runs/31203881004)), 5 jobs verts. **C'est le premier garde-fou du projet livré avec son rouge démontré en CI, pas seulement en local.** |
-| **Blocage résiduel du runner** | `pest-plugin-browser` ne rend pas la main ~1 run sur 2. Cause partielle : `Process::fromShellCommandline()` fait survivre le `node` au SIGTERM. Mitigé par lecture du rapport JUnit, pas corrigé. Rouvrir à chaque montée du plugin ; **retirer la mitigation dès que l'amont est corrigé**. Voir ADR-0013. |
+| 🟡 **Blocage résiduel du runner — 0/10 le 2026-08-09, mais sans bras témoin** | Était : `pest-plugin-browser` ne rend pas la main ~1 run sur 2 (6/10 en août). Cause partielle : `Process::fromShellCommandline()` fait survivre le `node` au SIGTERM. **Après `playwright` 1.59.1 → 1.62.1 : 0 blocage sur 10 runs, image du runner inchangée** (Chromium 150.0.7871.181, non rebâtie — donc la mesure isole bien playwright). **Mais le 6/10 portait sur 8 tests et le 0/10 sur 29** : ce n'est pas un A/B. **La mitigation JUnit RESTE en place.** Prochain pas concret : 10 runs à `playwright@1.59.1` aujourd'hui, même image, même suite. Voir ADR-0013 et la section « Supply chain — plan exécuté ». |
 | **`POSTGRES_CONTAINER` est faux** | `docker ps -qf "name=laravel-app_postgres"` filtre par sous-chaîne et matche **aussi** `laravel-app_postgres_pulse` : la variable résout vers 2 identifiants. Dormant — elle n'est utilisée nulle part. Même piège évité pour le conteneur de test (d'où `_test_browser`). |
 | **`_bmad-output/` n'est ni versionné ni sauvegardé** | Gitignoré volontairement (`.gitignore:219`) — décision PO du 2026-07-30 : le dépôt est **public**, le planning ne doit pas l'être. Mais `scripts/ops/backup-local.sh` ne fait qu'un `pg_dump` : **le plan-of-record (epics.md, sprint-status.yaml, deferred-work.md, stories) n'existe qu'à un seul endroit, sur le disque.** Un plan sans référent durable, c'est le motif du projet appliqué à lui-même. Options : dépôt git privé séparé, ou élargir le périmètre de `backup-local.sh`. Non tranché. |
 | **À vérifier avant story (ADR-0012)** | Quotas YouTube Data API v3 en 2026 · conditions d'utilisation sur le rehosting des miniatures · état réel des API Instagram / TikTok. Marqués « non vérifiés » dans l'ADR plutôt qu'affirmés. |
@@ -369,8 +461,8 @@ mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à
 
 ```bash
 make up-local              # démarrer la stack
-make test                  # 98 tests, exit 0 attendu (Unit + Feature)
-make test-browser          # 8 tests navigateur, conteneur dédié profil `test``test`
+make test                  # 149 tests, exit 0 attendu (Unit + Feature)
+make test-browser          # 29 tests navigateur, conteneur dédié profil `test`
 make test-browser-down     # arrêter le runner navigateur
 make quality-ratchet       # plafond de dette — exit 0 attendu
 make hooks-check           # hooks versionnés actifs ?

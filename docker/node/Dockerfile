@@ -14,7 +14,15 @@
 # Fenêtre de migration : les deux dates se croisent presque (24 quitte l'Active
 # LTS le 20 octobre, 26 le devient le 28). C'est à ce moment-là qu'il faudra
 # passer à Node 26, et pas avant.
-FROM node:24.18.0-alpine3.23
+# node 24.19.0 / alpine 3.23 — épinglé par digest (le tag reste mutable).
+#
+# ⚠️ Le numéro ci-dessus doit être VÉRIFIÉ dans l'image, pas recopié du tag :
+#   docker compose run --rm node node --version
+#
+# Un tag de version exacte est *presque* immuable — et « presque » est
+# exactement ce que l'épinglage par digest existe pour supprimer. php et apache
+# appliquent la même règle (ADR-0007, § « Épinglage par digest »).
+FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995
 
 # Arguments utilisateur
 ARG UID=1000
@@ -34,8 +42,14 @@ ARG GID=1000
 # Arbitrage assumé : `apk upgrade` rend le build légèrement moins reproductible,
 # puisque les paquets évoluent entre deux exécutions. C'est le bon compromis
 # pour des correctifs de sécurité — la reproductibilité de la BASE reste
-# assurée par l'épinglage de l'image, et l'alternative (rester sur des paquets
-# vulnérables jusqu'à la prochaine publication amont) est pire.
+# assurée par l'épinglage par DIGEST du `FROM` ci-dessus, et l'alternative
+# (rester sur des paquets vulnérables jusqu'à la prochaine publication amont)
+# est pire.
+#
+# ⚠️ Cette phrase a été FAUSSE ici du 2026-07-27 au 2026-08-09 : elle avait été
+# recopiée de php/apache, qui épinglent par digest, alors que ce fichier
+# n'épinglait que par tag. Elle n'a de sens que tant que le `FROM` porte un
+# `@sha256:` — si le digest disparaît, cette justification disparaît avec.
 RUN apk upgrade --no-cache
 
 # Dépendances système
@@ -65,7 +79,8 @@ RUN corepack enable && \
 #
 # Le problème n'est pas la version : c'est qu'une cible mouvante (@latest) dans
 # une image figée finit toujours par diverger. L'image node embarque déjà un npm
-# compatible avec son propre runtime (11.16.0 pour node 24.18.0) — c'est la
+# compatible avec son propre runtime (11.17.0 pour node 24.19.0, vérifié dans
+# l'image et non recopié) — c'est la
 # seule version dont la compatibilité est garantie. Pour monter npm, monter
 # l'image de base.
 

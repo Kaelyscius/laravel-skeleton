@@ -98,7 +98,14 @@ RUN sed -i 's|127.0.0.1:9000|9000|g' /usr/local/etc/php-fpm.d/www.conf \
     && echo "listen.mode = 0666" >> /usr/local/etc/php-fpm.d/www.conf
 
 # Stage 2: Composer optimisé
-FROM composer:2 AS composer-stage
+# composer 2.10.2 — épinglé par digest (le tag reste mutable).
+#
+# ⚠️ `composer:2` était un tag de MAJEURE flottante : le binaire qui résout et
+# installe toutes les dépendances PHP du projet pouvait changer sous nos pieds
+# entre deux builds, sans qu'aucun fichier du dépôt ne bouge. C'était le `FROM`
+# le moins maîtrisé du projet, et l'audit du 2026-08-08 l'a manqué en
+# affirmant que node était le seul non épinglé (§4.1).
+FROM composer:2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040 AS composer-stage
 
 # Stage 3: Dependencies builder (optionnel - pour pre-build des dépendances)
 FROM base AS dependencies

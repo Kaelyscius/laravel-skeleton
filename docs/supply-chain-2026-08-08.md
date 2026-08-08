@@ -1,5 +1,15 @@
 # Audit supply chain — 2026-08-08
 
+> ✅ **PLAN EXÉCUTÉ le 2026-08-09.** Lots A, B, C et D faits et vérifiés ; le lot E reste
+> ouvert (Epic 2). **Ce fichier n'a pas été réécrit** — un instantané qu'on retouche après coup
+> cesse d'être un instantané. Le compte rendu d'exécution, avec ce que le plan avait *manqué*,
+> est dans [`ETAT.md`](ETAT.md), section « Supply chain — plan exécuté ».
+>
+> **Un défaut de ce rapport lui-même** : le §4.1 affirme que `node` est le seul `FROM` non
+> épinglé. C'est faux — `docker/php/Dockerfile:101` portait `FROM composer:2`, une **majeure
+> flottante**, donc un épinglage plus lâche encore. Le rapport qui traque les affirmations sans
+> référent en a produit une.
+>
 > **Instantané daté, pas un document vivant.** Son nom porte sa date : il ne peut donc pas
 > prétendre décrire l'état courant six semaines plus tard. Le précédent instantané est le bloc
 > « Rafraîchissement supply chain » de [`ETAT.md`](ETAT.md) (2026-08-06).
