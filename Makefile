@@ -717,11 +717,23 @@ boost-setup: ## Configurer Laravel Boost guidelines AI (interactif)
 	@echo "$(GREEN)✓ Boost guidelines configurées$(NC)"
 	@echo "$(YELLOW)💡 Configurez le MCP Claude Code avec: make boost-mcp$(NC)"
 
+# ⚠️ SEUL point d'entrée de `boost:update` depuis le 2026-08-09.
+#
+# Il était déclaré dans `post-update-cmd` de src/composer.json, donc il
+# réécrivait src/CLAUDE.md — un fichier VERSIONNÉ — à chaque `composer update`,
+# hors de toute revue. La montée 2.4.13 → 2.5.3 en a profité pour y injecter une
+# consigne impérative pointant vers un `.ai/rules` inexistant.
+#
+# Retiré de post-update-cmd. Il se lance donc explicitement, et son diff se relit
+# comme n'importe quel autre. Après l'avoir lancé : `make test` — le garde-fou
+# `src/tests/Unit/BoostGuidelinesTest.php` rougit si l'amont a réintroduit une
+# consigne sans référent.
 .PHONY: boost-update
-boost-update: ## Mettre à jour les guidelines Laravel Boost
+boost-update: ## Mettre à jour les guidelines Laravel Boost (explicite — relire le diff !)
 	$(call check_container,$(PHP_CONTAINER_NAME))
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan boost:update --ansi
 	@echo "$(GREEN)✓ Boost guidelines à jour$(NC)"
+	@echo "$(YELLOW)⚠️  src/CLAUDE.md est VERSIONNÉ : relisez 'git diff src/CLAUDE.md' puis lancez 'make test'.$(NC)"
 
 .PHONY: boost-mcp
 boost-mcp: ## Ajouter le MCP Laravel Boost à Claude Code (commande hôte)

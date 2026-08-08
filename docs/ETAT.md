@@ -7,10 +7,10 @@
 
 ## Où j'en suis
 
-L'appareil de vérification est réparé — 3 workflows CI verts, **149 tests** + **29 tests
+L'appareil de vérification est réparé — 3 workflows CI verts, **151 tests** + **29 tests
 navigateur**, ratchet ECS/PHPStan 0/0/0. **Un navigateur affiche désormais ce projet** : le spike
 runner est fait, `make test-browser` existe et son rouge a été observé. Epic 1 : stories 1.1 → 1.8,
-1.11 et 1.13 `done`, **1.12 `review`**, 1.9 · 1.10a `backlog`, Epics 2 à 11 non démarrés.
+1.11, 1.12 et 1.13 `done`, 1.9 · 1.10a `backlog`, Epics 2 à 11 non démarrés.
 
 Le roundtable du 2026-07-30 a **réordonné le reliquat d'Epic 1** et arbitré la conception de
 l'écran offline : voir [ADR-0011](adr/ADR-0011-observation-avant-composition.md) et
@@ -194,8 +194,55 @@ Deux choses à savoir avant d'en conclure quoi que ce soit :
   n'existe pas, continue » — donc inoffensive, mais c'est **une instruction sans référent
   introduite par un outil dans un fichier du dépôt**, au neuvième exemplaire du motif.
 
-**Non tranché — décision PO attendue** : garder la réécriture, ou la révoquer et épingler
-`boost` pour que le script n'écrive plus dans un fichier versionné.
+## Laravel Boost — cadré le 2026-08-09 (l'effet de bord ci-dessus, tranché)
+
+**Décision PO : on garde Boost, on le cadre.** Trois changements, plus un garde-fou.
+
+**1. `boost:update` ne tourne plus automatiquement.** Il était dans `post-update-cmd` de
+`src/composer.json` : il réécrivait `src/CLAUDE.md`, **fichier versionné**, à chaque
+`composer update`, hors de toute revue. Retiré. Point d'entrée unique : `make boost-update`,
+qui rappelle de relire le diff et de relancer `make test`.
+
+**2. Les guidelines sont enfin LUES.** `boost:update` écrit dans `src/CLAUDE.md`, mais une
+session ouverte à la racine du dépôt ne charge que le `CLAUDE.md` **racine**. Elles étaient
+donc versionnées, tenues à jour… et jamais dans le contexte. Le `CLAUDE.md` racine porte
+désormais `@src/CLAUDE.md`.
+
+**3. Le bloc `.ai/rules` est retiré.** Boost 2.5.3 y imposait de lire `.ai/rules/index.md`
+avant toute écriture de code — répertoire inexistant ici. L'ajouter aurait créé une
+**cinquième couche documentaire sans autorité définie**, alors que la hiérarchie est fixée
+(ADR > epics.md + sprint-status.yaml > ETAT.md). Remplacé par un pointeur vers les vrais
+emplacements.
+
+**4. 🛡️ Le garde-fou : `src/tests/Unit/BoostGuidelinesTest.php`** — parce que rien de ce qui
+précède ne tient si le prochain `boost:update` réinjecte autre chose. Deux invariants :
+*tout import `@chemin` d'un fichier de consignes résout sur disque* · *le `CLAUDE.md` racine
+importe bien `src/CLAUDE.md`*. **Les trois assertions ont été observées ROUGES** — les deux
+premières sur les défauts réels avant correction, la troisième (anti-vacuité) par mutation.
+
+> ⚠️ **Un piège Pest rencontré en écrivant ce test, et déjà catalogué** : `toContain()` est
+> **variadique**. `expect($a)->toContain('x', 'mon message')` cherche **deux** valeurs dans le
+> tableau — l'assertion devient impossible à satisfaire. La Story 1.8 avait rencontré la
+> version symétrique (des `toContain()` qui ne pouvaient pas *échouer*). Pour une appartenance
+> avec message : `expect(in_array($v, $a, true))->toBeTrue($message)`.
+
+### 🔌 Et le MCP Boost : il n'était pas chargé, et on sait pourquoi
+
+`claude mcp list` répond `laravel-boost … ✔ Connected`, mais **aucun de ses 12 outils n'était
+atteignable** dans la session du 2026-08-09. Cause : le serveur est déclaré comme
+`docker exec -i laravel-app_php php artisan boost:mcp`, et **Docker Desktop ne tournait pas au
+démarrage de la session**. Le serveur a échoué à l'initialisation ; le registre d'outils est
+figé à ce moment-là. Un `mcp list` lancé plus tard refait un contrôle neuf et réussit — d'où
+l'apparence trompeuse.
+
+👉 **Démarrer Docker Desktop AVANT `claude`.** Les 12 outils apparaissent alors :
+`ApplicationInfo` · `Tinker` · `DatabaseSchema` · `DatabaseQuery` · `DatabaseConnections` ·
+`SearchDocs` · `LastError` · `ReadLogEntries` · `BrowserLogs` · `GetAbsoluteUrl` · `RecordRule`.
+
+Trois d'entre eux tapent exactement dans le mode de défaut du projet, parce qu'ils **résolvent
+un référent au lieu de le supposer** : `DatabaseSchema`/`DatabaseQuery` (le défaut du 31 juillet
+— `laravel_test` à 0 table — se voyait en une requête), `Tinker` (c'est ce qui a démenti l'AC1
+de la 1.12), `SearchDocs` (documentation versionnée des paquets réellement installés).
 
 ## Boucle qualité par story — écrite le 2026-08-07
 
@@ -265,7 +312,7 @@ pour dire si la police résolue a changé.
 
 ```bash
 make up-local && make test && make quality-ratchet && make npm-build && make test-browser
-# attendu : 149 tests exit 0 · ratchet 0/0/0 · 29 tests navigateur verts
+# attendu : 151 tests exit 0 · ratchet 0/0/0 · 29 tests navigateur verts
 ```
 
 Puis, **dans cet ordre** :
@@ -461,7 +508,7 @@ mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à
 
 ```bash
 make up-local              # démarrer la stack
-make test                  # 149 tests, exit 0 attendu (Unit + Feature)
+make test                  # 151 tests, exit 0 attendu (Unit + Feature)
 make test-browser          # 29 tests navigateur, conteneur dédié profil `test`
 make test-browser-down     # arrêter le runner navigateur
 make quality-ratchet       # plafond de dette — exit 0 attendu

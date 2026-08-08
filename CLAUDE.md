@@ -2,6 +2,27 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Guidelines Laravel (générées — Laravel Boost)
+
+@src/CLAUDE.md
+
+> ⚠️ **Cette ligne n'est pas décorative, et elle est verrouillée par un test.**
+> `src/CLAUDE.md` est **généré** par `php artisan boost:update` et contient les
+> conventions Laravel/PHP/Pest/Livewire tenues à jour par les mainteneurs. Sans
+> cet import, il serait versionné, à jour… et **jamais lu** : une session
+> ouverte à la racine du dépôt ne charge que *ce* fichier-ci.
+>
+> `src/tests/Unit/BoostGuidelinesTest.php` verrouille deux invariants, **tous
+> deux observés rouges le 2026-08-09 avant correction** : (1) l'import ci-dessus
+> existe ; (2) **tout import `@chemin` d'un fichier de consignes résout sur
+> disque** — parce que `laravel/boost` 2.5.3 y avait injecté, sans revue, une
+> consigne impérative pointant vers un `.ai/rules` inexistant.
+>
+> 🔁 **`boost:update` ne tourne PLUS automatiquement** (retiré de
+> `post-update-cmd` le 2026-08-09) : un outil ne modifie pas un fichier
+> versionné en marge d'un `composer update`. Il se lance explicitement, par
+> `make boost-update`, et son diff se relit comme n'importe quel autre.
+
 ## Development Commands
 
 ### Docker Environment - Architecture Modulaire

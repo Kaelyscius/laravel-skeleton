@@ -46,7 +46,21 @@ Before relying on a package's API, confirm its installed version:
 
 ## Project Rules
 
-- This project contains committed, area-grouped rules in `.ai/rules` when that directory exists (settled decisions, non-obvious traps, standing constraints). Framework and package guidelines that only apply to specific paths (testing, frontend, components) also live there, under `.ai/rules/boost` — this is not just recorded decisions, it is load-bearing guidance you have not seen inline. Before you enter plan mode or create/edit any file, you MUST first: open @.ai/rules/index.md (it maps file globs to rule files), read every rule file whose globs cover the path(s) in scope, and run `grep -rin 'keyword' .ai/rules` to catch what a path match alone misses. Do not write code until you have read and are following every matching rule. If `.ai/rules` does not exist, continue without it.
+<!--
+  Bloc « Project Rules » de Laravel Boost 2.5.3 RETIRÉ le 2026-08-09.
+
+  Il imposait de lire `.ai/rules/index.md` avant toute écriture de code. Ce
+  répertoire n'existe pas dans ce dépôt, et l'ajouter créerait une CINQUIÈME
+  couche documentaire sans autorité définie, alors que la hiérarchie est fixée :
+  ADR > epics.md + sprint-status.yaml > ETAT.md > roundtable-decisions.md.
+
+  `src/tests/Unit/BoostGuidelinesTest.php` rougira si un futur `boost:update`
+  le réinjecte — ou injecte toute autre consigne pointant vers un chemin absent.
+-->
+
+- Les décisions arrêtées de ce projet vivent dans `docs/adr/`, le plan dans
+  `_bmad-output/planning-artifacts/`, et l'état courant dans `docs/ETAT.md`.
+  Hiérarchie d'autorité : ADR > epics.md + sprint-status.yaml > ETAT.md.
 
 ## Artisan
 
