@@ -3,13 +3,11 @@
 declare(strict_types=1);
 
 use App\Core\Models\Streamer;
-use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Blade;
-use Illuminate\Support\Facades\Route as RouteFacade;
+use Tests\Support\RouteTable;
 
 uses(RefreshDatabase::class);
 
@@ -166,7 +164,15 @@ $storyTemplates = static function (): array {
         }
     }
 
-    $files[] = base_path('resources/views/_components-demo.blade.php');
+    /*
+     * Les pages de démonstration sont ramassées par MOTIF, pas nommées une à
+     * une. La Story 1.13 en a ajouté deux : avec une liste écrite en dur, elles
+     * seraient sorties du périmètre de la RÈGLE 1 sans que rien ne rougisse —
+     * le comptage plus bas serait resté vert en n'inspectant rien de nouveau.
+     */
+    foreach (glob(base_path('resources/views/_*demo*.blade.php')) ?: [] as $demo) {
+        $files[] = $demo;
+    }
 
     sort($files);
 
@@ -218,51 +224,13 @@ $findHardcodedValues = static function (string $source) use ($stripComments): ar
     return $found;
 };
 
-/**
- * Rejoue routes/web.php contre un routeur neuf, dans l'environnement demandé.
- *
- * C'est le seul moyen honnête de vérifier une garde `app()->environment()` : les
- * routes sont enregistrées au boot, donc changer l'environnement après coup ne
- * prouve rien. On reconstruit un routeur, on force l'environnement, on ré-exécute
- * le fichier (`require`, pas `require_once` : il DOIT s'exécuter à nouveau), puis
- * on remet tout en place.
+/*
+ * Le rejeu de routes/web.php contre un routeur neuf vivait ici en closure. La
+ * Story 1.13 ajoute deux routes de démonstration gardées de la même façon :
+ * dupliquer 35 lignes délicates dans un second fichier de tests aurait garanti
+ * qu'une des deux copies dérive en silence. Il vit désormais dans
+ * Tests\Support\RouteTable, avec son raisonnement complet.
  */
-$routesRegisteredIn = static function (string $environment): Illuminate\Routing\RouteCollectionInterface {
-    $app = app();
-    $detected = $app->environment();
-    $previousEnvironment = is_string($detected) ? $detected : 'testing';
-    $previousRouter = app(Router::class);
-
-    $app->detectEnvironment(static fn (): string => $environment);
-
-    $router = new Router(app(Dispatcher::class), $app);
-    $app->instance('router', $router);
-    RouteFacade::swap($router);
-
-    try {
-        // Portée isolée : `require` s'exécute dans le scope de l'appelant, donc
-        // une future variable `$router` ou `$app` déclarée dans routes/web.php
-        // écraserait celles d'ici — et le `finally` restaurerait un routeur
-        // corrompu pour toute la suite.
-        (static function (): void {
-            require base_path('routes/web.php');
-        })();
-
-        // `Route::get(...)->name(...)` nomme la route APRÈS son ajout à la
-        // collection : la table de correspondance nom → route est reconstruite
-        // par le framework au `booted()`, jamais atteint ici. Sans ce
-        // rafraîchissement, getByName() renvoie null pour TOUTES les routes et
-        // le test serait vert en production pour la mauvaise raison.
-        $router->getRoutes()
-            ->refreshNameLookups();
-    } finally {
-        $app->detectEnvironment(static fn (): string => $previousEnvironment);
-        $app->instance('router', $previousRouter);
-        RouteFacade::swap($previousRouter);
-    }
-
-    return $router->getRoutes();
-};
 
 /*
 |--------------------------------------------------------------------------
@@ -565,32 +533,19 @@ it('expose un bouton de fermeture nommé et une durée par défaut de 5000 ms (A
         ->toBeTrue('La durée n\'est pas surchargeable par prop.');
 });
 
-it('ne livre AUCUN comportement d\'auto-fermeture — il appartient à la Story 1.13 (AC7)', function () use (
-    $stripComments,
-    $expectAbsent
-): void {
-    /*
-     * ⚠️ Ce test est un dos-d'âne délibéré, et il est daté.
-     *
-     * L'auto-fermeture exige Alpine, chargé par @livewireScripts en Story 1.13.
-     * Écrite ici, elle serait du comportement livré dans une page qui n'exécute
-     * rien : un AC qui se valide sans que quoi que ce soit ne tourne — le motif
-     * exact qui a fait réordonner l'Epic 1 (arbitrage PO du 2026-08-08).
-     *
-     * EN STORY 1.13 : supprimer ce test et le remplacer par la vérification du
-     * comportement dans un navigateur (fermeture après data-toast-duration ms).
-     * Le voir rougir alors n'est pas une régression, c'est le rendez-vous.
-     */
-    $source = $stripComments((string) file_get_contents(base_path('resources/views/components/toast.blade.php')));
-
-    foreach (['x-data', 'x-init', 'setTimeout', 'addEventListener', 'wire:', 'Alpine'] as $needle) {
-        $expectAbsent(
-            $source,
-            $needle,
-            "toast.blade.php contient [{$needle}] : le comportement d'auto-fermeture appartient à la Story 1.13, où Alpine est chargé et où il peut être observé.",
-        );
-    }
-});
+/**
+ * ⚠️ RENDEZ-VOUS TENU (Story 1.13).
+ * Un test daté vivait ici : « ne livre AUCUN comportement d'auto-fermeture ».
+ * C'était un dos-d'âne assumé — l'auto-fermeture exige Alpine, chargé par
+ * @livewireScripts, qui n'arrivait qu'avec <x-layouts.public>. Son propre
+ * commentaire annonçait son remplacement, et son rouge du jour venu n'était pas
+ * une régression.
+ * Il est REMPLACÉ, pas supprimé, par trois garde-fous plus exigeants, tous dans
+ * la Story 1.13 :
+ *   - le scan « zéro expression JS dans toast.blade.php » (AC8, LayoutsTest) ;
+ *   - la fermeture différée et le bouton de fermeture, observés dans un
+ *     navigateur (AC6, tests/Browser/LayoutsTest.php).
+ */
 
 /*
 |--------------------------------------------------------------------------
@@ -649,7 +604,7 @@ it('ne hardcode ni couleur ni arbitrary value dans les composants de la story (R
         ->not->toBeEmpty('Le scan RÈGLE 1 n\'a trouvé aucun template à inspecter.');
 
     expect($templates)
-        ->toHaveCount(7, 'Les 6 composants + la page de démonstration sont attendus : un fichier a été ajouté ou retiré sans mettre ce garde-fou à jour.');
+        ->toHaveCount(11, 'Les 8 composants (dont les 2 layouts) + les 3 pages de démonstration sont attendus : un fichier a été ajouté ou retiré sans mettre ce garde-fou à jour.');
 
     foreach ($templates as $template) {
         expect($findHardcodedValues((string) file_get_contents($template)))
@@ -663,18 +618,18 @@ it('ne hardcode ni couleur ni arbitrary value dans les composants de la story (R
 |--------------------------------------------------------------------------
 */
 
-it('n\'enregistre la route de démonstration qu\'en local et testing (T9)', function () use ($routesRegisteredIn): void {
+it('n\'enregistre la route de démonstration qu\'en local et testing (T9)', function (): void {
     /*
      * Vu rouge : en retirant le `if (app()->environment([...]))` de
      * routes/web.php. Le test a échoué sur l'environnement `production`, puis la
      * garde a été restaurée.
      */
     foreach (['local', 'testing'] as $environment) {
-        expect($routesRegisteredIn($environment)->getByName('components.demo'))
+        expect(RouteTable::registeredIn($environment)->getByName('components.demo'))
             ->not->toBeNull("La galerie de composants devrait être disponible en [{$environment}].");
     }
 
-    $production = $routesRegisteredIn('production');
+    $production = RouteTable::registeredIn('production');
 
     // Anti-vacuité : si le fichier de routes n'avait pas été rejoué du tout, la
     // route de démo serait absente pour une mauvaise raison et ce test serait

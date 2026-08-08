@@ -1,0 +1,46 @@
+/*
+ * Réduction de mouvement — UX-DR-43, WCAG 2.3.3 (Story 1.13, AC5).
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * POURQUOI UN FICHIER À PART
+ *
+ * `tokens.css` déclare des VALEURS (--duration-default, --ease-default) ;
+ * `app.css` les PONTE vers Tailwind. Aucun des deux ne décide de comportement.
+ * La réduction de mouvement en est un : elle annule, sous condition, ce que les
+ * deux autres fichiers ont posé. Elle mérite son propre fichier plutôt que
+ * d'être noyée en bas du bridge.
+ *
+ * ⚠️ IMPORTÉ SANS `layer()`, délibérément, comme tokens.css. Les utilities
+ * Tailwind vivent dans `@layer utilities` ; une déclaration hors layer bat
+ * toute déclaration layered. Layer-ifier ce fichier le ferait perdre contre les
+ * utilities de transition, et la préférence serait déclarée sans rien réduire —
+ * exactement la classe de garde-fou silencieux que ce projet traque.
+ *
+ * `!important` n'est pas de la superstition : une transition peut aussi être
+ * déclarée en style inline (Alpine `x-transition`, bibliothèques tierces), et
+ * l'inline bat la cascade. Une préférence d'accessibilité ne se négocie pas.
+ *
+ * `animation-iteration-count: 1` accompagne `animation-duration` : sans lui,
+ * une animation infinie ramenée à 0,01 ms boucle des dizaines de milliers de
+ * fois par seconde — on remplace un déclencheur vestibulaire par un
+ * emballement CPU.
+ *
+ * Valeur : 0,01 ms et non 0 s. Une durée strictement nulle empêche
+ * `transitionend` de se déclencher dans certains moteurs, ce qui casse les
+ * bibliothèques qui l'attendent pour nettoyer leur état.
+ *
+ * Garde-fou : tests/Browser/LayoutsTest.php mesure la durée CALCULÉE avec et
+ * sans la préférence, DANS LE MÊME TEST — sans la seconde mesure, la première
+ * ne prouverait pas que quelque chose a été réduit.
+ */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

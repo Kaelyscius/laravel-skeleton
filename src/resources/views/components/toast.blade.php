@@ -67,7 +67,21 @@
     }
 @endphp
 
+{{--
+    Story 1.13 (AC6/AC8) : les DEUX SEULS attributs Alpine de ce fichier, et ce
+    sont des RÉFÉRENCES NUES — pas des expressions.
+
+      x-data="toast"  → la fabrique enregistrée par Alpine.data() dans app.js
+      x-show="open"   → un simple accès de propriété
+
+    Aucune logique n'entre ici : ni `@click`, ni `x-init`, ni `setTimeout`. La
+    durée reste exposée en `data-toast-duration` et c'est le JS qui la LIT, comme
+    l'en-tête ci-dessus le promettait. Un test scanne ce fichier et échoue si une
+    expression y réapparaît (tests/Feature/LayoutsTest.php).
+--}}
 <div
+    x-data="toast"
+    x-show="open"
     role="{{ $role }}"
     data-toast-type="{{ $type }}"
     data-toast-duration="{{ (int) $duration }}"

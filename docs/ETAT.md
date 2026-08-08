@@ -202,22 +202,36 @@ ce soir :
 | bandeau cookie consent | ⚠️ **emplacement seulement** — rempli en Epic 4. Un bandeau factice serait un échafaudage plus permissif que la prod |
 | `sr-only focus:not-sr-only` | ✅ utilities Tailwind natives |
 | header sticky 48/56 px | ✅ valeur calculée → `make test-browser` existe (ADR-0013) |
-| `prefers-reduced-motion` | ✅ **vérifié ce soir** : `visit('/x', ['reducedMotion' => 'reduce'])` — les options de `visit()` sont étalées dans `newContext()` de Playwright, qui le supporte. ⚠️ Réserve : le même tableau est aussi passé à `goto()`, à valider en 5 min avant d'écrire l'AC |
+| `prefers-reduced-motion` | ✅ **réserve LEVÉE le 2026-08-08 (Story 1.13, T0)** : `visit('/x', ['reducedMotion' => 'reduce'])` fonctionne. Sonde jetable verte **dans les deux sens** — `matchMedia('(prefers-reduced-motion: reduce)').matches` vaut `true` avec l'option et `false` sans. Le fait que le même tableau soit aussi passé à `goto()` est sans effet. Règle CSS en `resources/css/motion.css`, importée **sans `layer()`** dans `app.css` : layer-ifiée, elle perdrait contre les utilities de transition et la préférence serait déclarée sans rien réduire |
 
-### Trois pièges qui coûteront cher si oubliés
+### Pièges qui coûteront cher si oubliés
 
-1. **⛔ Le runner navigateur ne validera JAMAIS la CSP** : `bypassCSP => true` est
-   codé en dur dans le plugin (ADR-0013). Or la 1.13 est la première story à
-   confronter `spatie/laravel-csp` à de vraies balises. Les en-têtes CSP se
-   testent par un **test HTTP**, pas dans le navigateur.
-2. **Rendez-vous du toast** : `src/tests/Feature/BladeComponentsTest.php` contient
-   un test daté qui interdit `x-data`, `x-init`, `setTimeout`,
-   `addEventListener`, `wire:` et `Alpine` dans `toast.blade.php`. Il **doit être
-   supprimé** en 1.13 et remplacé par le test de comportement d'auto-fermeture.
-   Le voir rougir alors n'est pas une régression — son propre message d'échec le
-   dit.
+> ⚠️ **Le « piège n°1 » a été RETIRÉ le 2026-08-08.** Il affirmait que la 1.13
+> serait « la première story à confronter `spatie/laravel-csp` à de vraies
+> balises ». La prémisse était fausse : la CSP est **éteinte**
+> (`CSP_ENABLED=false`) et le middleware rend la main immédiatement. Voir la
+> ligne « CSP installée, câblée au groupe `web`, et ÉTEINTE » du tableau de
+> dette. Un piège fondé sur une prémisse fausse coûte plus cher que pas de
+> piège du tout : il fait chercher au mauvais endroit.
+
+1. **⛔ `make test-browser` NE CONSTRUIT PAS les assets.**
+   `docker/php/scripts/run-browser-tests.sh` lance `pest` et rien d'autre, et
+   `src/public/build/` est gitignoré. Dès que `resources/js/app.js` ou la CSS
+   bouge : **`make npm-build` AVANT `make test-browser`**, sinon Chromium exécute
+   l'ancien bundle. La CI, elle, construit (`ci.yml:458`) — le décalage ne se
+   voit donc qu'en local. *Piège le plus coûteux de la Story 1.13.*
+2. ✅ **Rendez-vous du toast — TENU le 2026-08-08 (Story 1.13).** Le test daté de
+   `BladeComponentsTest.php` (« ne livre AUCUN comportement d'auto-fermeture »)
+   a été **remplacé**, pas supprimé : le scan « zéro expression JS dans
+   `toast.blade.php` » (AC8) + la fermeture différée et le bouton de fermeture
+   observés dans un navigateur (AC6).
 3. **Ne PAS ajouter `alpinejs` via npm** : Livewire 4 l'embarque. Deux Alpine
    enregistrés en parallèle est un bug classique.
+4. **Le `<body>` ne se sélectionne pas par `'body'` dans les tests navigateur.**
+   `GuessLocator` ne traite une chaîne comme du CSS que si elle commence par
+   `#`, `.`, `[`, `internal:` ou contient un caractère spécial CSS. `body` part
+   donc en recherche de TEXTE et échoue sur un « Timeout 5000ms exceeded » qui
+   ne nomme rien. Écrire `html > body`. *Trouvé en Story 1.13.*
 
 ## Ce qui a changé depuis la dernière fois
 
@@ -336,7 +350,7 @@ mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à
 | ✅ **Épinglage supply chain — COMPLÉTÉ le 2026-08-06** | `docker.yml` et `security.yml` utilisaient **9 tags mutables** (`@v6`, `@v4`, `@v2`…) alors que seul `ci.yml` était épinglé. Tout est désormais en SHA. Contrôle : `grep -rhoE "uses: [^ ]+" .github/workflows/*.yml \| grep -vE "@[a-f0-9]{40}$"` doit ne rien sortir. |
 | 🔴 **`SetCurrentStreamer` : « fail-loud » qui échoue en silence** | `firstOrFail()` lève `ModelNotFoundException` → Laravel rend **404**, indiscernable d'une page inexistante. Le docblock du middleware promet pourtant « an explicit error rather than a silent empty tenant ». Vérifié par mutation : base vide → `/` = 404 ; après `db:seed` → 200. Aucun test ne l'attrape (tous sèment avant). En prod : site entier en 404 silencieux si la base n'est pas semée. Détail + piste de correction dans `deferred-work.md`. |
 | ✅ **7 advisories — CORRIGÉES le 2026-08-06** | `squizlabs/php_codesniffer` 3.13.5 → **3.13.6** (CVE-2026-67434, OS command injection, transitive d'ECS) et `league/commonmark` 2.8.3 → **2.9.0** (6 advisories DoS, transitive de `laravel/framework`). Toutes publiées les 5–6 août, détectées par `composer audit` pendant le spike. `composer audit` = 0, `npm audit` = 0. *Leçon : le seul fait de lancer `composer audit` régulièrement a rapporté 7 trouvailles en une session.* |
-| **CSP non configurée** | `spatie/laravel-csp` installé, jamais paramétré. Modèle de menace (2 pages) à écrire avant l'Epic 4 — sinon la CSP sera calibrée au moment où elle cassera l'embed Twitch, c'est-à-dire desserrée sous pression. ⚠️ **Le runner navigateur ne pourra pas aider** : `bypassCSP => true` est codé en dur dans le plugin (ADR-0013). Il faudra un test HTTP sur les en-têtes. |
+| **CSP installée, câblée au groupe `web`, et ÉTEINTE** | *Ligne réécrite le 2026-08-08 (Story 1.13) : la précédente disait « CSP non configurée » et annonçait que la 1.13 serait « la première story à confronter `spatie/laravel-csp` à de vraies balises ». **C'était faux**, et la vérification tient en une commande : `curl -skS -o /dev/null -D - https://localhost/ \| grep -i content-security` ne renvoie rien.* État réel, établi par lecture du code : (1) **éteinte** — `src/.env:107` → `CSP_ENABLED=false`, motif en commentaire ; (2) le middleware **est** câblé (`bootstrap/app.php:41`) mais rend la main aussitôt — `AddCspHeaders` : `if (! config('csp.enabled')) return $response;` ; (3) le scoping « groupe `web` » **ne protège rien** — `horizon.php:85`, `pulse.php:122`, `telescope.php:94` attachent tous `'web'`. **Deux verrous techniques avant de l'allumer** : la build Alpine par défaut de Livewire contient `new Function(` (donc exigerait `'unsafe-eval'` ; la build CSP `dist/livewire.csp.js` n'est servie que si `config('livewire.csp_safe')` vaut `true`, et `config/livewire.php` n'est pas publié) ; et **le nonce n'est branché nulle part** — Livewire lit `Vite::cspNonce()`, Spatie expose `app('csp-nonce')`, rien ne relie les deux. Modèle de menace (2 pages) à écrire avant l'Epic 4 — sinon la CSP sera calibrée au moment où elle cassera l'embed Twitch, c'est-à-dire desserrée sous pression. ⚠️ **Le runner navigateur ne pourra pas aider** : `bypassCSP => true` est codé en dur dans le plugin (ADR-0013). Il faudra un test HTTP sur les en-têtes. ✅ **Le trou ne se creuse plus** : l'AC8 de la 1.13 impose Alpine sans expression inline dès maintenant (`toast.blade.php` ne porte que des références nues, toute la logique est dans `resources/js/app.js`, bundlée donc servie depuis l'origine), avec un test qui rougit si une expression réapparaît. Le jour de l'allumage, rien à réécrire. |
 | ✅ **CI navigateur : câblée ET son rouge PROUVÉ** | Job `browser` dans `ci.yml`, **bloquant**. Rouge observé sur une exécution réelle avec le token muté ([run 31203127602](https://github.com/Kaelyscius/laravel-skeleton/actions/runs/31203127602)) : `❌ Tests navigateur en échec — 1 test(s), 2 assertion(s), 1 échec(s)`. Vert confirmé après restauration ([run 31203881004](https://github.com/Kaelyscius/laravel-skeleton/actions/runs/31203881004)), 5 jobs verts. **C'est le premier garde-fou du projet livré avec son rouge démontré en CI, pas seulement en local.** |
 | **Blocage résiduel du runner** | `pest-plugin-browser` ne rend pas la main ~1 run sur 2. Cause partielle : `Process::fromShellCommandline()` fait survivre le `node` au SIGTERM. Mitigé par lecture du rapport JUnit, pas corrigé. Rouvrir à chaque montée du plugin ; **retirer la mitigation dès que l'amont est corrigé**. Voir ADR-0013. |
 | **`POSTGRES_CONTAINER` est faux** | `docker ps -qf "name=laravel-app_postgres"` filtre par sous-chaîne et matche **aussi** `laravel-app_postgres_pulse` : la variable résout vers 2 identifiants. Dormant — elle n'est utilisée nulle part. Même piège évité pour le conteneur de test (d'où `_test_browser`). |

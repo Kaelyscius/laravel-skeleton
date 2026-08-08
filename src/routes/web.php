@@ -35,6 +35,27 @@ if (app()->environment(['local', 'testing'])) {
             'streamer' => app(CurrentStreamer::class)->streamer(),
         ]);
     })->name('components.demo');
+
+    /*
+     * Démonstration des layouts (Story 1.13, T7) — même double garde, et pour
+     * les mêmes raisons. Deux pages distinctes plutôt qu'une : l'AC2 est une
+     * assertion d'ABSENCE de header et de footer, qui ne veut rien dire sur un
+     * document qui en porterait par ailleurs.
+     *
+     * ⛔ Ces routes ne réutilisent PAS `_components-demo` : les 8 tests
+     * navigateur de la Story 1.11 dépendent de son ordre de tabulation.
+     */
+    Route::get('/_layouts', function () {
+        abort_unless(app()->environment(['local', 'testing']), 404);
+
+        return view('_layouts-demo');
+    })->name('layouts.demo');
+
+    Route::get('/_layouts-minimal', function () {
+        abort_unless(app()->environment(['local', 'testing']), 404);
+
+        return view('_layouts-demo-minimal');
+    })->name('layouts.demo.minimal');
 }
 
 // Route de healthcheck pour Docker
