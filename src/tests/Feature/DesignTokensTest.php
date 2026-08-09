@@ -372,7 +372,13 @@ it('imports the tokens UNLAYERED so they outrank Tailwind self-referencing theme
      * and the self-reference wins instead, becoming a cycle: --font-sans and
      * --ease-default compute to the guaranteed-invalid value. Typography and
      * motion would silently fall back with NO build error and NO console error.
-     * Story 1.9 (self-hosted IBM Plex) touches exactly these variables.
+     * Story 1.9 (self-hosted IBM Plex) landed on exactly these variables. It first
+     * added `@import './fonts.css'` next to this one; the 2026-08-09 code review
+     * moved those @font-face rules into `<x-font-preloads />` so that both the
+     * preload href and the @font-face url() derive from `asset()` — a static
+     * stylesheet cannot interpolate a deployment prefix, and the two must never
+     * resolve to different URLs. app.css therefore has one import fewer, and this
+     * invariant is unaffected: it is about `tokens.css`, which is still unlayered.
      */
     $css = $readCss('resources/css/app.css');
 
@@ -388,9 +394,14 @@ it('serves no Instrument Sans and no third-party font host anywhere in the app',
      * not. Scanning the templates too is the whole point — fonts are requested
      * from HTML, not from CSS.
      *
-     * Third-party font hosts are banned outright: IBM Plex is self-hosted in
-     * Story 1.9 (SIL OFL), and a remote font is both a privacy leak and a render
-     * blocker for every fork-streamer deployment.
+     * Third-party font hosts are banned outright: IBM Plex is self-hosted since
+     * Story 1.9 (SIL OFL, both licences redistributed under public/fonts/), and a
+     * remote font is both a privacy leak and a render blocker for every
+     * fork-streamer deployment.
+     *
+     * ⚠️ This scan reads SOURCES. Its observed counterpart — what the browser
+     * actually requests — lives in tests/Browser/FontsTest.php (AC7): a font
+     * pulled by a vendor stylesheet or an iframe would escape this one.
      */
     $sources = array_merge(glob(base_path('resources/css/*.css')) ?: [], $blades());
 
@@ -404,7 +415,7 @@ it('serves no Instrument Sans and no third-party font host anywhere in the app',
         $name = basename($source);
 
         foreach ($banned as $needle) {
-            $expectAbsent($code, $needle, "{$name} references {$needle}; IBM Plex is self-hosted (Story 1.9).");
+            $expectAbsent($code, $needle, "{$name} references {$needle}; IBM Plex is self-hosted since Story 1.9 — see resources/fonts.json.");
         }
     }
 });

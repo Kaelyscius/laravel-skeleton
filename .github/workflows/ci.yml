@@ -23,6 +23,13 @@ on:
       # CI qui s'en sert — un garde-fou qu'on peut changer sans le réexécuter.
       - 'docker/php/scripts/run-browser-tests.sh'
       - 'docker/php/scripts/browser-verdict.php'
+      # Le vhost porte des invariants que `src/**` teste sans pouvoir les
+      # atteindre : `ExpiresByType font/woff2 "access plus 1 year"` (Story 1.9)
+      # est assuré par un test de `src/tests/`, mais la ligne vit ICI. Sans cette
+      # entrée, la supprimer ne déclenchait aucune CI — un garde-fou dont la
+      # cible est hors du périmètre qui le fait tourner. Relevé à la seconde
+      # passe de revue de la 1.9 (2026-08-09).
+      - 'docker/apache/**'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main, develop]
@@ -34,6 +41,13 @@ on:
       # CI qui s'en sert — un garde-fou qu'on peut changer sans le réexécuter.
       - 'docker/php/scripts/run-browser-tests.sh'
       - 'docker/php/scripts/browser-verdict.php'
+      # Le vhost porte des invariants que `src/**` teste sans pouvoir les
+      # atteindre : `ExpiresByType font/woff2 "access plus 1 year"` (Story 1.9)
+      # est assuré par un test de `src/tests/`, mais la ligne vit ICI. Sans cette
+      # entrée, la supprimer ne déclenchait aucune CI — un garde-fou dont la
+      # cible est hors du périmètre qui le fait tourner. Relevé à la seconde
+      # passe de revue de la 1.9 (2026-08-09).
+      - 'docker/apache/**'
       - '.github/workflows/ci.yml'
   workflow_dispatch:
 

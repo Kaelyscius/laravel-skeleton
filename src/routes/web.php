@@ -96,6 +96,20 @@ if (app()->environment(['local', 'testing'])) {
                 ->subMonths(2),
         ]);
     })->name('time.demo');
+
+    /*
+     * Démonstration des faces self-hostées (Story 1.9, T8) — même double garde.
+     *
+     * Elle existe parce qu'une face n'est CHARGÉE qu'à son usage : `font-display:
+     * swap` ne déclenche le téléchargement qu'au premier élément qui la demande,
+     * et le preload seul laisse le statut à `unloaded`. Sans une page qui exerce
+     * les quatre faces, l'AC6 n'a rien à observer.
+     */
+    Route::get('/_fonts', function () {
+        abort_unless(app()->environment(['local', 'testing']), 404);
+
+        return view('_fonts-demo');
+    })->name('fonts.demo');
 }
 
 // Route de healthcheck pour Docker

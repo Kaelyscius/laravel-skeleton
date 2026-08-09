@@ -22,6 +22,23 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Composants de base — {{ config('app.name', 'Laravel') }}</title>
+
+        {{--
+            Ajouté à la seconde passe de revue de la Story 1.9 (2026-08-09), par
+            la garde « tout template qui charge app.css inclut <x-font-preloads /> ».
+
+            Cette page construit son propre <head> (les layouts n'existaient pas
+            en 1.11) : sans cette ligne, la galerie qui sert à REGARDER nos
+            composants les rendait en fonte système, c'est-à-dire pas dans la
+            typographie qu'elle est censée montrer. Le défaut était local — la
+            page n'est enregistrée qu'en `local` et `testing` — mais il est de la
+            même famille que celui de welcome.blade.php.
+
+            ⚠️ Dans le <head>, donc hors de l'ordre de tabulation : la contrainte
+            de #focus-lab ci-dessous n'est pas touchée.
+        --}}
+        <x-font-preloads />
+
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="bg-bg text-text-primary font-sans min-h-screen p-8">

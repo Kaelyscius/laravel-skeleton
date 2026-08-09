@@ -1,0 +1,91 @@
+{
+    "_note": [
+        "La table UNIQUE des faces self-hostées — Story 1.9, AC2. JSON n'accepte pas de",
+        "commentaires : le raisonnement vit dans le plugin `self-hosted-fonts` de",
+        "vite.config.js et dans components/font-preloads.blade.php, ses deux voisins.",
+        "",
+        "QUATRE consommateurs, et pas un de plus :",
+        "  1. vite.config.js                    — sait QUOI copier depuis node_modules",
+        "  2. config/fonts.php                  — expose la table au rendu",
+        "  3. tests/Feature/FontsTest.php       — dérive ses attentes du câblage",
+        "  4. tests/Browser/FontsTest.php       — dérive ses attentes de l'observé",
+        "",
+        "  (3 et 4 passent tous deux par tests/Support/FontManifest.php, qui est leur",
+        "  lecteur typé commun — mais ce sont bien DEUX consommateurs, et la première",
+        "  rédaction de cette note en annonçait trois. Relevé à la revue du 2026-08-09.)",
+        "",
+        "⚠️ LES @font-face SONT DÉRIVÉS DE CETTE TABLE depuis la revue du 2026-08-09.",
+        "Ils vivaient auparavant dans un resources/css/fonts.css écrit à la main, ce qui",
+        "donnait au test de l'AC4 une divergence à attraper. Le prix en était des URL en",
+        "racine absolue — une feuille statique ne peut pas interpoler un préfixe — donc",
+        "quatre 404 silencieux pour un déploiement sous sous-chemin, alors que le",
+        "fork-streamer est l'audience explicite d'ADR-0001. Les règles sont désormais",
+        "rendues par <x-font-preloads />, où asset() s'applique AUX DEUX CÔTÉS : le href",
+        "du preload et l'url() du @font-face ne peuvent plus viser deux chemins",
+        "différents, ce qui aurait produit un second téléchargement complet et muet.",
+        "",
+        "Ce que le garde-fou de l'AC4 attrape MAINTENANT : un template qui oublie une",
+        "propriété (font-display, font-style, format) ou une face. Ce que le test",
+        "« sert 4 faces et n'en précharge que 3 » attrape, lui, est le seul défaut qu'une",
+        "dérivation ne peut PAS voir : la table qui change sans que personne ne l'ait",
+        "décidé. Ses valeurs sont écrites en dur, jamais dérivées.",
+        "",
+        "⚠️ LE `target` PORTE LA VERSION DU PAQUET, ET C'EST LE MÉCANISME",
+        "D'INVALIDATION DE CACHE. Les fichiers copiés ne sont pas hachés par Vite (leur",
+        "nom doit être connu à l'écriture du preload) : sans la version, une montée de",
+        "@fontsource servirait l'ancienne face à tout visiteur récurrent pendant la",
+        "durée du cache — un an, depuis que le vhost Apache déclare",
+        "ExpiresByType font/woff2. Un test vérifie que chaque `target` porte bien la",
+        "version résolue par package-lock.json : la convention ne tient pas toute seule.",
+        "",
+        "`weight` est un ENTIER : il est recopié tel quel dans `font-weight` et comparé",
+        "au CSS rendu. Une chaîne obligerait chaque consommateur à caster, donc à",
+        "choisir sa propre règle de cast."
+    ],
+    "faces": [
+        {
+            "package": "@fontsource/ibm-plex-sans",
+            "source": "files/ibm-plex-sans-latin-400-normal.woff2",
+            "target": "ibm-plex-sans-latin-400-normal-5.3.0.woff2",
+            "family": "IBM Plex Sans",
+            "weight": 400,
+            "preload": true
+        },
+        {
+            "package": "@fontsource/ibm-plex-sans",
+            "source": "files/ibm-plex-sans-latin-500-normal.woff2",
+            "target": "ibm-plex-sans-latin-500-normal-5.3.0.woff2",
+            "family": "IBM Plex Sans",
+            "weight": 500,
+            "preload": false
+        },
+        {
+            "package": "@fontsource/ibm-plex-sans",
+            "source": "files/ibm-plex-sans-latin-600-normal.woff2",
+            "target": "ibm-plex-sans-latin-600-normal-5.3.0.woff2",
+            "family": "IBM Plex Sans",
+            "weight": 600,
+            "preload": true
+        },
+        {
+            "package": "@fontsource/ibm-plex-mono",
+            "source": "files/ibm-plex-mono-latin-400-normal.woff2",
+            "target": "ibm-plex-mono-latin-400-normal-5.3.0.woff2",
+            "family": "IBM Plex Mono",
+            "weight": 400,
+            "preload": true
+        }
+    ],
+    "licenses": [
+        {
+            "package": "@fontsource/ibm-plex-sans",
+            "source": "LICENSE",
+            "target": "LICENSE-ibm-plex-sans.txt"
+        },
+        {
+            "package": "@fontsource/ibm-plex-mono",
+            "source": "LICENSE",
+            "target": "LICENSE-ibm-plex-mono.txt"
+        }
+    ]
+}

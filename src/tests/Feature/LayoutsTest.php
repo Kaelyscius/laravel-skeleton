@@ -588,28 +588,55 @@ it('reçoit en fin de <body> ce qu\'une vue pousse sur la pile body-end (AC7)', 
         ->toBeLessThan($bodyEnd, 'Le contenu poussé sur la pile body-end sort du <body>.');
 });
 
-it('n\'écrit ni preload de police ni bandeau de consentement (AC7)', function (): void {
+it('précharge désormais les polices, et n\'écrit toujours pas de bandeau de consentement (AC7)', function (): void {
     /*
-     * Les deux noms que la definition-of-ready a requalifiés en points
-     * d'insertion. Les rendre ici — même en factice — livrerait un échafaudage
-     * PLUS PERMISSIF que la production : la Story 1.9 et l'Epic 4 se
-     * valideraient alors contre du décor.
+     * ⚠️ CE TEST A ÉTÉ RETOURNÉ PAR LA STORY 1.9, ET C'EST SON SUCCÈS.
+     *
+     * Il s'appelait « n'écrit NI preload de police NI bandeau de consentement ».
+     * Les deux moitiés gardaient la même chose : qu'aucun échafaudage PLUS
+     * PERMISSIF que la production ne soit livré avant la story qui doit le
+     * remplir. Un preload pointant vers un woff2 absent, ou un bandeau factice,
+     * auraient laissé la 1.9 et l'Epic 4 se valider contre du décor (ADR-0011).
+     *
+     * La Story 1.9 est arrivée. La moitié « police » n'a donc plus rien à garder
+     * en ABSENCE — elle garde désormais la PRÉSENCE. La moitié « consentement »,
+     * elle, reste une absence : l'Epic 4 n'a pas encore eu lieu.
+     *
+     * ⚠️ Ce n'est PAS une régression déguisée. Le détail des preloads — leur
+     * compte, leurs quatre attributs, leur ordre vis-à-vis de @vite, et le fait
+     * que chaque href corresponde à une entrée de la table — vit dans
+     * tests/Feature/FontsTest.php. Ici on garde le seul invariant qui appartient
+     * au LAYOUT : il en rend, et il ne rend toujours pas de bandeau.
      */
     $html = Blade::render('<x-layouts.public>Contenu</x-layouts.public>');
 
     /*
-     * ⚠️ Première rédaction : `str_contains($html, 'rel="preload"')`. Elle
-     * rougissait — mais pas pour la raison visée : Laravel Vite émet SES PROPRES
-     * `<link rel="preload" as="style">` pour les chunks du manifeste. Une
-     * assertion qui ne distingue pas le preload de Vite du preload de police
-     * n'aurait laissé que deux issues le jour de la Story 1.9 : la désarmer, ou
-     * la croire. On vise donc ce qui appartient réellement à la 1.9 — la police.
+     * ⚠️ `as="font"` et pas `rel="preload"`. Laravel Vite émet SES PROPRES
+     * `<link rel="preload" as="style">` pour les chunks du manifeste : une
+     * assertion qui ne distinguerait pas les deux serait vraie sans qu'aucune
+     * police ne soit préchargée. Elle l'était déjà avant le retournement, pour
+     * la raison symétrique.
      */
     expect(str_contains($html, 'as="font"'))
-        ->toBeFalse('Le layout précharge une police : les <link rel="preload"> de police appartiennent à la Story 1.9.');
+        ->toBeTrue('Le layout ne précharge plus aucune police : <x-font-preloads /> a disparu du <head>.');
 
-    expect(str_contains($html, '.woff'))
-        ->toBeFalse('Le layout référence un fichier de police : le self-hosting IBM Plex appartient à la Story 1.9.');
+    expect(str_contains($html, '.woff2'))
+        ->toBeTrue('Le layout ne référence aucun fichier de police : les href de preload ne pointent plus vers la table.');
+
+    /*
+     * ⚠️ LA MOITIÉ QUI AVAIT DISPARU DANS LE RETOURNEMENT, REMISE À LA REVUE DU
+     * 2026-08-09.
+     *
+     * L'ancienne assertion cherchait `.woff` — donc les DEUX extensions. En la
+     * remplaçant par `.woff2`, le retournement a supprimé sans le dire
+     * l'interdiction du `.woff` legacy. Or le `src` amont de @fontsource en liste
+     * un, que nous ne copions pas : une URL morte en production, sans erreur — le
+     * navigateur prend le woff2, listé en premier, et ne demande jamais le second.
+     * Rien d'autre ne l'attrapait : l'AC4 vérifie que `format('woff2')` est
+     * PRÉSENT, jamais qu'aucun autre format ne l'accompagne.
+     */
+    expect(preg_match('/\.woff(?!2)/', $html))
+        ->toBe(0, 'Le layout référence un fichier .woff (sans le 2) : une URL morte que le navigateur ne demandera jamais, et qu\'aucune erreur ne signale.');
 
     expect(mb_stripos($html, 'consent') !== false || mb_stripos($html, 'cookie') !== false)
         ->toBeFalse('Le layout rend un bandeau de consentement factice : il appartient à l\'Epic 4.');

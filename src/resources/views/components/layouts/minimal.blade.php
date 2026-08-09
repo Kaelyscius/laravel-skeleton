@@ -56,6 +56,14 @@
 
         <title>{{ $title ?? config('app.name') }}</title>
 
+        {{--
+            Les MÊMES preloads que <x-layouts.public>, et c'est délibéré : ce
+            layout charge la même CSS, donc les mêmes @font-face. Le laisser
+            sans preloads ferait d'une page d'erreur la seule page du site à
+            découvrir ses polices après le CSS — plus lente, et différente.
+        --}}
+        <x-font-preloads />
+
         @stack('head')
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])

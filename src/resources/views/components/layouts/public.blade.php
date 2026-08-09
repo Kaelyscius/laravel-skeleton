@@ -11,18 +11,24 @@
     RÈGLE 1 (tokens.css) : aucune couleur en dur, aucune arbitrary value.
 
     ─────────────────────────────────────────────────────────────────────────
-    LES DEUX PILES SONT DES POINTS D'INSERTION, ET ELLES SONT VIDES (AC7)
+    LES DEUX PILES SONT DES POINTS D'INSERTION (AC7)
 
-      @stack('head')      → la Story 1.9 y poussera les <link rel="preload">
-                            de police. Elle est rendue AVANT @vite : un preload
-                            déclaré après le script qui déclenche le chargement
-                            arrive trop tard pour servir à quoi que ce soit.
+      @stack('head')      → libre, pour ce qui est réellement page-spécifique
+                            (une balise <meta> d'une seule page, un canonical).
+                            Rendue AVANT @vite.
       @stack('body-end')  → l'Epic 4 y poussera le bandeau de consentement.
+                            Vide aujourd'hui : un bandeau factice serait un
+                            échafaudage PLUS PERMISSIF que la production, et
+                            l'Epic 4 se validerait contre du décor (ADR-0011).
 
-    Rien n'est rendu ici pour l'une ni pour l'autre. Un preload de police
-    pointant vers un woff2 absent, ou un bandeau factice, seraient un
-    échafaudage PLUS PERMISSIF que la production : les stories qui les doivent
-    se valideraient contre du décor (ADR-0011).
+    ⚠️ CORRECTION (Story 1.9). Ce bloc annonçait que la 1.9 pousserait les
+    <link rel="preload"> de police sur `@stack('head')`. Elle a décidé
+    autrement, et le motif tient en une phrase : une pile se remplit par
+    `@push` DEPUIS LA PAGE APPELANTE, donc les preloads seraient devenus une
+    ligne à ne pas oublier sur chaque page future — et un oubli aurait été
+    silencieux. Les polices ne sont pas une préoccupation de page : elles sont
+    rendues directement dans le <head> ci-dessous, par <x-font-preloads />,
+    avant `@stack('head')` et avant `@vite`.
 
     ─────────────────────────────────────────────────────────────────────────
     POURQUOI LE <header> N'A PAS DE border-b
@@ -59,6 +65,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <title>{{ $title ?? config('app.name') }}</title>
+
+        <x-font-preloads />
 
         @stack('head')
 

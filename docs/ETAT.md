@@ -7,10 +7,27 @@
 
 ## Où j'en suis
 
-L'appareil de vérification est réparé — 3 workflows CI verts, **151 tests** + **29 tests
-navigateur**, ratchet ECS/PHPStan 0/0/0. **Un navigateur affiche désormais ce projet** : le spike
+> ⛔ **« 3 workflows CI verts » NE PARLE PAS DU CODE CI-DESSOUS.** Il reste des **commits non
+> poussés**, et `origin` est injoignable depuis les sessions d'agent
+> (`Permission denied (publickey)`). La CI n'a donc **jamais exécuté** le travail de la 1.9 ni de
+> sa revue : le vert cité est celui du dernier état poussé. Conséquence concrète, pas théorique —
+> le runner GitHub est Ubuntu/glibc (Chrome for Testing) là où le local est Alpine/musl
+> (Chromium), et ADR-0013 désigne l'**AC8** de la 1.9 (`initiatorType`) comme le candidat le plus
+> probable à une divergence entre les deux. ⚠️ Ne jamais conclure sur l'état d'`origin` depuis
+> `git status` : `refs/remotes/origin/main` est un cache local. `git fetch` d'abord.
+>
+> *(Cette mise en garde figurait dans l'ETAT précédent, avait disparu du commit de la 1.9 — que
+> son T13 exigeait pourtant de tenir à jour — et est remise à la revue du 2026-08-09.)*
+
+L'appareil de vérification est réparé — 3 workflows CI verts sur le dernier état poussé,
+**179 tests** + **34 tests navigateur**, ratchet ECS/PHPStan 0/0/0. **Un navigateur affiche désormais ce projet** : le spike
 runner est fait, `make test-browser` existe et son rouge a été observé. Epic 1 : stories 1.1 → 1.8,
-1.11, 1.12 et 1.13 `done`, 1.9 · 1.10a `backlog`, Epics 2 à 11 non démarrés.
+1.11, 1.12 et 1.13 `done`, **1.9 `done`** (implémentée le 2026-08-09, puis **DEUX passes de revue**
+le même jour : 21 correctifs + 5 reports à la première, 21 correctifs + 6 reports à la seconde),
+**1.10a `backlog` — dernière story d'Epic 1**, Epics 2 à 11 non démarrés.
+
+**La typographie a un corps.** Les quatre faces IBM Plex sont self-hostées, servies depuis le
+domaine de l'application, et un navigateur a **constaté** qu'elles sont chargées — pas déclarées.
 
 Le roundtable du 2026-07-30 a **réordonné le reliquat d'Epic 1** et arbitré la conception de
 l'écran offline : voir [ADR-0011](adr/ADR-0011-observation-avant-composition.md) et
@@ -285,48 +302,107 @@ Trois choses à retenir, qui resserviront :
 > un état, pas une 5ᵉ surface). Le code la commentait sans que le document le
 > dise — forme exacte du motif dominant.
 
-## Prochaine action — Story 1.9 (self-hosting IBM Plex).
+## Prochaine action — la **1.10a**, dernière story d'Epic 1
 
-> ⚠️ **`origin` est injoignable depuis les sessions d'agent** — `git fetch` répond
-> `Permission denied (publickey)`. Déjà constaté à la revue du 2026-08-08, toujours vrai le
-> 2026-08-09. Conséquence : **rien n'a été poussé**, aucune affirmation sur l'état distant n'est
-> possible, et la CI n'a rien vu de ces commits. `git push` est une action **manuelle d'Alex**.
+> ✅ **La 1.9 est `done`.** Elle a été revue **deux fois** le 2026-08-09, en fenêtres neuves, le
+> fichier de story passé en argument (donc ADR-0013 embarqué par son champ `context:`). La
+> seconde passe portait sur l'état d'après les correctifs de la première — c'est-à-dire sur les
+> trois changements structurels écrits *pendant* une revue, que personne n'avait relus.
 
-👉 **`1.13 ✅ → 1.12 ✅ → 1.9 → 1.10a`.** L'inversion `1.13` avant `1.12`,
-décidée le 2026-08-08 en amendement à
-[ADR-0011 §1](adr/ADR-0011-observation-avant-composition.md), a produit ce
-qu'elle promettait : le rafraîchissement client de la 1.12 a été **observé dans
-un navigateur**, pas déclaré.
+```
+/bmad-create-story 1.10a
+```
 
-**La 1.12 est `done`** — la revue a été faite le 2026-08-08 (4 couches, 4 décisions
-PO, 22 correctifs appliqués, 8 reports). Elle a livré les 4 composants `<x-time-*>`,
-`Alpine.data('timeRelative')`, la table de non-dérive serveur ↔ client, et
-l'élargissement du scanner « zéro expression JS » à tous les templates.
-
-**Ce que la 1.12 rend enfin possible pour la 1.9** : `--font-mono` est désormais
-*consommé* par du code de production et **mesuré** dans le navigateur (mutation
-du token à chaud). Le jour où la 1.9 posera les `@font-face`, un test existe déjà
-pour dire si la police résolue a changé.
+**`1.13 ✅ → 1.12 ✅ → 1.9 ✅ → 1.10a`** — la 1.10a (Filament v5 + Sanctum + Spatie Permission,
+panel `/admin` qui s'ouvre et s'authentifie, rate limiting login 5/min/IP) **ferme l'Epic 1**.
+C'est la première story de la séquence qui n'est pas du front : son consommateur immédiat est
+Alex qui se connecte.
 
 ### Commande d'ouverture de la prochaine session
 
 ```bash
 make up-local && make test && make quality-ratchet && make npm-build && make test-browser
-# attendu : 151 tests exit 0 · ratchet 0/0/0 · 29 tests navigateur verts
+# attendu : 179 tests exit 0 · ratchet 0/0/0 · 34 tests navigateur verts
 ```
 
-Puis, **dans cet ordre** :
+⛔ **`make npm-build` AVANT chaque `make test-browser`** dès que `app.js`, la CSS **ou
+`resources/fonts.json`** bouge — y compris entre deux mutations. Le runner ne construit rien, et
+depuis la 1.9 il lit aussi `public/fonts/`, qui est produit par le build.
 
-```
-/bmad-create-story 1.9
-/bmad-dev-story _bmad-output/implementation-artifacts/1-9-*.md
-```
+### Ce que la 1.9 a livré, et les deux choses qu'elle a trouvées
 
-*(La revue de la 1.12 est faite — 2026-08-08. Il ne reste plus de `/bmad-code-review` en
-attente.)*
+**Livré** : `resources/fonts.json` (la table unique — 4 faces, 2 licences), un plugin Vite
+**inline** qui copie depuis `node_modules` vers `public/fonts/` au `buildStart` (aucun paquet npm
+ajouté, `/public/fonts` gitignoré), `<x-font-preloads />` — qui rend **les preloads ET les quatre
+`@font-face`**, les deux côtés dérivant de la table et passant par `asset()`, donc solidaires sous
+un déploiement en sous-chemin —, `config/fonts.php`, la page `/_fonts` doublement gardée, et
+**33 tests neufs** (28 Feature + 5 navigateur).
 
-⛔ **`make npm-build` AVANT chaque `make test-browser`** dès que `app.js` ou la
-CSS bouge — y compris entre deux mutations. Le runner ne construit rien.
+⚠️ **Il n'y a PAS de `resources/css/fonts.css`, et `app.css` n'est pas modifié.** Une feuille
+statique ne peut interpoler aucun préfixe de déploiement : elle imposait `url('/fonts/…')` en
+racine absolue, donc quatre 404 muets chez un fork-streamer sous sous-chemin. Supprimée à la
+première passe de revue.
+
+**⚖️ L'arbitrage tenu** : **4 faces servies, 3 préchargées**. La face 500 existe pour que
+`font-medium` — employé 8 fois, dont 4 dans des composants `done` — ait un référent ; elle n'est
+pas préchargée parce qu'elle n'est pas garantie au-dessus de la ligne de flottaison. Aucun Blade
+n'a été modifié.
+
+**Trouvaille n°1 — l'AC8 était écrit avec un repli, et le repli n'a pas servi.** L'AC prévoyait
+que Chromium puisse ne pas distinguer un téléchargement déclenché par le `<link rel="preload">`
+d'un téléchargement déclenché par la découverte du `@font-face`. **Mesuré avant d'asserter**
+(Chromium 150 d'Alpine, 2026-08-09) : il les distingue proprement — les trois faces préchargées
+rapportent `initiatorType: "link"`, la face 500 rapporte `"css"`. L'assertion est donc écrite sur
+l'observable réel, et **bilatéralement** : c'est la moitié « les faces NON préchargées valent
+`css` » qui rougit si quelqu'un ajoute un preload sans le décider.
+
+**Trouvaille n°2 — une mutation a SURVÉCU, et c'était le motif du projet une fois de plus.**
+Basculer un `preload` de `true` à `false` dans `resources/fonts.json` ne faisait rougir personne :
+le composant **dérivait** son rendu de la table, et le test qui le vérifiait **dérivait** ses
+attentes de la même table. Les deux côtés se calculaient l'un l'autre — le compte restait
+cohérent, le preload disparaissait, la page restait jolie. C'est mot pour mot la réserve écrite
+en tête de `tests/Fixtures/RelativeTimeCases.php` (« une table que les deux côtés liraient pour se
+calculer l'un l'autre ne prouverait rien »), et elle n'avait pas été appliquée ici.
+
+> **Correctif** : un test écrit **en dur** le jeu servi (4) et le jeu préchargé (3) — il ne
+> décrit pas la table, il décrit la **décision** dont la table est l'exécution (UX-DR-42 +
+> arbitrage PO du 2026-08-09). Mutation rejouée **dans les deux sens**, rouge observé.
+>
+> 📌 **Règle qui se généralise** : dès qu'une donnée est lue à la fois par le code de production
+> et par son test, le test ne garde plus rien. Il faut un second référent, écrit à la main, qui
+> dise ce que la donnée est *censée* valoir.
+
+**Ce que la rédaction avait trouvé, et qui s'est confirmé** : l'AC de preuve d'origine
+(`getComputedStyle(document.body).fontFamily` contient `IBM Plex Sans`) **était déjà vert** —
+12ᵉ instance du motif dominant, dans l'énoncé même de la story censée le produire.
+`CascadeSmokeTest` reste en place et reste vert : il garde l'invariant de cascade d'ADR-0013, pas
+cette story. Son en-tête a été réécrit pour le dire.
+
+### Campagne de mutation — 8 mutations, rejouées séparément
+
+| # | Mutation | Rouge observé |
+|---|---|---|
+| MF-A | un `target` renommé d'**une lettre** dans `fonts.json` | Feature AC4 + navigateur AC6 (`unloaded`) + AC7 |
+| MF-B | `crossorigin` retiré du composant de preload | Feature AC5 + navigateur AC7 (**second téléchargement observé**) + AC8 |
+| MF-C | `font-display: swap` retiré d'**une seule** règle | Feature AC4 |
+| MF-D | une entrée `preload` basculée à `false` | ⚠️ **SURVIVANTE** → garde-fou ajouté, puis rouge |
+| MF-D2 | la même, **en sens inverse** (`false` → `true`) | Feature AC5 (nouveau garde-fou) |
+| MF-E | plugin de copie Vite désactivé | navigateur AC3 + AC6 |
+| MF-F | `font-light` introduit dans un template | Feature AC9 (scanner de graisses) |
+| MF-G | un `source` pointant un fichier absent | `npm run build` **exit 1**, message nommant l'entrée |
+
+*MF-E a aussi montré qu'un rouge peut être illisible : `scandir()` d'un dossier absent produisait
+une **erreur** PHP anonyme au lieu d'un échec nommé. Corrigé — un garde-fou dont le rouge ne se
+lit pas se fait désarmer au premier run pressé.*
+
+### Deux réserves honnêtes, à porter en revue
+
+1. **Un run navigateur complet a échoué une fois** sur `TimeAsTextureTest:116`, puis est repassé
+   vert seul **et** en suite complète (34/34, deux fois). C'est l'instabilité connue d'ADR-0013,
+   pas une régression de cette story — mais elle est écrite plutôt que tue.
+2. **Le renvoi `epics.md` → fichier de story n'existait pour AUCUNE story.** Le T13 demandait de
+   l'ajouter « comme l'ont fait 1.11/1.12/1.13 » : `grep implementation-artifacts epics.md` ne
+   rendait rien. Celui de la 1.9 est le **premier**. Les trois autres restent à faire.
 
 ### Ce que la 1.12 a appris, et qui vaut pour la suite
 

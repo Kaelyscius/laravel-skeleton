@@ -36,9 +36,17 @@
  *   Pas de thème clair, pas de toggle, pas de @media (prefers-color-scheme).
  *   Les valeurs ci-dessous sont dark par construction, pas par défaut.
  *
- * NOTE — Les familles de police sont déclarées ici, mais les fichiers woff2
- * (@font-face + preload, self-hosting IBM Plex) arrivent en Story 1.9. D'ici là
- * le rendu utilise les fallbacks système : c'est attendu, pas un bug.
+ * NOTE — Les familles déclarées ici ont un CORPS depuis la Story 1.9 : les
+ * quatre faces IBM Plex sont self-hostées (resources/fonts.json → public/fonts/)
+ * et déclarées par nos propres @font-face, que rend le composant
+ * <x-font-preloads /> en même temps que les <link rel="preload"> — dans le <head>
+ * de tout template qui charge cette feuille. Elles ne vivent PAS dans un fichier
+ * CSS : une feuille statique ne peut pas interpoler le préfixe d'un déploiement
+ * en sous-chemin, et le preload et le @font-face doivent viser exactement la
+ * même URL sous peine de télécharger deux fois. Ce fichier ne change PAS pour
+ * autant, et c'est délibéré : la 1.9 donne un corps à une déclaration, elle ne la
+ * remplace pas. Les fallbacks système restent la suite de la pile, glyphe par
+ * glyphe.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -61,7 +69,7 @@
     --state-err: #EF4444;
 
     /*
-     * Typographie (fichiers woff2 → Story 1.9).
+     * Typographie (faces self-hostées depuis la Story 1.9 — resources/fonts.json).
      *
      * Les 4 familles emoji terminant --font-sans sont volontaires. Tailwind pose
      * `--default-font-family: var(--font-sans)` et son preflight écrit
