@@ -7,17 +7,24 @@
 
 ## Où j'en suis
 
-> ⛔ **« 3 workflows CI verts » NE PARLE PAS DU CODE CI-DESSOUS.** Il reste des **commits non
-> poussés**, et `origin` est injoignable depuis les sessions d'agent
-> (`Permission denied (publickey)`). La CI n'a donc **jamais exécuté** le travail de la 1.9 ni de
-> sa revue : le vert cité est celui du dernier état poussé. Conséquence concrète, pas théorique —
-> le runner GitHub est Ubuntu/glibc (Chrome for Testing) là où le local est Alpine/musl
-> (Chromium), et ADR-0013 désigne l'**AC8** de la 1.9 (`initiatorType`) comme le candidat le plus
-> probable à une divergence entre les deux. ⚠️ Ne jamais conclure sur l'état d'`origin` depuis
-> `git status` : `refs/remotes/origin/main` est un cache local. `git fetch` d'abord.
+> ✅ **LE VERT CI PARLE BIEN DU CODE CI-DESSOUS.** `origin/main` = **`d17964b`**, poussé le
+> 2026-08-09, et les **trois workflows sont verts** : `Laravel CI/CD Pipeline` (5 jobs, dont
+> **Tests navigateur — 34 tests, 1798 assertions**), `Security Audit`, `Docker Build & Validation`
+> (5 jobs, déclenché par la modification du vhost, désormais dans les `paths:`).
 >
-> *(Cette mise en garde figurait dans l'ETAT précédent, avait disparu du commit de la 1.9 — que
-> son T13 exigeait pourtant de tenir à jour — et est remise à la revue du 2026-08-09.)*
+> **Le risque qu'ADR-0013 nommait est levé** : l'AC8 (`initiatorType`) est vert sur le Chrome for
+> Testing d'Ubuntu (**glibc**) comme sur le Chromium d'Alpine (**musl**). C'est la seule assertion
+> de la story qui dépend de ce que le moteur *rapporte* plutôt que de ce qu'il *fait* — elle
+> tenait des deux côtés, ce qui n'était pas acquis.
+>
+> ⚠️ **DEUX NOTES PÉRIMÉES, CORRIGÉES ICI.** (1) « 3 commits non poussés » était **faux** :
+> `origin` était déjà à `810d3ad`. (2) « `origin` injoignable depuis les sessions d'agent » est
+> **faux aussi** — le remote est en SSH, mais le push passe par `gh` en HTTPS :
+> `git -c credential.helper='!f() { echo username=x-access-token; echo "password=$(gh auth token)"; }; f' push https://github.com/Kaelyscius/laravel-skeleton.git main:main`
+> (scopes `repo` + `workflow` requis ; `--force-with-lease` ne marche PAS par cette voie).
+> ⚠️ La règle de fond ne change pas : `refs/remotes/origin/main` est un **cache local**, et c'est
+> exactement lui qui a fait vivre ces deux affirmations fausses pendant trois sessions. **`git fetch`
+> avant toute affirmation sur `origin`** — et par HTTPS, puisque le `fetch` SSH échoue ici.
 
 L'appareil de vérification est réparé — 3 workflows CI verts sur le dernier état poussé,
 **179 tests** + **34 tests navigateur**, ratchet ECS/PHPStan 0/0/0. **Un navigateur affiche désormais ce projet** : le spike
