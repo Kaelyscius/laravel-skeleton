@@ -99,11 +99,71 @@ revue.
 |---|---|
 | **S** | `/bmad-code-review` — les 3 layers, contexte frais |
 | **R** | idem + relecture ciblée de l'invariant touché |
-| **C** | idem + `/bmad-review-adversarial-general` sur la surface sensible |
+| **C** | idem + `/bmad-review-adversarial-general` sur la surface sensible — **2 passes MAX**, cf. plafond ci-dessous |
 
 Ne pas empiler les revues « pour être sûr ». Deux revues qui disent la même
 chose ne valent pas mieux qu'une ; elles coûtent juste le double et fabriquent
 de la confiance.
+
+> ## ⛔ PLAFOND : **deux passes de revue de code par story.**
+> ## Et la seconde relit **ce que la première a écrit**.
+>
+> Décidé le **2026-08-20**, sur mesure — pas sur intuition. Les 13 stories de
+> l'Epic 1 ont subi **15 passes** de revue. En comptant les correctifs
+> *appliqués* et, parmi eux, ceux dont l'objet est une régression introduite
+> par la passe précédente :
+>
+> | Rang | Correctifs | Dont réparation de la passe précédente |
+> |---|---|---|
+> | Passe 1 (13 stories) | **117** — 9 par story | 0 % |
+> | Passe 2 (3 passes) | **27** | **22 %** |
+> | Passe 3 (1 passe) | **5** | **80 %**, dont un revert pur |
+>
+> **Ce qui compte dans le quota** : `/bmad-code-review` et
+> `/bmad-review-adversarial-general`.
+> **Ce qui en est exclu** : `/security-review`, `composer audit`, `npm audit`,
+> `make security-scan` — un scanner ne fabrique pas de la confiance, il
+> constate, et `composer audit` a sorti 7 advisories en une session le
+> 2026-08-06.
+>
+> ### La clause qui fait tout le travail
+>
+> Une passe 2 n'est utile que si elle a **du code neuf à lire**. Les deux
+> passes 2 du dépôt le prouvent dans les deux sens :
+>
+> - **Story 1.3** — la passe 2 relisait le même code, corrigé : **0 correctif**,
+>   2 reports, **13 constats écartés** (des thèmes de la passe 1 re-soulevés
+>   hors contexte). Coût pur.
+> - **Story 1.9** — la passe 2 portait sur les **3 changements structurels
+>   écrits pendant la passe 1**, donc jamais relus : **21 correctifs**, et la
+>   trouvaille de la story (`welcome.blade.php`, seule route atteignable en
+>   production, gardée dans aucun sens).
+>
+> Donc : **une passe 2 qui ne peut pas nommer ce que la passe 1 a écrit n'a
+> rien à faire.** Ce n'est pas une question de zèle, c'est une question de
+> périmètre.
+>
+> ### 🔴 Et l'argument qui a emporté la décision
+>
+> `F3`, correctif de la **passe 2** de la story 1.1, a **introduit**
+> `env('TRUSTED_PROXIES', '*')` — avec une justification fausse (« safe derrière
+> Apache » : Apache *ajoute* à `X-Forwarded-For`, il ne remplace pas). C'est le
+> trou de sécurité trouvé **deux mois et demi plus tard** par la story 1.10a :
+> toute adresse d'Internet devenait proxy de confiance, `request()->ip()`
+> rendait la valeur forgée par le client, et le rate limiting du login donnait
+> **un seau neuf par tentative**.
+>
+> La revue adversariale ne l'a pas trouvé — **elle l'a posé**. Et la passe 3 est
+> repassée dessus sans le voir : elle regardait le *parsing* de la variable, pas
+> ce que sa valeur par défaut autorisait.
+>
+> ### Ce que ce plafond n'est pas
+>
+> Une loi de la nature. La mesure compte des **correctifs**, pas de la
+> **gravité** ; elle porte sur **un seul epic** et **un seul relecteur** ; et
+> l'échantillon des passes 3 est de **un**. C'est une règle de coût. Elle vaut
+> jusqu'à ce qu'une story la démente — auquel cas **on écrit le démenti**, on ne
+> contourne pas le plafond en silence.
 
 ### Étape 4 — Revue de sécurité (R et C uniquement)
 
