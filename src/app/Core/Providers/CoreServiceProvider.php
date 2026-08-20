@@ -8,6 +8,7 @@ use App\Core\Console\Commands\ProxiesCheckCommand;
 use App\Core\Console\Commands\TenancyAssertCommand;
 use App\Core\Http\Middleware\SetCurrentStreamer;
 use App\Core\Support\CurrentStreamer;
+use App\Core\Support\TrustedProxies;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
@@ -76,7 +77,7 @@ final class CoreServiceProvider extends ServiceProvider
     private function trustConfiguredProxies(): void
     {
         /** @var string|array<int, string> $at */
-        $at = config('proxies.at', []);
+        $at = config('proxies.at', TrustedProxies::TRUST_NOBODY);
 
         TrustProxies::at($at);
     }

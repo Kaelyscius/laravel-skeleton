@@ -6,6 +6,7 @@ use App\Core\Providers\CoreServiceProvider;
 use App\Modules\Admin\Providers\AdminServiceProvider;
 use App\Modules\Admin\Providers\Filament\AdminPanelProvider;
 use App\Modules\Public\Providers\PublicServiceProvider;
+use App\Providers\AppServiceProvider;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
@@ -252,17 +253,48 @@ it('leaves only the package-level Filament routes behind, and they serve nothing
                 . 'un constat mais une permission.',
         );
 
-    // Sans URL signée, la route refuse — le panel éteint n'expose donc rien.
-    /** @var int $status */
-    $status = ModuleBoot::withEnv(
-        [
-            'MODULE_ADMIN_ENABLED' => 'false',
-        ],
-        static fn (): int => HttpProbe::get('/filament/exports/1/download')->getStatusCode(),
-    );
+    /*
+     * ⚠️ CE QU'ON MESURE EST UNE INVARIANCE, PAS UN CODE DE STATUT — et la première
+     *    rédaction se trompait deux fois.
+     *
+     * Elle assertait `>= 400`, borne assez lâche pour avaler n'importe quoi. La
+     * lentille adversariale l'a relevé (2026-08-20) en mesurant un **500**, et a
+     * diagnostiqué `NoDefaultPanelSetException` — un panel par défaut absent.
+     * VÉRIFIÉ : c'est faux. L'exception réellement levée est un `QueryException`,
+     * `relation "exports" does not exist` : ces routes lient un modèle `Export`
+     * dont ce projet n'a jamais publié la migration, et n'en a pas besoin.
+     *
+     * Conséquence : le 500 n'a RIEN à voir avec le gate de module. Il se produit
+     * à l'identique module allumé. La propriété honnête n'est donc pas « ces
+     * routes refusent », c'est « le gate ne les influence pas » — ce qui est le
+     * vrai sujet de l'AC2 — et « elles ne servent jamais rien ».
+     *
+     * ⛔ Un renderer transformant `NoDefaultPanelSetException` en 404 a été écrit
+     * puis RETIRÉ : il aurait gardé une exception qui ne survient jamais ici.
+     */
+    $statusWithModule = static function (string $enabled): int {
+        /** @var int $status */
+        $status = ModuleBoot::withEnv(
+            [
+                'MODULE_ADMIN_ENABLED' => $enabled,
+            ],
+            static fn (): int => HttpProbe::get('/filament/exports/1/download')->getStatusCode(),
+        );
 
-    expect($status)
-        ->toBeGreaterThanOrEqual(400, "Une route de paquet Filament répond {$status} module éteint.");
+        return $status;
+    };
+    $off = $statusWithModule('false');
+    $on = $statusWithModule('true');
+
+    expect($off)
+        ->toBe(
+            $on,
+            "Une route de PAQUET Filament rend {$off} module éteint et {$on} module allumé : "
+                . 'le gate de module l\'influence, alors qu\'elle ne lui appartient pas.',
+        );
+
+    expect($off)
+        ->not->toBe(200, "Une route de paquet Filament rend 200 module éteint : elle sert quelque chose.");
 });
 
 it('answers 404 on GET /admin when the Admin module is disabled', function (): void {
@@ -297,4 +329,36 @@ it('redirects GET /admin to the panel login page when the module is enabled', fu
         ->toBe(302);
     expect($response->headers->get('Location'))
         ->toContain('/admin/login');
+});
+
+it('registers Core before the module providers, and pins that order', function (): void {
+    /*
+     * 🔴 UN INVARIANT DE COMPORTEMENT QUI N'ÉTAIT GARDÉ QUE PAR UN COMMENTAIRE.
+     *
+     * `bootstrap/providers.php` a vu son ordre s'inverser en silence le
+     * 2026-08-09 — `AppServiceProvider, CoreServiceProvider` → l'inverse. C'était
+     * une CORRECTION (ADR-0009:102 : le cœur d'abord, puisque
+     * `AppServiceProvider::register()` enregistre les providers de module et que
+     * ceux-ci dépendent des liaisons du cœur), mais elle est passée sans une
+     * ligne : ni dans le commentaire de 18 lignes du fichier, ni dans la File
+     * List, ni dans le Change Log.
+     *
+     * Le remède retenu à la revue du 2026-08-20 avait été… un commentaire de
+     * plus, qui écrivait lui-même « ⛔ Aucun test n'observe l'ORDRE … cette note
+     * est la seule chose qui empêche quelqu'un de le réinverser en croyant
+     * ranger ». La lentille adversariale a relevé qu'un garde-fou déclarant son
+     * propre vide reste un vide. Le voici.
+     */
+    $providers = require RepoFile::root() . '/src/bootstrap/providers.php';
+
+    expect($providers)
+        ->toBe(
+            [
+                CoreServiceProvider::class,
+                AppServiceProvider::class,
+            ],
+            'L\'ordre d\'enregistrement des providers inconditionnels a changé. ADR-0009:102 exige '
+                . 'le cœur AVANT les modules : AppServiceProvider::register() enregistre les providers '
+                . 'de module, qui dépendent des liaisons de Core (CurrentStreamer notamment).',
+        );
 });

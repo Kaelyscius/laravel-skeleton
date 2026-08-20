@@ -58,7 +58,7 @@ uses(RefreshDatabase::class);
 function superAdminUser(): User
 {
     $user = User::factory()->create();
-    $user->assignRole(Role::findOrCreate('super-admin', 'web'));
+    $user->assignRole(Role::findOrCreate(RoleSeeder::SUPER_ADMIN, 'web'));
 
     return $user;
 }
@@ -114,7 +114,7 @@ it('refuses the seeded test@example.com user by name', function (): void {
 
     $seeded = User::query()->where('email', 'test@example.com')->firstOrFail();
 
-    expect($seeded->hasRole('super-admin'))
+    expect($seeded->hasRole(RoleSeeder::SUPER_ADMIN))
         ->toBeFalse(
             'DatabaseSeeder ne doit JAMAIS donner super-admin à test@example.com.',
         );
@@ -267,7 +267,7 @@ it('refuses a super-admin on a panel that is not the admin panel', function (): 
      * compris celui nommé « grants the panel on the role, not on panel identity
      * alone », qui n'observait que la dimension rôle.
      *
-     * La revue a APPLIQUÉ la mutation `return $this->hasRole('super-admin');` et
+     * La revue a APPLIQUÉ la mutation `return $this->hasRole(RoleSeeder::SUPER_ADMIN);` et
      * relancé la suite entière : 226 tests, 0 échec. Le paragraphe défendait une
      * ligne que rien ne gardait, sur la seule surface d'authentification du
      * produit — le motif dominant de ce dépôt, à sa place la plus coûteuse.
@@ -361,13 +361,13 @@ it('actually opens the door: a super-admin signs in with real credentials and la
      * page de connexion, avec le bon mot de passe. Le `POST /admin/login` n'existe
      * pas (§11 de la story) — c'est `authenticate()` qui authentifie.
      */
-    Role::findOrCreate('super-admin', 'web');
+    Role::findOrCreate(RoleSeeder::SUPER_ADMIN, 'web');
 
     $admin = User::factory()->create([
         'email' => 'operator@example.com',
         'password' => Hash::make('correct-horse-battery-staple'),
     ]);
-    $admin->assignRole('super-admin');
+    $admin->assignRole(RoleSeeder::SUPER_ADMIN);
 
     expect(Filament::auth()->check())->toBeFalse('La session doit partir non authentifiée.');
 
@@ -525,4 +525,27 @@ it('does not leak an authenticated session into the next anonymous probe', funct
                 . 'a fuité, et toute assertion de refus de ce fichier peut être verte sans avoir '
                 . 'exercé le chemin anonyme.',
         );
+});
+
+it('exposes no self-registration and no password reset on the panel', function (): void {
+    /*
+     * ⚠️ « PAS D'INSCRIPTION » N'ÉTAIT EXPRIMÉ QUE PAR UN APPEL ABSENT.
+     *
+     * `AdminPanelProvider::panel()` n'appelle simplement pas `->registration()`
+     * ni `->passwordReset()`. Une absence ne se relit pas : un `filament:install`
+     * rejoué, un provider recopié depuis la documentation, ou un copier-coller
+     * bien intentionné les activent sans que rien ne rougisse — c'est le mécanisme
+     * exact qui avait mis `AdminPanelProvider` dans `bootstrap/providers.php` et
+     * laissé `/admin` servir un 302 module éteint.
+     *
+     * Sur la seule surface d'authentification du produit, l'inscription libre
+     * signifierait que n'importe qui crée un compte ; le rôle le laisserait
+     * dehors (403), mais la table `users` deviendrait publique en écriture.
+     */
+    $panel = Filament::getPanel('admin');
+
+    expect($panel->hasRegistration())
+        ->toBeFalse('Le panel /admin accepte les inscriptions : la table users devient publique en écriture.');
+    expect($panel->hasPasswordReset())
+        ->toBeFalse('Le panel /admin expose la réinitialisation de mot de passe — un flux d\'e-mail non prévu par cette story.');
 });

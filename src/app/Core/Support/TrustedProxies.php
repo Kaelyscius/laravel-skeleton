@@ -51,6 +51,43 @@ final class TrustedProxies
     public const string REMOTE_ADDR = 'REMOTE_ADDR';
 
     /**
+     * « Aucun proxy de confiance », exprimé par une valeur que RIEN ne peut satisfaire.
+     *
+     * 🔴 POURQUOI PAS SIMPLEMENT UN TABLEAU VIDE — LA FAILLE, TROISIÈME ITÉRATION.
+     *
+     * `TrustProxies::proxies()` est `static::$alwaysTrustProxies ?: $this->proxies`.
+     * Un tableau VIDE est **falsy** : la valeur configurée s'effondre donc sur
+     * `null`, strictement indiscernable de « jamais configuré ». Or dans cette
+     * branche, `setTrustedProxyIpAddresses()` fait :
+     *
+     *   if (is_null($trustedIps) && (laravel_cloud()
+     *       || str_ends_with($request->host(), '.on-forge.com')
+     *       || str_ends_with($request->host(), '.on-vapor.com'))) {
+     *       $trustedIps = '*';
+     *   }
+     *
+     * `$request->host()` est l'en-tête `Host`, écrit par le CLIENT. Un attaquant
+     * envoyant `Host: x.on-vapor.com` obtenait donc `setTrustedProxies(['0.0.0.0/0',
+     * '::/0'])` — la faille d'origine, intégralement, sur un seul en-tête.
+     *
+     * MESURÉ en HTTP réel le 2026-08-20, `TRUSTED_PROXIES=` vide :
+     *
+     *   Host: localhost        → ip = 172.18.0.3      trusted = []
+     *   Host: x.on-vapor.com   → ip = 198.51.100.42   trusted = ['0.0.0.0/0','::/0']  ❌
+     *   Host: y.on-forge.com   → ip = 198.51.100.42   trusted = ['0.0.0.0/0','::/0']  ❌
+     *
+     * `0.0.0.0/32` est l'adresse « non spécifiée » : aucune connexion TCP ne peut
+     * en provenir, donc `IpUtils::checkIp()` la refuse pour tout pair réel. La
+     * valeur est NON VIDE, donc `proxies()` ne rend plus `null`, donc le pivot
+     * `.on-vapor.com` / `.on-forge.com` ne peut plus se déclencher — et elle ne
+     * fait confiance à personne. Dire « aucun » exige ici de le dire avec quelque
+     * chose ; un vide se fait relire comme un silence.
+     *
+     * @var list<string>
+     */
+    public const array TRUST_NOBODY = ['0.0.0.0/32'];
+
+    /**
      * @return array{at: string|array<int, string>, problems: array<int, string>}
      */
     public static function parse(mixed $raw): array
@@ -61,7 +98,7 @@ final class TrustedProxies
         // trusted, and nobody is told. Finding Q22.
         if (! is_string($raw)) {
             return [
-                'at' => [],
+                'at' => self::TRUST_NOBODY,
                 'problems' => [sprintf(
                     'TRUSTED_PROXIES vaut `%s`, qui n\'est pas une chaîne. Laissez la variable VIDE '
                     . '(aucun proxy de confiance, le défaut sûr) ou énumérez des adresses/CIDR '
@@ -92,7 +129,7 @@ final class TrustedProxies
          */
         if ($value === '') {
             return [
-                'at' => [],
+                'at' => self::TRUST_NOBODY,
                 'problems' => [],
             ];
         }
@@ -155,7 +192,9 @@ final class TrustedProxies
         }
 
         return [
-            'at' => $kept,
+            // Une liste entièrement écartée (que des `*` noyés) ne doit pas retomber
+            // sur le tableau vide, pour la raison écrite sur TRUST_NOBODY.
+            'at' => $kept === [] ? self::TRUST_NOBODY : $kept,
             'problems' => $problems,
         ];
     }
@@ -173,11 +212,28 @@ final class TrustedProxies
         if (str_contains($entry, '/')) {
             [$address, $prefix] = explode('/', $entry, 2);
 
-            if ($prefix === '' || ! ctype_digit($prefix) || (int) $prefix > 128) {
+            // ⚠️ `/033` n'est pas `/33` : un zéro de tête est une faute de frappe,
+            // pas une notation. On refuse plutôt que d'interpréter.
+            if ($prefix === '' || ! ctype_digit($prefix) || ($prefix !== '0' && str_starts_with($prefix, '0'))) {
                 return false;
             }
         }
 
-        return filter_var($address, FILTER_VALIDATE_IP) !== false;
+        if (filter_var($address, FILTER_VALIDATE_IP) === false) {
+            return false;
+        }
+
+        // 🔴 LA BORNE DÉPEND DE LA FAMILLE, et ne pas le voir rendait le contrôle muet.
+        //
+        // La version précédente n'écartait que `> 128`, si bien que `10.0.0.0/64`
+        // et `192.168.1.1/99` passaient sans un mot. Mesuré :
+        // `IpUtils::checkIp('10.0.0.5', '10.0.0.0/64')` rend `false` — l'entrée ne
+        // correspond donc à AUCUN client, `request()->ip()` rend l'adresse du proxy,
+        // et tous les clients derrière lui partagent un seul seau. C'est exactement
+        // la conséquence que le message de ce contrôle décrit, restée silencieuse
+        // parce que la borne était celle de l'autre famille d'adresses.
+        $isIpv4 = filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
+
+        return $prefix === null || (int) $prefix <= ($isIpv4 ? 32 : 128);
     }
 }

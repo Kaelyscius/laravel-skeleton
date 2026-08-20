@@ -8,6 +8,7 @@ use App\Models\User;
 use Filament\Auth\Pages\Login;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
 use Tests\Support\HttpProbe;
@@ -384,6 +385,66 @@ it('still separates two genuinely different clients into different buckets', fun
         );
 });
 
+it('cannot be pivoted onto the wildcard by a forged Host header', function (): void {
+    /*
+     * 🔴 LA MÊME FAILLE, TROISIÈME ITÉRATION — trouvée par la lentille adversariale
+     *    le 2026-08-20, REPRODUITE en HTTP réel avant d'être écrite.
+     *
+     * Le défaut « aucun proxy de confiance » avait été exprimé par un TABLEAU VIDE.
+     * Or `TrustProxies::proxies()` est `static::$alwaysTrustProxies ?: $this->proxies` :
+     * un tableau vide est FALSY, la valeur s'effondre sur `null`, et `null` signifie
+     * pour Laravel « jamais configuré ». Dans cette branche :
+     *
+     *   if (is_null($trustedIps) && (laravel_cloud()
+     *       || str_ends_with($request->host(), '.on-forge.com')
+     *       || str_ends_with($request->host(), '.on-vapor.com'))) { $trustedIps = '*'; }
+     *
+     * `$request->host()` est l'en-tête `Host`, écrit par le client. UN SEUL EN-TÊTE
+     * FORGÉ rendait donc tout le joker. Mesuré avant correction :
+     *
+     *   Host: localhost      → ip = 172.18.0.3      trusted = []
+     *   Host: x.on-vapor.com → ip = 198.51.100.42   trusted = ['0.0.0.0/0','::/0']
+     *
+     * Aucun test ne pouvait le voir : toutes les sondes passent par
+     * `Request::create()`, dont l'hôte par défaut est `localhost`.
+     */
+    $peer = '203.0.113.9';
+
+    foreach (['localhost', 'x.on-vapor.com', 'y.on-forge.com', 'anything.on-forge.com'] as $host) {
+        HttpProbe::get('/admin/login', null, [
+            'HTTP_HOST' => $host,
+            'REMOTE_ADDR' => $peer,
+            'HTTP_X_FORWARDED_FOR' => '198.51.100.42',
+        ]);
+
+        expect(request()->ip())
+            ->toBe(
+                $peer,
+                "Sous `Host: {$host}`, request()->ip() rend une valeur écrite par le client : "
+                    . 'la confiance aux proxys a basculé sur le joker à cause d\'un en-tête forgé.',
+            );
+    }
+});
+
+it('expresses "no trusted proxy" with something, never with an empty array', function (): void {
+    /*
+     * LE GARDE-FOU DE L'EXPRESSION ELLE-MÊME.
+     *
+     * Le test précédent observe l'effet ; celui-ci observe la cause, parce que le
+     * pivot ne se déclenche que sur des hôtes précis et qu'une future version de
+     * Laravel peut en ajouter d'autres. La propriété robuste est : la valeur
+     * remise à `TrustProxies` n'est JAMAIS vide, donc `proxies()` ne peut jamais
+     * rendre `null`, donc la branche « jamais configuré » est hors d'atteinte.
+     */
+    expect(TrustedProxies::parse('')['at'])->not->toBe([]);
+    expect(TrustedProxies::parse('   ')['at'])->not->toBe([]);
+    expect(TrustedProxies::parse(true)['at'])->not->toBe([]);
+    expect(TrustedProxies::parse('*,*')['at'])->not->toBe([]);
+
+    // Et ce « quelque chose » ne doit faire confiance à personne.
+    expect(TrustedProxies::TRUST_NOBODY)->toBe(['0.0.0.0/32']);
+});
+
 it('ignores a forged X-Forwarded-For end to end, through the real HTTP kernel', function (): void {
     /*
      * 🔴 LE GARDE-FOU QUI MANQUAIT, ET QUI AURAIT ATTRAPÉ LE DÉFAUT.
@@ -569,7 +630,7 @@ it('does not let a non-string value silently trust nothing', function (): void {
     // casse, et personne n'est prévenu. Finding Q22.
     $parsed = TrustedProxies::parse(true);
 
-    expect($parsed['at'])->toBe([], 'Une valeur non-chaîne ne retombe pas sur le défaut sûr (aucun proxy de confiance).');
+    expect($parsed['at'])->toBe(TrustedProxies::TRUST_NOBODY, 'Une valeur non-chaîne ne retombe pas sur le défaut sûr (aucun proxy de confiance).');
     expect($parsed['problems'])->toHaveCount(1, 'Une valeur non-chaîne passe sans être signalée.');
 });
 
@@ -666,8 +727,12 @@ it('falls back to the immediate peer when the variable is written but left empty
      * silence : c'est le seul cas où l'on décide à la place de l'opérateur, et
      * c'est parce qu'il n'a précisément rien décidé.
      */
-    expect(TrustedProxies::parse('')['at'])->toBe([]);
-    expect(TrustedProxies::parse('   ')['at'])->toBe([]);
+    // ⚠️ `TRUST_NOBODY`, jamais `[]` : un tableau vide est falsy, donc
+    // `TrustProxies::proxies()` le rendrait indiscernable de « jamais configuré »
+    // et Laravel basculerait sur le joker pour un `Host` forgé. Voir le test
+    // `cannot be pivoted onto the wildcard by a forged Host header`.
+    expect(TrustedProxies::parse('')['at'])->toBe(TrustedProxies::TRUST_NOBODY);
+    expect(TrustedProxies::parse('   ')['at'])->toBe(TrustedProxies::TRUST_NOBODY);
 });
 
 it('still honours a wildcard written on its own, because that is a decision', function (): void {
@@ -705,4 +770,104 @@ it('flags REMOTE_ADDR, because under FastCGI it names the client and not the pro
     expect($parsed['problems'])
         ->toHaveCount(1, 'REMOTE_ADDR passe sans être signalé : le déploiement certifierait la faille.');
     expect($parsed['problems'][0])->toContain('FastCGI');
+});
+
+/*
+|------------------------------------------------------------------------------
+| Les garde-fous du garde-fou — findings de la lentille adversariale, 2026-08-20
+|------------------------------------------------------------------------------
+*/
+
+it('ships an empty TRUSTED_PROXIES default in .env.example', function (): void {
+    /*
+     * 🔴 CETTE LIGNE A PORTÉ UNE VALEUR DANGEREUSE DEUX FOIS — `*` jusqu'au
+     *    2026-08-09, `REMOTE_ADDR` jusqu'au 2026-08-20 — chaque fois avec une
+     *    justification confiante et fausse écrite juste à côté, chaque fois
+     *    découverte par une revue ultérieure et non par un test.
+     *
+     * Rien ne gardait cette ligne : tous les tests de `TrustedProxies::parse()`
+     * passent un argument LITTÉRAL, donc ils restent verts quoi que dise le
+     * fichier que l'opérateur va réellement copier. Une troisième régression
+     * serait aussi invisible que les deux premières.
+     */
+    $line = null;
+
+    foreach (explode("\n", RepoFile::read('src/.env.example')) as $candidate) {
+        if (str_starts_with(trim($candidate), 'TRUSTED_PROXIES=')) {
+            $line = trim($candidate);
+
+            break;
+        }
+    }
+
+    expect($line)
+        ->not->toBeNull('`.env.example` ne déclare plus TRUSTED_PROXIES du tout.');
+    expect($line)
+        ->toBe(
+            'TRUSTED_PROXIES=',
+            "`.env.example` livre [{$line}]. Le défaut doit être VIDE : `*` fait confiance à "
+                . 'toute adresse d\'Internet, et `REMOTE_ADDR` désigne le CLIENT sous FastCGI — '
+                . 'les deux rendent la clé de seau de limitation falsifiable.',
+        );
+});
+
+it('registers proxies:check, and it refuses a bad value', function (): void {
+    /*
+     * ⚠️ LA DÉCISION D8 A DÉPLACÉ LE REFUS DANS UNE COMMANDE QUE RIEN N'EXÉCUTAIT.
+     *
+     * `TrustedProxies::parse()` était testé, mais la commande qui en fait une
+     * porte de déploiement ne l'était pas : ni son enregistrement dans
+     * `CoreServiceProvider::boot()`, ni son code de sortie. Une signature changée,
+     * un `return self::SUCCESS` glissé dans la branche d'erreur, ou la commande
+     * retirée de `$this->commands([...])` laissaient tout vert et la porte inerte.
+     */
+    expect(array_key_exists('proxies:check', Artisan::all()))
+        ->toBeTrue('La commande `proxies:check` n\'est pas enregistrée : l\'entrypoint appelle une commande qui n\'existe pas.');
+
+    config()
+        ->set('proxies.problems', []);
+    expect(Artisan::call('proxies:check'))
+        ->toBe(0, 'Une configuration saine fait échouer le contrôle de déploiement.');
+
+    config()
+        ->set('proxies.problems', ['une entrée qui ne correspondra jamais']);
+    expect(Artisan::call('proxies:check'))
+        ->toBe(1, 'Une configuration signalée comme dangereuse laisse le déploiement passer.');
+});
+
+it('keeps the deploy gate outside the production-only block', function (): void {
+    // Le contrôle vivait dans `if [ "$APP_ENV" = "production" ]` : un hôte
+    // `staging` ou `preprod` démarrait sans lui, avec le `*` hérité d'un vieux
+    // `.env` — l'état exact que ce contrôle refuse.
+    $entrypoint = RepoFile::read('docker/php/scripts/docker-entrypoint.sh');
+
+    expect(str_contains($entrypoint, 'php artisan proxies:check || exit 1'))
+        ->toBeTrue('L\'entrypoint n\'exécute plus `proxies:check`, ou n\'abandonne plus sur son échec.');
+
+    $gate = strpos($entrypoint, 'php artisan proxies:check');
+    $cache = (int) strpos($entrypoint, 'php artisan config:cache');
+
+    expect($gate)
+        ->toBeLessThan(
+            $cache,
+            '`proxies:check` s\'exécute APRÈS `config:cache` : il contrôlerait une configuration déjà figée.',
+        );
+});
+
+it('rejects a CIDR prefix impossible for its address family', function (): void {
+    // `/64` sur une IPv4 passait le contrôle de forme, puis ne correspondait à
+    // aucun client — `request()->ip()` rendait alors l'adresse du proxy, et tous
+    // les clients derrière lui partageaient un seul seau. La borne était celle
+    // de l'autre famille d'adresses.
+    foreach (['10.0.0.0/64', '192.168.1.1/99', '10.0.0.0/033'] as $bogus) {
+        expect(TrustedProxies::parse($bogus)['problems'])
+            ->not->toBeEmpty("`{$bogus}` passe sans être signalé alors qu'il ne peut correspondre à aucun client.");
+    }
+
+    // Et les bornes légitimes restent acceptées, sans quoi le test précédent
+    // serait satisfait par un contrôle qui refuse tout.
+    foreach (['10.0.0.0/8', '192.168.1.1/32', '2001:db8::/32', '::1/128'] as $valid) {
+        expect(TrustedProxies::parse($valid)['problems'])
+            ->toBe([], "`{$valid}` est refusé alors qu'il est parfaitement valide.");
+    }
 });

@@ -50,22 +50,7 @@ final class HttpProbe
      */
     public static function get(string $uri, ?Authenticatable $actingAs = null, array $server = []): Response
     {
-        if ($actingAs instanceof Authenticatable) {
-            // On connecte sur le guard `web` explicitement plutôt que sur le
-            // guard par défaut : c'est celui par lequel Filament authentifie
-            // (AC9), et `auth.defaults.guard` est modifiable.
-            Auth::guard('web')->login($actingAs);
-        } else {
-            // ⚠️ ET ON DÉCONNECTE QUAND LA SONDE EST ANONYME (finding Q12,
-            // revue du 2026-08-20).
-            //
-            // Sans cette branche, deux sondes dans le même test partageaient la
-            // session : après un `get($uri, $user)`, un `get($uri)` censé être
-            // anonyme tournait ENCORE AUTHENTIFIÉ. Les assertions de refus (403)
-            // passaient alors sans avoir exercé le chemin anonyme — un vert pour
-            // la mauvaise raison, sur les tests d'accès au panel.
-            Auth::guard('web')->logout();
-        }
+        self::authenticate($actingAs);
 
         return app(Kernel::class)->handle(
             Request::create($uri, 'GET', [], [], [], $server),
@@ -81,11 +66,40 @@ final class HttpProbe
      *
      * @param  array<string, string>  $server
      */
-    public static function post(string $uri, string $body = '', array $server = []): Response
-    {
+    public static function post(
+        string $uri,
+        string $body = '',
+        array $server = [],
+        ?Authenticatable $actingAs = null,
+    ): Response {
+        // ⚠️ MÊME SYMÉTRIE QUE `get()`, ET ELLE MANQUAIT (finding de revue, 2026-08-20).
+        //
+        // Le correctif Q12 avait posé le `logout()` sur `get()` seulement. Un
+        // `post()` suivant un `get($uri, $user)` dans le même test tournait donc
+        // ENCORE AUTHENTIFIÉ — sur l'endpoint qui porte TOUT le trafic du panel.
+        // Le défaut réparé d'un côté restait ouvert de l'autre.
+        self::authenticate($actingAs);
+
         return app(Kernel::class)->handle(
             Request::create($uri, 'POST', [], [], [], $server, $body),
         );
+    }
+
+    /**
+     * Aligne la session sur ce que la sonde demande — connectée, ou franchement anonyme.
+     */
+    private static function authenticate(?Authenticatable $actingAs): void
+    {
+        if ($actingAs instanceof Authenticatable) {
+            // On connecte sur le guard `web` explicitement plutôt que sur le
+            // guard par défaut : c'est celui par lequel Filament authentifie
+            // (AC9), et `auth.defaults.guard` est modifiable.
+            Auth::guard('web')->login($actingAs);
+
+            return;
+        }
+
+        Auth::guard('web')->logout();
     }
 
     /**

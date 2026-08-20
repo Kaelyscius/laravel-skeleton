@@ -105,6 +105,14 @@ final class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            // ⚠️ EXPLICITE, ET CE N'EST PAS REDONDANT (finding de revue, 2026-08-20).
+            //
+            // `web` est déjà le défaut de Filament (`HasAuth::$authGuard`). Sans
+            // cet appel, l'assertion d'AC9 `getAuthGuard() === 'web'` gardait donc
+            // un défaut du framework, pas une décision de ce projet : un Filament
+            // mineur qui changerait ce défaut basculerait le guard de l'application
+            // ET le test en même temps — les deux bougent ensemble, rien ne sonne.
+            ->authGuard('web')
             ->login()
             ->colors([
                 // Palette laissée telle que générée : le thème du panel n'a

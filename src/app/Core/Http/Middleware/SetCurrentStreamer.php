@@ -8,8 +8,8 @@ use App\Core\Exceptions\NoStreamerConfiguredException;
 use App\Core\Models\Streamer;
 use App\Core\Support\CurrentStreamer;
 use Closure;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -86,14 +86,28 @@ final class SetCurrentStreamer
                 // et demandent deux commandes différentes. Sans ce test, le premier
                 // cas rend une QueryException nue — un 500 sans remède dedans, soit
                 // exactement le coût de diagnostic que ce chemin existe pour retirer.
-                if (! Schema::hasTable('streamers')) {
-                    throw NoStreamerConfiguredException::migrationsMissing();
-                }
-
                 // ⛔ PAS de `firstOrFail()` : sa ModelNotFoundException est rendue en
                 // 404 par le handler, c'est-à-dire en « page inexistante ». L'échec doit
                 // être une erreur serveur nommée, que la supervision voit.
-                $streamer = Streamer::query()->orderBy('id')->first();
+                // ⚠️ ON RATTRAPE, ON NE PRÉ-VÉRIFIE PAS (finding de revue, 2026-08-20).
+                //
+                // Un `Schema::hasTable()` ici interrogeait `information_schema` à
+                // CHAQUE résolution du contexte tenant — donc à chaque requête `web`
+                // du site public — pour distinguer deux états qui n'existent que sur
+                // un déploiement pas encore migré. Un aller-retour permanent payé sur
+                // le chemin nominal, invisible pour la suite de tests, pour un
+                // meilleur message dans un cas qui ne se produit qu'une fois.
+                //
+                // `42P01` = `undefined_table` (SQLSTATE, PostgreSQL comme standard).
+                try {
+                    $streamer = Streamer::query()->orderBy('id')->first();
+                } catch (QueryException $exception) {
+                    if ($exception->getCode() === '42P01') {
+                        throw NoStreamerConfiguredException::migrationsMissing();
+                    }
+
+                    throw $exception;
+                }
 
                 if (! $streamer instanceof Streamer) {
                     throw NoStreamerConfiguredException::make();

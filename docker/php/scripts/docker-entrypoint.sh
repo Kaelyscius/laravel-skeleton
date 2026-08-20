@@ -74,6 +74,20 @@ fi
 if [ -f "/var/www/html/artisan" ]; then
    echo -e "${YELLOW}Configuration de Laravel...${NC}"
 
+   # ─────────────────────────────────────────────────────────────────────────
+   # ⛔ LE CONTRÔLE DES PROXYS EST HORS DU `if production` (finding de revue, 2026-08-20)
+   #
+   # Il y était, et c'était un trou : un hôte `staging`, `preprod` ou `demo` —
+   # tout ce qui n'est pas LITTÉRALEMENT « production » — démarrait sans contrôle,
+   # avec le `TRUSTED_PROXIES=*` hérité d'un vieux `.env`, c'est-à-dire dans l'état
+   # exact que ce contrôle a été écrit pour refuser. Il est bon marché (il lit la
+   # configuration) : on le passe partout sauf en local/testing, où un opérateur
+   # bricole et n'a pas à être arrêté.
+   # ─────────────────────────────────────────────────────────────────────────
+   if [ "$APP_ENV" != "local" ] && [ "$APP_ENV" != "testing" ]; then
+       php artisan proxies:check || exit 1
+   fi
+
    if [ "$APP_ENV" = "production" ]; then
        echo -e "${YELLOW}Optimisation pour la production...${NC}"
 
@@ -95,12 +109,11 @@ if [ -f "/var/www/html/artisan" ]; then
        # ─────────────────────────────────────────────────────────────────────
        php artisan optimize:clear
 
-       # ⛔ AVANT `config:cache`, PAS APRÈS. `TRUSTED_PROXIES` mal renseigné n'est
-       # plus refusé pendant le chargement de `config/` (décision D8 : une
-       # exception levée là rendait l'application non bootable, commandes de
-       # réparation comprises). Le refus est ici, où il arrête le déploiement sans
-       # emporter la console avec lui.
-       php artisan proxies:check || exit 1
+       # ⛔ `proxies:check` a déjà tourné ci-dessus, AVANT `config:cache` — l'ordre
+       # compte : le refus de `TRUSTED_PROXIES` ne vit plus dans le chargement de
+       # `config/` (décision D8, où une exception rendait l'application non
+       # bootable, commandes de réparation comprises), et il ne doit pas s'exécuter
+       # sur une configuration déjà mise en cache.
 
        php artisan config:cache
        php artisan route:cache

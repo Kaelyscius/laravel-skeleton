@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core\Console\Commands;
 
+use App\Core\Support\TrustedProxies;
 use Illuminate\Console\Command;
 
 /**
@@ -91,10 +92,13 @@ final class ProxiesCheckCommand extends Command
             return $at;
         }
 
-        // Une liste vide N'EST PAS une absence de réglage : c'est LE défaut sûr,
-        // et l'imprimer comme une chaîne vide laisserait croire à un oubli.
-        return $at === []
-            ? 'aucun proxy de confiance (défaut sûr — X-Forwarded-* ignoré, request()->ip() = pair TCP)'
-            : implode(', ', $at);
+        // `TRUST_NOBODY` N'EST PAS une absence de réglage : c'est LE défaut sûr, et
+        // l'imprimer tel quel (`0.0.0.0/32`) laisserait un opérateur croire à une
+        // valeur bizarre héritée d'ailleurs. On dit ce que ça FAIT.
+        if ($at === TrustedProxies::TRUST_NOBODY || $at === []) {
+            return 'aucun proxy de confiance (défaut sûr — X-Forwarded-* ignoré, request()->ip() = pair TCP)';
+        }
+
+        return implode(', ', $at);
     }
 }

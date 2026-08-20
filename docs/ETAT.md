@@ -486,8 +486,8 @@ appartenir à la table `users` n'accorde rien.
 
 ```bash
 make up-local && make test && make quality-ratchet && make npm-build && make test-browser
-# attendu : 241 tests exit 0 · ratchet 0/0/0 · 34 tests navigateur verts
-#            (179 → 241 : +61 tests apportés par la 1.10a et sa revue)
+# attendu : 252 tests exit 0 · ratchet 0/0/0 · 34 tests navigateur verts
+#            (179 → 252 : +61 tests apportés par la 1.10a et sa revue)
 #
 # ⚠️ Le chiffre a été FAUX en trois endroits jusqu'au 2026-08-20 : le dossier
 #    annonçait 217 quand la suite en comptait 226, puis 240 après les correctifs
