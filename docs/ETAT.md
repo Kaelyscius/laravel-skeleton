@@ -2,7 +2,7 @@
 
 > ✅ **Epic 1 terminé — 13/13 `done` le 2026-08-20.** La 1.10a, seule story de niveau **C**, a
 > passé les trois revues prescrites (`/bmad-code-review` passe 2, `/security-review`,
-> `/bmad-review` adversariale). **252 tests · 34 navigateur · ratchet 0/0/0 · PHPStan niveau 10 ·
+> `/bmad-review` adversariale). **255 tests · 34 navigateur · ratchet 0/0/0 · PHPStan niveau 10 ·
 > `composer audit` 0 · `npm audit` 0.**
 >
 > ⚠️ La même faille de confiance aux proxys a dû être corrigée **trois fois** : `*`, puis
@@ -10,7 +10,17 @@
 > « jamais configuré », donc joker sur un `Host:` forgé). Défaut final : `TRUST_NOBODY =
 > ['0.0.0.0/32']`. Chaque correctif portait une justification confiante et fausse écrite à côté.
 >
-> **Prochaine étape : `epic-1-retrospective`.** Reports ouverts : W1–W12 dans `deferred-work.md`.
+> **Rétrospective faite le 2026-08-20** → `_bmad-output/implementation-artifacts/epic-1-retro-2026-08-20.md`.
+> Verdict : **`accepted-with-open-items`**, critères déclarés. 15 actions inscrites au sprint status.
+>
+> ⚠️ **FR-Scaff-6 (Pennant) n'a jamais été construit** et Epic 1 le comptait comme couvert : les FR
+> déclarés se lisent **9 sur 10**. Reporté en W13 vers Epic 9. Et **cinq garde-fous ont été prouvés
+> incapables de rougir** (mutation appliquée, pas déduite) — c'est une dette de *détection*, pas de
+> fonctionnement : le comportement livré est correct.
+>
+> **Prochaine étape : Epic 2** (`2-1-refactor-scripts-lib-common-sh`). Fenêtre à surveiller : A4,
+> le scan de couplage aveugle aux FQCN, doit être refait **avant Epic 4** — le premier epic à
+> écrire du code métier dans deux modules.
 
 > Point d'entrée de reprise. **Un seul fichier, écrasé à chaque session, jamais accumulé.**
 > Il n'a aucune autorité : il pointe vers `epics.md` et `sprint-status.yaml`, jamais l'inverse.
@@ -498,8 +508,8 @@ appartenir à la table `users` n'accorde rien.
 
 ```bash
 make up-local && make test && make quality-ratchet && make npm-build && make test-browser
-# attendu : 252 tests exit 0 · ratchet 0/0/0 · 34 tests navigateur verts
-#            (179 → 252 : +61 tests apportés par la 1.10a et sa revue)
+# attendu : 255 tests exit 0 · ratchet 0/0/0 · 34 tests navigateur verts
+#            (179 → 255 : +61 tests apportés par la 1.10a et sa revue)
 #
 # ⚠️ Le chiffre a été FAUX en trois endroits jusqu'au 2026-08-20 : le dossier
 #    annonçait 217 quand la suite en comptait 226, puis 240 après les correctifs
