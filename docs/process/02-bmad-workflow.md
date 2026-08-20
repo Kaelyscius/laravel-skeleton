@@ -71,17 +71,22 @@ Format BMAD architecture document standard.
 
 **Output** : `docs/architecture.md` — doc architecture formel, format BMAD standard.
 
-### Étape 2 — Sharding (~5 min)
+### Étape 2 — Sharding — ⛔ ÉTAPE SUPPRIMÉE, ET DÉJÀ FAITE
 
-```
-/bmad-shard-doc docs/architecture.md
-```
+<!-- bmad-referents:ignore — nomme une commande retirée de BMad, pour expliquer sa disparition. -->
 
-**Output** : Découpage en sous-docs digestes :
-- `docs/architecture/stack.md`
-- `docs/architecture/modularity.md`
-- `docs/architecture/tenancy.md`
-- etc.
+> ⛔ **La commande de sharding n'existe plus dans BMad 6.11** (`bmad-shard-doc` a été retirée,
+> sans remplaçant : le découpage n'est plus une étape du workflow). Constaté le 2026-08-20 en
+> re-pointant ce document.
+>
+> **Cette étape est sans objet ici** : le découpage a déjà eu lieu et ses produits sont sur
+> disque — `docs/architecture/1-*.md` à `13-*.md`. Il n'y a rien à relancer.
+>
+> Si un futur gros document doit être découpé, ce sera à la main ou via `/bmad-spec`, qui
+> distille une intention en contrat structuré — ce n'est pas la même opération, et il ne faut
+> pas l'appeler « sharding » par habitude.
+
+<!-- /bmad-referents:ignore -->
 
 ### Étape 3 — Backlog formalisé (~30 min)
 
@@ -116,21 +121,23 @@ Une fois la formalisation faite, ton workflow quotidien devient :
 ```bash
 # Matin : choisir la story du jour
 /bmad-help                                     # GPS BMAD : recommande quoi faire
-# OU
-/bmad-create-story                             # créer la prochaine story du sprint
 
-# Coder
-/bmad-dev-story docs/stories/XXXX-name.md      # impl rigoureuse
-# OU
-/bmad-quick-dev "implémente le ticket XYZ"     # impl rapide (couteau suisse)
+# Créer ET coder — une seule commande depuis BMad 6.11
+/bmad-build _bmad-output/implementation-artifacts/<story>.md
 
 # Review avant commit
-/bmad-code-review                              # review adversariale en 3 layers
+/bmad-code-review                              # review adversariale, 4 couches parallèles
 
 # Commit + PR
 git add -A && git commit && git push
 gh pr create
 ```
+
+> ⚠️ **`bmad-build` n'est pas un renommage.** Il FUSIONNE ce que faisaient
+> `bmad-create-story` puis `bmad-dev-story` : on ne crée plus la story dans une passe et on ne
+> l'implémente plus dans une autre. La boucle qualité (`03-boucle-qualite.md`) garde ses deux
+> étapes distinctes — relire les AC **avant** de coder reste une étape à part entière, même si
+> la commande est la même.
 
 ### Cas particuliers
 
@@ -140,7 +147,7 @@ gh pr create
 | Tu veux une review approfondie | `/bmad-code-review` |
 | Une story devient hors scope v1 | `/bmad-correct-course` |
 | Tu veux un avis sur une décision avant code | `/bmad-checkpoint-preview` |
-| Bug subtil ou edge case que tu sens venir | `/bmad-review-edge-case-hunter` |
+| Bug subtil ou edge case que tu sens venir | `/bmad-review` (lentille edge-case) |
 | Tests à designer pour une feature | `/bmad-testarch-test-design` |
 | Tests à scaffolder Pest concrètement | `/bmad-testarch-automate` |
 | Feature complexe à brainstormer | `/bmad-brainstorming` (Carson) |
@@ -160,41 +167,33 @@ P0 Bloquant : Scaffold modular architecture (Core + 5 modules)
 **Commande pour démarrer** :
 
 ```
-/bmad-create-story
+/bmad-build
 
 Crée la story du ticket "Scaffold modular architecture (Core + 5 modules vides)"
 identifié comme blocker-S1 dans le backlog R4. Estimation ~40h (25h back + 14.5h front + 0.5h buffer). ACs déjà définis.
 ```
 
-Puis :
-
-```
-/bmad-dev-story docs/stories/0001-scaffold-modular-architecture.md
-```
-
 ## 🔧 Skills par cas d'usage (référence rapide)
 
 ### Conception / Décision
-- `/bmad-create-prd` — créer un PRD
-- `/bmad-create-architecture` — architecture solution
-- `/bmad-create-ux-design` — UX patterns
+- `/bmad-prd` — créer, éditer ou valider un PRD (les trois intentions, une seule commande)
+- `/bmad-architecture` — architecture solution
+- `/bmad-ux` — UX patterns
 - `/bmad-brainstorming` — facilité ideation
 - `/bmad-advanced-elicitation` — pousser une analyse plus loin (socratic, first principles, pre-mortem)
-- `/bmad-validate-prd` — valider un PRD
+- `/bmad-forge-idea` — éprouver une idée par interrogatoire jusqu'à ce qu'elle tienne ou meure
 
 ### Backlog
 - `/bmad-create-epics-and-stories` — décomposer en epics/stories
-- `/bmad-create-story` — créer une story spécifique
-- `/bmad-edit-prd` — éditer un PRD existant
-- `/bmad-shard-doc` — découper un gros doc
+- `/bmad-spec` — distiller une intention en SPEC, puis la découper en stories
+- `/bmad-build` — créer ET implémenter une story
 
 ### Code
-- `/bmad-dev-story` — impl rigoureuse story par story
-- `/bmad-quick-dev` — couteau suisse impl
-- `/bmad-code-review` — review adversariale 3 layers
-- `/bmad-review-edge-case-hunter` — chasse aux edge cases
-- `/bmad-review-adversarial-general` — review cynique
-- `/bmad-simplify` — simplifier code existant
+- `/bmad-build` — créer et implémenter une story (méthode officielle)
+- `/bmad-build-auto` — une itération de boucle de dev non surveillée
+- `/bmad-code-review` — review adversariale, 4 couches parallèles
+- `/bmad-review` — review multi-lentilles : adversariale, edge-case, verification-gap, structure, prose
+- `/simplify` — simplifier le code changé (skill hors BMad, fourni par Claude Code)
 
 ### Tests / Qualité
 - `/bmad-testarch-test-design` — plan de tests
@@ -208,25 +207,21 @@ Puis :
 - `/bmad-qa-generate-e2e-tests` — générer E2E auto
 
 ### Pilotage / Sprint
-- `/bmad-sprint-planning` — générer sprint plan
-- `/bmad-sprint-status` — état du sprint
+- `/bmad-sprint-planning` — générer le sprint plan, voir l'état du sprint, ET valider la
+  readiness avant code (les trois, une seule commande)
 - `/bmad-correct-course` — recadrer si dérive
 - `/bmad-checkpoint-preview` — review humaine in-flight
-- `/bmad-retrospective` — post-epic / fin de sprint
-- `/bmad-check-implementation-readiness` — valider PRD/UX/Archi avant code
+- `/bmad-retrospective` — post-epic / fin de sprint (accepte `-H` / `--headless`)
 
 ### Doc / OSS
-- `/bmad-document-project` — doc projet brownfield
-- `/bmad-generate-project-context` — context AI rules
-- `/bmad-index-docs` — générer index.md d'un dossier
-- `/bmad-distillator` — compression LLM-optimized
-- `/bmad-editorial-review-prose` — review prose
-- `/bmad-editorial-review-structure` — review structure
+- `/bmad-project-context` — instructions d'agent d'un dépôt (bloc AGENTS.md) : installer,
+  rafraîchir, auditer. Remplace à la fois la doc brownfield et les AI rules
+- `/bmad-spec` — distiller une intention en contrat machine (SPEC)
+- `/bmad-review` — review de prose et de structure (deux lentilles de la même commande)
 
 ### Marketing / Produit
-- `/bmad-market-research` — recherche marché/concurrence
-- `/bmad-domain-research` — recherche domaine
-- `/bmad-technical-research` — recherche technique
+- `/bmad-deep-recon` — recherche décisionnelle : marché, domaine, technique, concurrence,
+  user-voice, littérature académique (les six, une seule commande, par `type`)
 - `/bmad-product-brief` — brief produit
 - `/bmad-prfaq` — Working Backwards Amazon
 - `/bmad-cis-storytelling` — narratif produit
@@ -236,6 +231,8 @@ Puis :
 - `/bmad-help` — recommande la prochaine skill selon l'état
 - `/bmad-customize` — overrides BMAD du projet
 - `/bmad-bmb-setup` — setup BMad Builder
+- `/bmad-workflow-builder` — construire ou analyser un workflow
+- `/bmad-eval-runner` — évaluer une skill en environnement isolé
 
 ## 🎯 Plan minimaliste pour redémarrer demain
 
@@ -255,8 +252,7 @@ et docs/roundtable-decisions.md pour le contexte. On est au sprint S0."
 /bmad-agent-pm → "génère docs/epics/ + stories/ depuis le backlog R4"
 
 # 4. Attaque la 1ère story
-/bmad-create-story (pour le ticket scaffold modular architecture)
-/bmad-dev-story docs/stories/0001-*.md
+/bmad-build (pour le ticket scaffold modular architecture)
 
 # 5. Code → Review → Commit
 /bmad-code-review

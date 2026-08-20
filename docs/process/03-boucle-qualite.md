@@ -1,5 +1,29 @@
 # Boucle qualité par story
 
+<!-- bmad-referents:ignore — bloc HISTORIQUE : il NOMME les commandes dépréciées pour
+     expliquer la migration. Sans ce marqueur, le garde-fou rougirait sur le commentaire
+     qui explique son propre motif — piège déjà rencontré dans ce dépôt (grep textuel de
+     la 1.10a). Voir src/tests/Unit/BmadCommandReferentsTest.php. -->
+
+> 🔄 **Noms de commandes re-pointés le 2026-08-20 sur BMad 6.11.0.**
+> `/bmad-create-story` et `/bmad-dev-story` sont **dépréciés** : `bmad-build` est désormais la
+> méthode d'implémentation officielle, et elle **fusionne** la création de story et son
+> implémentation — ce n'est pas un simple renommage. `/bmad-review-adversarial-general` est
+> déprécié au profit de `/bmad-review`, qui regroupe en lentilles les quatre anciens skills de
+> revue (adversariale, edge-case, verification-gap, structure/prose).
+>
+> Les anciens noms **redirigent encore** ; rien ne garantit qu'ils le feront toujours.
+> `src/tests/Unit/BmadCommandReferentsTest.php` verrouille l'invariant : toute commande `bmad-*`
+> citée hors bloc historique, ici et dans `02-bmad-workflow.md`, doit résoudre vers un skill
+> installé et **non déprécié**.
+>
+> ⚠️ Ce garde-fou est **local uniquement**, et c'est écrit plutôt que subi : `.claude/skills/`
+> est gitignoré (`.gitignore:229`), donc la CI n'a pas les skills et le test s'y déclare
+> *skipped* — bruyamment, jamais vert par extinction. C'est le bon compromis : la dérive naît
+> sur le poste du développeur au moment d'une mise à jour BMad, et c'est là que le test tourne.
+
+<!-- /bmad-referents:ignore -->
+
 > Écrit le 2026-08-07, à partir de ce que ce projet a réellement produit comme
 > défauts — pas d'un catalogue de bonnes pratiques.
 >
@@ -67,13 +91,13 @@ ferait rougir un tel test. Le résolveur de noms, c'est Laravel — un test qui
 passe par un rendu réel échoue nativement sur un composant inexistant.
 
 ```
-/bmad-create-story          # puis relire les AC AVANT de lancer le dev
+/bmad-build                 # puis relire les AC AVANT de lancer le dev
 ```
 
 ### Étape 1 — Développement
 
 ```
-/bmad-dev-story _bmad-output/implementation-artifacts/<story>.md
+/bmad-build _bmad-output/implementation-artifacts/<story>.md
 ```
 
 Règle unique pendant le dev : **tout garde-fou ajouté doit avoir été vu rouge
@@ -99,7 +123,7 @@ revue.
 |---|---|
 | **S** | `/bmad-code-review` — les 3 layers, contexte frais |
 | **R** | idem + relecture ciblée de l'invariant touché |
-| **C** | idem + `/bmad-review-adversarial-general` sur la surface sensible |
+| **C** | idem + `/bmad-review` (lentille adversariale) sur la surface sensible |
 
 Ne pas empiler les revues « pour être sûr ». Deux revues qui disent la même
 chose ne valent pas mieux qu'une ; elles coûtent juste le double et fabriquent
@@ -228,10 +252,10 @@ comme une porte.
 
 ```bash
 # 0. Definition-of-ready : chaque nom des AC résout
-/bmad-create-story
+/bmad-build
 
 # 1. Dev — tout garde-fou ajouté doit être vu rouge
-/bmad-dev-story <story>
+/bmad-build <story>
 
 # 2. Portes automatiques
 make test && make quality-ratchet
@@ -239,7 +263,7 @@ make test-browser                     # si rendu
 
 # 3. Revue (S/R/C)
 /bmad-code-review
-/bmad-review-adversarial-general       # C uniquement
+/bmad-review                           # C uniquement — lentille adversariale
 
 # 4. Sécurité (R et C)
 /security-review && make security-scan
