@@ -1,5 +1,17 @@
 # État du projet — 2026-08-09 (branche `main`)
 
+> ✅ **Epic 1 terminé — 13/13 `done` le 2026-08-20.** La 1.10a, seule story de niveau **C**, a
+> passé les trois revues prescrites (`/bmad-code-review` passe 2, `/security-review`,
+> `/bmad-review` adversariale). **252 tests · 34 navigateur · ratchet 0/0/0 · PHPStan niveau 10 ·
+> `composer audit` 0 · `npm audit` 0.**
+>
+> ⚠️ La même faille de confiance aux proxys a dû être corrigée **trois fois** : `*`, puis
+> `REMOTE_ADDR` (qui désigne le CLIENT sous FastCGI), puis le tableau vide (falsy, donc lu comme
+> « jamais configuré », donc joker sur un `Host:` forgé). Défaut final : `TRUST_NOBODY =
+> ['0.0.0.0/32']`. Chaque correctif portait une justification confiante et fausse écrite à côté.
+>
+> **Prochaine étape : `epic-1-retrospective`.** Reports ouverts : W1–W12 dans `deferred-work.md`.
+
 > Point d'entrée de reprise. **Un seul fichier, écrasé à chaque session, jamais accumulé.**
 > Il n'a aucune autorité : il pointe vers `epics.md` et `sprint-status.yaml`, jamais l'inverse.
 
