@@ -247,3 +247,37 @@ it('prescribes no BMad command that has been deprecated', function (): void {
     fn (): bool => ! is_dir(installedSkillsDirectory()),
     'Skills BMad non installées ici (.claude/skills/ gitignoré) — voir le test précédent.',
 );
+
+/*
+|------------------------------------------------------------------------------
+| ⛔ CE QUI N'EST PAS VÉRIFIÉ ICI, ET POURQUOI CE N'EST PAS UN OUBLI
+|------------------------------------------------------------------------------
+|
+| Ces trois tests vérifient qu'une commande prescrite RÉSOUT et n'est pas
+| dépréciée. Ils ne vérifient PAS qu'elle DÉMARRE — et le 2026-08-20, huit heures
+| après leur écriture, ils étaient verts sur une commande morte :
+|
+|   `bmad-build`, la méthode d'implémentation officielle depuis BMad 6.11 et celle
+|   vers laquelle les deux documents de process venaient d'être re-pointés, n'est
+|   pas un workflow en clair. C'est une amorce de 13 lignes qui rend son workflow
+|   via `render_skill.py`, avec une instruction sans échappatoire : « On failure
+|   (including `uv` being unavailable), report the command output and HALT. »
+|   `uv` était absent. La commande existait, n'était pas dépréciée, et s'arrêtait
+|   au démarrage.
+|
+| ⛔ UN TEST DE CETTE SUITE NE PEUT PAS LE VOIR, et l'écrire ici serait un défaut,
+| pas une correction. Pest tourne dans le conteneur `php` ; `bmad-build` tourne sur
+| l'HÔTE, dans le shell de la session. MESURÉ le 2026-08-20 :
+|
+|   `command -v uv` depuis l'hôte       → /home/alex/.local/bin/uv
+|   `command -v uv` depuis le conteneur → absent
+|
+| Un test écrit ici serait donc resté ROUGE POUR TOUJOURS alors que le problème est
+| réglé — rouge pour une raison sans rapport avec ce qu'il mesure, c'est-à-dire le
+| défaut Q4 corrigé le matin même (un SHA figé qui rougissait sur un clone
+| superficiel). On ne le refait pas en le déplaçant d'un fichier.
+|
+| → Le contrôle d'exécutabilité vit dans **`make bmad-doctor`**, côté hôte, où le
+|   PATH observé est celui qui compte. Ce n'est pas un commentaire qui tient lieu de
+|   garde : c'est un contrôle exécutable, dans le seul environnement où il a un sens.
+*/

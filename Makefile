@@ -511,6 +511,54 @@ update-packages: ## Vérifier et installer packages devenus compatibles
 artisan: ## Exécuter artisan (usage: make artisan cmd="migrate")
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan $(cmd)
 
+.PHONY: bmad-doctor
+bmad-doctor: ## Vérifier que les commandes BMad prescrites par les docs peuvent DÉMARRER
+	@# ─────────────────────────────────────────────────────────────────────────
+	@# Ce contrôle vit ICI, sur l'hôte, et pas dans la suite Pest — et c'est mesuré.
+	@#
+	@# `bmad-build` s'exécute dans le shell de la session ; Pest s'exécute dans le
+	@# conteneur `php`. Le 2026-08-20 : `uv` présent sur l'hôte, absent du conteneur.
+	@# Un test écrit côté conteneur serait donc resté rouge pour toujours alors que
+	@# le problème est réglé — le défaut Q4 corrigé le matin même.
+	@#
+	@# Complément de `src/tests/Unit/BmadCommandReferentsTest.php`, qui garde la
+	@# RÉSOLUTION et la DÉPRÉCIATION. Celui-ci garde l'EXÉCUTABILITÉ.
+	@#
+	@# ⚠️ ON CHERCHE `render_skill.py`, PAS `uv run` — et la première rédaction se
+	@# trompait. `uv run` apparaît dans 44 SKILL.md sur 74, presque toujours pour
+	@# `resolve_customization.py`, AVEC une échappatoire documentée (« si le script
+	@# échoue, lis les fichiers de customisation toi-même »). Ces skills tournent
+	@# sans `uv`. Seule l'amorce `render_skill.py` — 2 skills, `bmad-build` et
+	@# `bmad-build-auto` — ordonne « HALT. Do not run any workflow source directly ».
+	@# Un contrôle qui déclare 44 succès là où 2 comptent est du bruit, et le bruit
+	@# est la façon dont un garde-fou cesse d'être lu.
+	@# ─────────────────────────────────────────────────────────────────────────
+	@echo "$(CYAN)🩺 BMad — les commandes prescrites peuvent-elles démarrer ?$(NC)"
+	@fail=0; \
+	if [ ! -d .claude/skills ]; then \
+		echo "$(YELLOW)   ⚠️  .claude/skills/ absent (gitignoré) — contrôle impossible ici.$(NC)"; \
+		exit 0; \
+	fi; \
+	for cmd in $$(grep -ohE '(^|[^A-Za-z0-9_/])/bmad-[a-z0-9-]+' docs/process/02-bmad-workflow.md docs/process/03-boucle-qualite.md 2>/dev/null | grep -oE 'bmad-[a-z0-9-]+' | sort -u); do \
+		manifest=".claude/skills/$$cmd/SKILL.md"; \
+		[ -f "$$manifest" ] || continue; \
+		if grep -q 'render_skill.py' "$$manifest"; then \
+			if ! command -v uv >/dev/null 2>&1; then \
+				echo "$(RED)   ⛔ /$$cmd exige \`uv\`, introuvable sur le PATH — son SKILL.md lui ordonne de HALT.$(NC)"; \
+				fail=1; \
+			else \
+				echo "$(GREEN)   ✅ /$$cmd (amorce uv — uv présent)$(NC)"; \
+			fi; \
+		fi; \
+	done; \
+	if [ $$fail -eq 1 ]; then \
+		echo ""; \
+		echo "$(YELLOW)   Installer : curl -LsSf https://astral.sh/uv/install.sh | sh$(NC)"; \
+		echo "$(YELLOW)   Ou cesser de prescrire ces commandes dans docs/process/.$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(GREEN)✔ Toutes les commandes BMad prescrites peuvent démarrer.$(NC)"
+
 .PHONY: artisan-it
 artisan-it: ## Exécuter artisan en INTERACTIF (usage: make artisan-it cmd="make:filament-user")
 	@# ⚠️ `-it` est indispensable pour toute commande qui POSE DES QUESTIONS.

@@ -133,6 +133,17 @@ git add -A && git commit && git push
 gh pr create
 ```
 
+> 🩺 **`make bmad-doctor` avant de commencer, si la session est neuve.**
+> `bmad-build` n'est pas un workflow en clair : c'est une amorce qui rend son workflow via
+> `render_skill.py`, **et qui exige `uv`**. Son instruction est sans échappatoire — *« On failure
+> (including `uv` being unavailable), report the command output and HALT »*. Elle est, avec
+> `bmad-build-auto`, la seule de ce type sur 74 skills : tout le reste porte son workflow en clair
+> et tourne sans `uv`. Constaté le 2026-08-20, `uv` absent de la machine — la commande officielle
+> s'arrêtait au démarrage pendant que les documents la prescrivaient.
+>
+> `make bmad-doctor` répond en une seconde, et sort en erreur si le binaire manque.
+> Installation : `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+
 > ⚠️ **`bmad-build` n'est pas un renommage.** Il FUSIONNE ce que faisaient
 > `bmad-create-story` puis `bmad-dev-story` : on ne crée plus la story dans une passe et on ne
 > l'implémente plus dans une autre. La boucle qualité (`03-boucle-qualite.md`) garde ses deux
