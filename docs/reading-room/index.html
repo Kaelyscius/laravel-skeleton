@@ -250,8 +250,9 @@ footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
     <div class="stamp">
       <span><b>lu le</b> 2026-08-20</span>
       <span><b>branche</b> main</span>
-      <span><b>commit</b> 3f345f2</span>
-      <span><b>arbre de travail</b> 21 fichiers modifiés, 13 non suivis — non commités</span>
+      <span><b>commit</b> c00f3d6</span>
+      <span><b>arbre de travail</b> propre</span>
+      <span><b>CI</b> 3 / 3 verts sur ce commit, poussé</span>
     </div>
   </div>
 </header>
@@ -268,43 +269,44 @@ footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
       <div class="bigbar">
         <div class="row">
           <span class="lab">Plan complet — 11 epics, 131 stories</span>
-          <span class="pct">9<small style="font-size:15px;color:var(--text-3)">%</small></span>
+          <span class="pct">10<small style="font-size:15px;color:var(--text-3)">%</small></span>
         </div>
-        <div class="track"><i class="fill-done" style="width:9.2%"></i><i class="fill-now" style="width:0.8%"></i></div>
+        <div class="track"><i class="fill-done" style="width:9.9%"></i></div>
       </div>
 
       <div class="bigbar" style="margin-bottom:8px">
         <div class="row">
           <span class="lab">Epic 1 — Foundations</span>
-          <span class="pct" style="font-size:20px">92<small style="font-size:13px;color:var(--text-3)">%</small></span>
+          <span class="pct" style="font-size:20px;color:var(--ok)">100<small style="font-size:13px;color:var(--text-3)">%</small></span>
         </div>
-        <div class="track"><i class="fill-done" style="width:92.3%"></i><i class="fill-now" style="width:7.7%"></i></div>
-        <p class="mut" style="font-size:12px;margin:9px 0 0">12 stories <b style="color:var(--text-2)">done</b> · 1 en <b style="color:var(--lava)">review</b> · la 1.10b a été déplacée en Epic 5</p>
+        <div class="track"><i class="fill-done" style="width:100%;background:var(--ok);opacity:.75"></i></div>
+        <p class="mut" style="font-size:12px;margin:9px 0 0"><b style="color:var(--ok)">13 / 13 stories <span style="color:var(--text-2)">done</span></b> — la 1.10a close le 2026-08-20. La 1.10b a été déplacée en Epic 5. L'epic bascule à <span class="mono">done</span> <b>à la rétrospective</b>, qui est en cours.</p>
       </div>
 
       <div class="metrics" style="margin-top:20px">
         <button class="metric" aria-expanded="false" data-prov="p-epics">
           <span class="k">Epics</span><span class="v">0 <small>/ 11</small></span></button>
         <button class="metric" aria-expanded="false" data-prov="p-stories">
-          <span class="k">Stories</span><span class="v">12 <small>/ 131</small></span></button>
+          <span class="k">Stories</span><span class="v">13 <small>/ 131</small></span></button>
         <button class="metric" aria-expanded="false" data-prov="p-tests">
-          <span class="k">Tests</span><span class="v">224 <small>déclarés</small></span></button>
+          <span class="k">Tests</span><span class="v">250 <small>déclarés</small></span></button>
         <button class="metric" aria-expanded="false" data-prov="p-browser">
           <span class="k">Navigateur</span><span class="v">34</span></button>
         <div class="prov" id="p-epics">
           <p><b>Source :</b> <span class="mono">_bmad-output/implementation-artifacts/sprint-status.yaml</span> — <span class="mono">epic-1: in-progress</span>, epics 2 à 11 <span class="mono">backlog</span>.</p>
-          <p><b>Ce que ça ne dit pas :</b> l'Epic 1 est à une story de la clôture, donc « 0/11 » sous-estime lourdement l'état réel. Le fichier source est dans <span class="mono">_bmad-output/</span>, qui est <b>gitignoré</b> — il n'apparaît dans aucun diff et n'existe que sur cette machine.</p>
+          <p><b>⚠️ Ce compteur est en retard sur la réalité, et c'est réglementaire :</b> les 13 stories d'Epic 1 sont <span class="mono">done</span> depuis le 2026-08-20, mais un epic ne bascule qu'à <b>la rétrospective</b>. Elle est en cours. « 0/11 » est donc juste au sens du fichier et faux au sens du travail — raison de plus pour ne rien fonder sur cette page.</p>
+          <p>Le fichier source est dans <span class="mono">_bmad-output/</span>, qui est <b>gitignoré</b> : il n'apparaît dans aucun diff et n'existe que sur cette machine.</p>
         </div>
         <div class="prov" id="p-stories">
-          <p><b>Source :</b> 131 titres <span class="mono">### Story</span> comptés dans <span class="mono">epics.md</span> ; 12 clés à <span class="mono">done</span> dans <span class="mono">sprint-status.yaml</span>.</p>
+          <p><b>Source :</b> 131 titres <span class="mono">### Story</span> comptés dans <span class="mono">epics.md</span> ; 13 clés à <span class="mono">done</span> dans <span class="mono">sprint-status.yaml</span>.</p>
           <p><b>Ce que ça ne dit pas :</b> cinq stories de processus (spike runner, observation module éteint, écrans de référence, relecture d'AC, déclaration Livewire) sont <span class="mono">done</span> mais <b>absentes du plan</b> — elles ne comptent nulle part. Le rythme réel n'est donc pas lisible sur ce ratio.</p>
         </div>
         <div class="prov" id="p-tests">
-          <p><b>Source :</b> 224 = déclarations <span class="mono">it(</span> / <span class="mono">test(</span> comptées le 2026-08-20 dans <span class="mono">src/tests/Unit</span> (16) et <span class="mono">src/tests/Feature</span> (208).</p>
-          <p><b>⚠️ Écart non expliqué :</b> la story 1.10a rapportait <b>217 exécutions</b> le 2026-08-10. L'écart de 7 n'a pas été instruit. Un compte statique n'est pas un compte d'exécution — et c'est exactement pourquoi cette page ne vaut pas preuve. Le seul chiffre qui engage est celui que <span class="mono">make test</span> imprime.</p>
+          <p><b>Source :</b> 250 = déclarations <span class="mono">it(</span> / <span class="mono">test(</span> comptées le 2026-08-20 dans <span class="mono">src/tests/Unit</span> (19) et <span class="mono">src/tests/Feature</span> (231).</p>
+          <p><b>⚠️ Écart non expliqué, et il persiste :</b> la story 1.10a rapporte <b>240 exécutions</b> et 1 366 assertions. L'écart de 10 entre les déclarations et les exécutions n'a jamais été instruit — il était de 7 le matin même. Un compte statique n'est pas un compte d'exécution, et cette page ne sait pas lequel a raison. Le seul chiffre qui engage est celui que <span class="mono">make test</span> imprime.</p>
         </div>
         <div class="prov" id="p-browser">
-          <p><b>Source :</b> 34 déclarations dans <span class="mono">src/tests/Browser</span> (5 fichiers).</p>
+          <p><b>Source :</b> 34 déclarations dans <span class="mono">src/tests/Browser</span> (5 fichiers), inchangé depuis la 1.9.</p>
           <p><b>À savoir :</b> <span class="mono">tests/Browser</span> n'est <b>pas</b> une testsuite de <span class="mono">phpunit.xml</span>, délibérément — sinon <span class="mono">php artisan test</span> exigerait un Chromium en CI et en production. Elle se lance par <span class="mono">make test-browser</span>, et son verdict se lit dans le rapport JUnit, pas dans le code de sortie (<a class="ref" href="../adr/ADR-0013-runner-navigateur-pest-browser.md">docs/adr/ADR-0013…</a>).</p>
         </div>
 
@@ -325,54 +327,59 @@ footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
           <p>Effet de bord observé en 1.10a : dans une closure Pest, PHPStan résout <span class="mono">$this</span> en <span class="mono">TestCall</span> — 49 erreurs de ce seul motif, résorbées en extrayant <span class="mono">Tests\Support\HttpProbe</span>.</p>
         </div>
         <div class="prov" id="p-sec">
-          <p><b>Source :</b> <span class="mono">composer audit</span> et <span class="mono">npm audit</span> à 0 lors de la story 1.10a (2026-08-09/10).</p>
+          <p><b>Source :</b> <span class="mono">composer audit</span> et <span class="mono">npm audit</span> à 0 sur la 1.10a, plus le workflow <em>Security Audit</em> vert sur <span class="mono">c00f3d6</span> et sa passe nocturne planifiée.</p>
           <p><b>Ce que ça ne dit pas :</b> zéro advisory n'est pas zéro défaut. Le trou de sécurité réel de ce dépôt — <span class="mono">TRUSTED_PROXIES=*</span> rendant inopérant le rate limiting du login — n'a jamais fait rougir un scanner. Il a été trouvé en <b>mesurant</b>, et il avait été <b>introduit par une revue de code</b> (voir §07).</p>
         </div>
         <div class="prov" id="p-ci">
-          <p><b>Source :</b> trois workflows verts sur <span class="mono">origin/main</span> = <span class="mono">3f345f2</span> — <em>Laravel CI/CD Pipeline</em> (5 jobs dont le job navigateur bloquant), <em>Security Audit</em>, <em>Docker Build &amp; Validation</em>.</p>
-          <p><b>⚠️ Le vert parle du commit poussé, pas de l'arbre de travail.</b> Les 2 774 insertions de la story 1.10a ne sont pas commitées : <b>aucune CI ne les a vues</b>.</p>
+          <p><b>Source :</b> <span class="mono">gh run list</span> le 2026-08-20 — trois workflows <b>verts</b> sur <span class="mono">c00f3d6</span>, poussé : <em>Laravel CI/CD Pipeline</em> (2 min 04), <em>Security Audit</em> (1 min 22), <em>Docker Build &amp; Validation</em> (10 min 49).</p>
+          <p>✅ <b>Le vert parle bien du code de la 1.10a</b> — ce qui n'était pas le cas ce matin, où 2 774 insertions attendaient dans l'arbre de travail sans qu'aucune CI ne les ait vues.</p>
         </div>
       </div>
     </div>
 
     <div class="card panel">
-      <h3>Story courante — 1.10a</h3>
+      <h3>Épilogue d'Epic 1 — et la prochaine story</h3>
       <p style="font-size:13.5px;color:var(--text-2);margin-bottom:16px">
-        <b style="color:var(--text)">Filament v5 + Sanctum + Permission.</b> La seule story de <b>niveau C — Critique</b> du projet. Le squelette y gagne sa première porte : <span class="mono">/admin</span>, authentifiée, refusée par défaut, éteignable par variable d'environnement.
+        <b style="color:var(--ok)">La 1.10a est <span class="mono">done</span> depuis le 2026-08-20</b>, après <b>deux passes de revue</b> — le plafond, atteint et respecté. Il n'y a pas eu de troisième.
       </p>
 
       <div class="bigbar">
-        <div class="row"><span class="lab">Boucle qualité</span><span class="pct" style="font-size:20px">62<small style="font-size:13px;color:var(--text-3)">%</small></span></div>
-        <div class="track"><i class="fill-done" style="width:56%"></i><i class="fill-now" style="width:6%"></i></div>
+        <div class="row"><span class="lab">Clôture d'Epic 1</span><span class="pct" style="font-size:20px">88<small style="font-size:13px;color:var(--text-3)">%</small></span></div>
+        <div class="track"><i class="fill-done" style="width:82%"></i><i class="fill-now" style="width:6%"></i></div>
       </div>
 
       <div class="items" style="margin-top:18px">
-        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Story écrite<em>19 référents / 19 résolvent</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Quatre trouvailles à la seule rédaction, toutes vérifiées sur le dépôt : la commande d'installation d'<span class="mono">epics.md</span> était <b>destructrice</b> (elle demandait <span class="mono">spatie/laravel-permission:^7.0</span> alors que <span class="mono">^8</span> est installé — une rétrogradation, pas une installation) ; « login via Sanctum cookie SPA » était faux ; le rate limiting ne limitait rien ; et <span class="mono">MODULE_ADMIN_ENABLED=false</span> n'aurait pas éteint <span class="mono">/admin</span>.</p></div></div></div>
+        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Revue — passe 1<em>2026-08-10 · 3 décisions + 10 correctifs</em></span><span class="chev">›</span></button>
+          <div class="body"><div class="in"><p>Trois couches, 25 fichiers / 2 640 lignes, les constats de tête <b>reproduits sur la pile qui tourne</b>. Puis ses conclusions sont largement restées lettre morte — voir ci-dessous.</p></div></div></div>
 
-        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Développement<em>+38 tests · 5 défauts trouvés, tous mesurés</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Le provider Filament a été sorti de <span class="mono">bootstrap/providers.php</span> — inconditionnel — pour vivre sous <span class="mono">App\Modules\Admin\Providers\Filament\</span>, enregistré par <span class="mono">AdminServiceProvider::register()</span>. <span class="mono">/admin</span> rend désormais <b>404</b> module éteint ; il rendait <b>302</b> avant, <em>vu rouge avant correction</em>.</p><p>Quatre helpers de tests extraits pour le motif « dupliquer des lignes délicates garantit qu'une des deux copies dérive ».</p></div></div></div>
+        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Revue — passe 2<em>2026-08-20 · 5 décisions + 23 correctifs + 5 reports</em></span><span class="chev">›</span></button>
+          <div class="body"><div class="in">
+            <p>Quatre couches parallèles en fenêtres neuves. Son <b>premier constat porte sur la passe 1</b> : des 13 constats du 10/08, <b>1 résolu</b> (P9), <b>2 traités sans atteindre leur but</b>, <b>10 intacts</b>. Les quatre couches, <b>qui ne connaissaient pas cette liste</b>, en ont retrouvé huit indépendamment — c'est-à-dire payés deux fois.</p>
+            <p>Trois autres faits mesurés : la CSP <b>est</b> portée par le trafic du panel (<span class="mono">POST /livewire-*/update</span>), la conclusion inverse ayant été tirée de la seule route qui ne la porte pas ; <b>aucun test n'ouvrait la porte</b> — tous injectaient l'utilisateur en processus, donc la seule surface authentifiée du produit pouvait être livrée <em>inouvrable</em> ; et deux routes Filament survivent à <span class="mono">MODULE_ADMIN_ENABLED=false</span>, parce qu'elles appartiennent au paquet et non au panel.</p>
+          </div></div></div>
 
-        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Portes automatiques<em>ratchet 0/0/0 · audits à 0</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p><span class="mono">make test</span>, <span class="mono">make quality-ratchet</span>, <span class="mono">make test-browser</span> (34 verts), <span class="mono">composer audit</span> et <span class="mono">npm audit</span> à 0.</p></div></div></div>
+        <div class="item"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">🔴 <span class="mono">TRUSTED_PROXIES</span>, troisième itération<em>le correctif de la passe 1 était inopérant en production</em></span><span class="chev">›</span></button>
+          <div class="body"><div class="in">
+            <p>Le correctif du 10/08 avait déplacé l'<span class="mono">env()</span> de <span class="mono">bootstrap/app.php</span> vers <span class="mono">config/proxies.php</span>… puis <span class="mono">require</span> ce fichier <b>depuis le même callback</b>. L'<span class="mono">env()</span> avait changé de <b>fichier</b>, pas de <b>moment</b> : sous <span class="mono">config:cache</span>, la liste de proxys de l'opérateur était remplacée en silence par <span class="mono">REMOTE_ADDR</span>.</p>
+            <p><b>Mesuré :</b> <span class="mono">app()->bound('config')</span> vaut <b>false</b> dans le callback <span class="mono">withMiddleware()</span> — ni <span class="mono">env()</span> ni <span class="mono">config()</span> n'y sont lisibles. La valeur est désormais posée par <span class="mono">CoreServiceProvider::boot()</span>.</p>
+            <p>⚠️ <b>Deux couches de revue recommandaient d'y lire <span class="mono">config('proxies.at')</span>.</b> La recommandation était <b>fausse</b> et aurait fermé la confiance aux proxys en silence. Une revue peut se tromper avec assurance — c'est pour ça qu'un correctif de revue est du code à relire, pas une conclusion.</p>
+            <p class="mut">Troisième itération du même défaut, sur trois passes différentes, en trois mois. Un en-tête <span class="mono">Host</span> forgé suffisait encore à rendre le joker à l'itération précédente (<span class="mono">dc03611</span>).</p>
+          </div></div></div>
 
-        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Campagne de mutation<em>15 mutations · 15 rouges · rejouée après refactor</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Rejouée <b>intégralement</b> après le refactor des tests vers <span class="mono">HttpProbe</span> — un test non discriminant y a été trouvé et réécrit. Cette obligation de rejeu est devenue une règle de la boucle qualité.</p><p class="mut">⛔ Elle a remplacé <span class="mono">make test-drift</span>, que le dépôt documentait à l'envers : ce n'est pas un outil de mutation, c'est le migrateur PHPUnit → Pest. Un seul appel a <b>réécrit 7 fichiers de tests</b>.</p></div></div></div>
+        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Campagne de mutation rejouée<em>7 mutations · 2 survivantes traitées · 1 assumée</em></span><span class="chev">›</span></button>
+          <div class="body"><div class="in"><p>Dont le correctif d'un garde-fou silencieux qui était <b>lui-même livré sans garde</b>. Une 3ᵉ survivante est <b>assumée et écrite</b> : aucune mutation atteignable ne la démontre, et l'écrire vaut mieux que fabriquer un vert.</p></div></div></div>
 
-        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Revue de code — passe 1<em>2026-08-10 · 3 décisions + 10 correctifs + 3 reports</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Trois couches en fenêtres neuves, 25 fichiers / 2 640 lignes. <b>Les trois constats de tête ont été reproduits sur la pile qui tourne</b>, sonde jetable à l'appui — pas déduits d'une lecture.</p><p>Trouvaille majeure : le panel <b>traverse bien</b> le groupe <span class="mono">web</span> à chaque interaction Livewire. Une base migrée non semée servait la page de connexion en <b>200</b> et refusait la connexion en <b>404</b>.</p></div></div></div>
+        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Un constat NON corrigé, délibérément<em>W9 — reporté avec sa mesure</em></span><span class="chev">›</span></button>
+          <div class="body"><div class="in"><p>Le 3ᵉ Given de l'AC5 n'est pas composable sous <span class="mono">Livewire::test()</span> : <span class="mono">RequestBroker</span> désactive les middlewares et <span class="mono">REMOTE_ADDR</span> n'y est pas pilotable. <b>Établi par un contre-test qui a rougi</b>, puis reporté avec sa mesure — plutôt que fabriquer un vert.</p></div></div></div>
 
-        <div class="item"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">13 constats non traités<em>D1·D2·D3 + P1→P10 · cases non cochées</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Vérifié sur disque le 2026-08-20 : <b>P2</b> (SHA <span class="mono">3f345f2</span> figé en dur, ligne 117), <b>P3</b> (<span class="mono">src/public/fonts/filament</span> n'existe pas), <b>P4</b> (<span class="mono">canAccessPanel</span> — la moitié du contrat non gardée), <b>P8</b> (nom de test énonçant l'inverse de son assertion), <b>P9</b> (<span class="mono">HttpProbe::html()</span> — zéro consommateur) sont <b>toujours ouverts</b>.</p><p><b>D1 fait exception :</b> son correctif est <b>sur disque</b> — <span class="mono">NoStreamerConfiguredException</span> existe et <span class="mono">deferred-work.md</span> le déclare résolu le 2026-08-10 — mais <b>la case de la story n'est pas cochée</b>. L'écart entre le code et le document est, lui aussi, le motif du projet.</p></div></div></div>
+        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Commit, push, CI<em>3 workflows verts sur <span class="mono">c00f3d6</span></em></span><span class="chev">›</span></button>
+          <div class="body"><div class="in"><p>Le vert parle enfin du code de la story. Arbre de travail propre.</p></div></div></div>
 
-        <div class="item"><button aria-expanded="false"><span class="dot d-now"></span><span class="ttl">Revue de code — passe 2<em>la dernière autorisée · doit relire les correctifs</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Sous le plafond arrêté le 2026-08-20 (§07), il reste <b>une</b> passe. Elle doit porter sur <b>ce que les correctifs P1→P10 auront écrit</b>, pas relire Filament une troisième fois. C'est la différence mesurée entre la 2ᵉ passe utile (story 1.9) et la 2ᵉ passe stérile (story 1.3).</p></div></div></div>
+        <div class="item"><button aria-expanded="false"><span class="dot d-now"></span><span class="ttl">Rétrospective d'Epic 1<em>en cours — c'est elle qui bascule l'epic</em></span><span class="chev">›</span></button>
+          <div class="body"><div class="in"><p>Elle était marquée <span class="mono">optional</span>. Elle ne l'est plus en pratique : l'Epic 1 est le seul epic dont l'exécution a produit une <b>doctrine</b> — la boucle qualité, la règle du rouge observé, le catalogue des garde-fous silencieux, le plafond de revues et son amendement. Les dix epics suivants en héritent ou la réinventent.</p></div></div></div>
 
-        <div class="item"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">Revue de sécurité<em>hors quota — c'est une porte, pas un avis</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p><span class="mono">/security-review</span> + <span class="mono">make security-scan</span> + <span class="mono">composer audit &amp;&amp; npm audit</span>. Obligatoire en niveau R et C, et <b>exclu du plafond de 2</b> : un scanner ne fabrique pas de la confiance, il constate.</p></div></div></div>
-
-        <div class="item"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">Commit<em>2 774 insertions hors de toute CI</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>21 fichiers modifiés, 13 non suivis. Tant que ce n'est pas commité et poussé, <b>le vert de la CI parle d'un autre code</b> — la mise en garde en tête de <a class="ref" href="../ETAT.md">docs/ETAT.md</a> porte exactement là-dessus.</p></div></div></div>
+        <div class="item"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">Prochaine story<em>Epic 2 — Installer &amp; Quality Gates</em></span><span class="chev">›</span></button>
+          <div class="body"><div class="in"><p>Dix jours au budget, et il porte deux dettes déjà nommées ici : le <b>Lot E</b> de la supply chain (<span class="mono">vite@latest</span>, <span class="mono">webpack@latest</span>, <span class="mono">pnpm@latest</span> — des cibles mouvantes dans une image figée) et le binaire Node de 52,5 Mo embarqué dans l'image PHP de production.</p><p>⚠️ Première story sous le nouveau régime : <b>appliquer les constats de la passe 1 avant d'ouvrir la passe 2</b>. C'est le corollaire qui a coûté le plus cher à la 1.10a.</p></div></div></div>
       </div>
     </div>
   </div>
@@ -384,89 +391,68 @@ footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
   <p class="lede">« En cours » ne veut rien dire. Le projet a un cycle nommé, avec des étapes qui ont chacune leur sortie. Voici laquelle est allumée.</p>
 
   <figure>
-  <svg viewBox="0 0 1120 268" role="img" aria-label="Cycle de vie d'une story : le curseur est sur la deuxième passe de revue de code">
+  <svg viewBox="0 0 1120 268" role="img" aria-label="Cycle de vie d'une story : les huit étapes de la 1.10a sont franchies, le curseur est sur la rétrospective d'Epic 1">
     <defs>
       <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
         <path d="M0,0 L7,3 L0,6" fill="none" stroke="#2c2c31" stroke-width="1.4"/>
       </marker>
     </defs>
-    <text x="28" y="34" fill="rgba(255,255,255,.38)" font-size="11" letter-spacing="1.6" class="m">CYCLE DE VIE D'UNE STORY — STORY 1.10a</text>
+    <text x="28" y="34" fill="rgba(255,255,255,.38)" font-size="11" letter-spacing="1.6" class="m">CYCLE DE VIE D'UNE STORY — 1.10a, TERMINÉE LE 2026-08-20</text>
 
-    <!-- rail -->
     <line x1="60" y1="112" x2="1060" y2="112" stroke="#1F1F22" stroke-width="2"/>
-    <line x1="60" y1="112" x2="672" y2="112" stroke="rgba(255,255,255,.28)" stroke-width="2"/>
+    <line x1="60" y1="112" x2="1060" y2="112" stroke="rgba(255,255,255,.28)" stroke-width="2"/>
 
-    <!-- étapes franchies -->
-    <g>
-      <circle cx="60"  cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+    <g><circle cx="60" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
       <path d="M55.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
       <text x="60" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Plan</text>
-      <text x="60" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">epics.md</text>
-    </g>
-    <g>
-      <circle cx="213" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M208.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="213" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Story écrite</text>
-      <text x="213" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">19 référents /19</text>
-    </g>
-    <g>
-      <circle cx="366" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M361.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="366" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Développement</text>
-      <text x="366" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">+38 tests</text>
-    </g>
-    <g>
-      <circle cx="519" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M514.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="519" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Portes auto</text>
-      <text x="519" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">0/0/0 · niv.10</text>
-    </g>
-    <g>
-      <circle cx="672" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M667.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="672" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Revue — passe 1</text>
-      <text x="672" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">13 constats ouverts</text>
-    </g>
+      <text x="60" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">epics.md</text></g>
+    <g><circle cx="203" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      <path d="M198.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="203" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Story écrite</text>
+      <text x="203" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">19 référents /19</text></g>
+    <g><circle cx="346" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      <path d="M341.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="346" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Développement</text>
+      <text x="346" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">+38 tests</text></g>
+    <g><circle cx="489" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      <path d="M484.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="489" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Portes auto</text>
+      <text x="489" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">0/0/0 · niv.10</text></g>
+    <g><circle cx="632" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      <path d="M627.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="632" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Revue — passe 1</text>
+      <text x="632" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">10 constats intacts</text></g>
+    <g><circle cx="775" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      <path d="M770.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="775" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Revue — passe 2</text>
+      <text x="775" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">23 correctifs · PLAFOND</text></g>
+    <g><circle cx="918" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      <path d="M913.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="918" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Sécurité</text>
+      <text x="918" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">hors quota</text></g>
+    <g><circle cx="1060" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      <path d="M1055.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="1060" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Commit</text>
+      <text x="1060" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">CI 3/3 verte</text></g>
 
-    <!-- étape courante -->
-    <g>
-      <circle cx="825" cy="112" r="16" fill="none" stroke="#FF5722" stroke-width="1" opacity=".28"/>
-      <circle cx="825" cy="112" r="10" fill="#FF5722"/>
-      <text x="825" y="86" fill="#FF5722" font-size="12.5" text-anchor="middle" font-weight="600">Revue — passe 2</text>
-      <text x="825" y="140" fill="#FF5722" font-size="10.5" text-anchor="middle" class="m" opacity=".8">la dernière autorisée</text>
-      <text x="825" y="158" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">relit les correctifs</text>
-    </g>
-
-    <!-- étapes à venir -->
-    <g>
-      <circle cx="962" cy="112" r="8" fill="#0A0A0B" stroke="#2c2c31" stroke-width="2"/>
-      <text x="962" y="88" fill="rgba(255,255,255,.38)" font-size="12" text-anchor="middle">Sécurité</text>
-      <text x="962" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">hors quota</text>
-    </g>
-    <g>
-      <circle cx="1060" cy="112" r="8" fill="#0A0A0B" stroke="#2c2c31" stroke-width="2"/>
-      <text x="1060" y="88" fill="rgba(255,255,255,.38)" font-size="12" text-anchor="middle">Commit</text>
-      <text x="1060" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">+ hygiène doc</text>
-    </g>
-
-    <!-- suite -->
     <line x1="60" y1="206" x2="1010" y2="206" stroke="#1F1F22" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="60" y="192" fill="rgba(255,255,255,.38)" font-size="11" class="m">PUIS, ET L'EPIC 1 EST CLOS</text>
+    <text x="60" y="192" fill="rgba(255,255,255,.38)" font-size="11" class="m">CLÔTURE D'EPIC — OÙ NOUS SOMMES EXACTEMENT</text>
     <g>
       <circle cx="70" cy="206" r="4" fill="#2c2c31"/>
-      <text x="86" y="211" fill="rgba(255,255,255,.6)" font-size="12">story 1.10a → done</text>
-      <line x1="240" y1="206" x2="286" y2="206" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-      <circle cx="300" cy="206" r="4" fill="#2c2c31"/>
-      <text x="316" y="211" fill="rgba(255,255,255,.6)" font-size="12">epic-1 → done</text>
-      <line x1="446" y1="206" x2="492" y2="206" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-      <circle cx="506" cy="206" r="4" fill="#2c2c31"/>
-      <text x="522" y="211" fill="rgba(255,255,255,.6)" font-size="12">rétrospective Epic 1</text>
-      <line x1="672" y1="206" x2="718" y2="206" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-      <circle cx="732" cy="206" r="4" fill="#FF5722"/>
-      <text x="748" y="211" fill="#FF5722" font-size="12">la règle « plus de roundtable » tombe</text>
+      <text x="86" y="211" fill="rgba(255,255,255,.6)" font-size="12">1.10a → done ✓</text>
+      <line x1="212" y1="206" x2="258" y2="206" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
+      <circle cx="278" cy="206" r="10" fill="#FF5722"/>
+      <circle cx="278" cy="206" r="16" fill="none" stroke="#FF5722" stroke-width="1" opacity=".28"/>
+      <text x="298" y="211" fill="#FF5722" font-size="12.5" font-weight="600">rétrospective Epic 1 — EN COURS</text>
+      <line x1="546" y1="206" x2="592" y2="206" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
+      <circle cx="606" cy="206" r="4" fill="#2c2c31"/>
+      <text x="622" y="211" fill="rgba(255,255,255,.38)" font-size="12">epic-1 → done</text>
+      <line x1="740" y1="206" x2="786" y2="206" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
+      <circle cx="800" cy="206" r="4" fill="#2c2c31"/>
+      <text x="816" y="211" fill="rgba(255,255,255,.38)" font-size="12">Epic 2 — Installer &amp; CI</text>
     </g>
   </svg>
-  <figcaption>La règle de cadrage du 2026-07-31 — <em>plus aucun roundtable jusqu'à ce que l'Epic 1 soit <span class="mono">done</span></em> — a été posée après trois sessions consécutives sans qu'une story avance. Elle est suspendue à la case tout à droite. Détail des étapes : <a class="ref" href="../process/03-boucle-qualite.md">docs/process/03-boucle-qualite.md</a>.</figcaption>
+  <figcaption>Les huit étapes de la boucle sont franchies : la 1.10a a eu <b>deux</b> passes de revue et pas une de plus. Ce qui reste n'est plus du développement — c'est la rétrospective, seul acte qui bascule <span class="mono">epic-1</span> à <span class="mono">done</span>. La règle de cadrage du 2026-07-31 (<em>plus aucun roundtable jusqu'à ce que l'Epic 1 soit clos</em>) tombe avec elle. Détail des étapes : <a class="ref" href="../process/03-boucle-qualite.md">docs/process/03-boucle-qualite.md</a>.</figcaption>
   </figure>
 </section>
 
@@ -478,24 +464,27 @@ footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
   <p class="lede">Deux sources mêlées : les risques d'architecture prévus (<a class="ref" href="../architecture/12-risques-architecturaux-flaggs-monitorer.md">docs/architecture/12-risques…</a>) et ceux que l'exécution a effectivement produits. Les seconds sont les plus intéressants — personne ne les avait écrits.</p>
 
   <div class="items">
-    <div class="item"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">Le code de la story 1.10a n'est vu par aucune CI<em>🔴 actif · 2 774 insertions non commitées</em></span><span class="chev">›</span></button>
+    <div class="item"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">La confiance aux proxys s'est cassée trois fois, sur trois revues<em>🔴 corrigé le 2026-08-20 — mais c'est la 3ᵉ itération</em></span><span class="chev">›</span></button>
       <div class="body"><div class="in">
-        <p>21 fichiers modifiés et 13 non suivis dans l'arbre de travail, dont la couche d'authentification, <span class="mono">bootstrap/app.php</span>, le middleware de tenancy et 10 fichiers de tests. Les trois workflows verts portent sur <span class="mono">3f345f2</span>, qui ne contient <b>rien</b> de tout ça.</p>
-        <p><b>Pourquoi c'est un vrai risque et pas de la comptabilité :</b> ce dépôt a déjà perdu du travail de cette façon — six fichiers, dont ADR-0003, ADR-0006 et toute la stratégie de sauvegarde, n'avaient jamais été commités parce que <span class="mono">.gitignore</span> portait des motifs non ancrés (<span class="mono">*token*</span>, <span class="mono">*secret*</span>, <span class="mono">*backup*</span>). Ils ont été récupérés le 2026-07-27.</p>
-        <p><b>Mitigation :</b> <span class="mono">scripts/assert-tracked-files.sh</span> en CI, et le commit de la 1.10a dès que la passe 2 est faite.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">Treize constats de revue ouverts sur la surface la plus sensible du projet<em>🔴 actif · authentification, proxys, CSP</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p>Trois d'entre eux ne sont pas des correctifs mais des <b>décisions</b> — c'est-à-dire des choses que le développement ne peut pas trancher seul :</p>
+        <p>Le même défaut, sous trois formes, en trois mois :</p>
         <ul>
-          <li><b>D2</b> — <span class="mono">filament:upgrade</span> en <span class="mono">post-autoload-dump</span> fait plus que republier des assets : il enchaîne <span class="mono">config:clear</span>, <span class="mono">route:clear</span>, <span class="mono">view:clear</span>. Tout <span class="mono">composer install</span> sur un hôte ayant fait <span class="mono">config:cache</span> <b>efface ses caches de production</b>. Et le test qui garde la ligne est vert sous <span class="mono">--no-scripts</span>, employé par le Dockerfile et trois workflows.</li>
-          <li><b>D3</b> — le chemin de production met en défaut deux mécanismes de la story. Après <span class="mono">config:cache</span>, <span class="mono">.env</span> n'est plus lu : <span class="mono">env('TRUSTED_PROXIES', 'REMOTE_ADDR')</span> retombe sur le défaut, et une liste CIDR configurée est ignorée. Après <span class="mono">route:cache</span>, éteindre le module rend <b>500</b> au lieu de 404.</li>
-          <li><b>D1</b> — corrigé sur disque, non consigné dans la story.</li>
+          <li><b>Mai</b> — la passe 2 de la story 1.1 <b>introduit</b> <span class="mono">env('TRUSTED_PROXIES','*')</span> avec une justification fausse. Toute adresse d'Internet devient proxy de confiance ; le rate limiting du login donne un seau neuf par tentative.</li>
+          <li><b>10 août</b> — corrigé en apparence : l'<span class="mono">env()</span> est déplacé vers <span class="mono">config/proxies.php</span>, puis <span class="mono">require</span> depuis le même callback. Il a changé de <b>fichier</b>, pas de <b>moment</b> — sous <span class="mono">config:cache</span>, la liste de l'opérateur est remplacée en silence par <span class="mono">REMOTE_ADDR</span>. <b>Mesuré :</b> <span class="mono">app()-&gt;bound('config')</span> vaut <b>false</b> dans <span class="mono">withMiddleware()</span>.</li>
+          <li><b>20 août</b> — un en-tête <span class="mono">Host</span> forgé suffisait encore à rendre le joker. La valeur est désormais posée par <span class="mono">CoreServiceProvider::boot()</span>.</li>
         </ul>
-        <p class="mut">Aucun de ces trois n'est atteignable par un test : l'application jetable des tests n'est jamais cachée.</p>
+        <p>⚠️ <b>Deux couches de la revue recommandaient d'y lire <span class="mono">config('proxies.at')</span> — recommandation fausse</b>, qui aurait fermé la confiance aux proxys en silence. Le risque résiduel n'est pas le code : c'est que <b>cette pièce a une histoire de corrections qui n'en étaient pas</b>. Toute modification future s'y mesure, elle ne s'y raisonne pas.</p>
       </div></div></div>
 
+    <div class="item"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">Les constats de revue ne sont pas consommés<em>🔴 actif · 10 des 13 constats de la passe 1 étaient intacts</em></span><span class="chev">›</span></button>
+      <div class="body"><div class="in">
+        <p>C'est le risque que la clôture d'Epic 1 a rendu visible, et il pèse plus que n'importe quel défaut technique de cette page.</p>
+        <p>La passe 2 de la 1.10a a établi que, des 13 constats du 2026-08-10 : <b>1 résolu</b>, <b>2 traités sans atteindre leur but</b>, <b>10 intacts</b>. Et ses quatre couches, <b>qui ne connaissaient pas la liste</b>, en ont retrouvé huit indépendamment.</p>
+        <p><b>Coût :</b> huit constats payés deux fois. C'est aussi ce qui a rendu la 2ᵉ passe indispensable là où la règle écrite le matin même l'aurait déclarée inutile — d'où son amendement (§07).</p>
+        <p><b>Mitigation, à tenir dès l'Epic 2 :</b> appliquer les constats de la passe 1 <em>avant</em> d'ouvrir la passe 2. Le plafond de deux passes n'est tenable qu'à cette condition.</p>
+      </div></div></div>
+
+    <div class="item"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">Deux routes Filament survivent à <span class="mono">MODULE_ADMIN_ENABLED=false</span><em>🟠 elles appartiennent au paquet, pas au panel</em></span><span class="chev">›</span></button>
+      <div class="body"><div class="in"><p>Le gate éteint le <span class="mono">PanelProvider</span>, donc les routes <em>du panel</em>. Deux routes enregistrées par le paquet lui-même y échappent. ADR-0009 promet qu'un module désactivé ne charge « ni ses routes, ni ses migrations, ni ses Filament resources » : la promesse est tenue pour le panel, pas pour le paquet qui le porte.</p></div></div></div>
     <div class="item"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">Le blocage du runner navigateur n'est pas prouvé résolu<em>🟠 le bras témoin manque</em></span><span class="chev">›</span></button>
       <div class="body"><div class="in">
         <p>Le plugin ne rendait pas la main ~1 fois sur 2 (mesuré : 6 blocages / 10 runs). Après la montée de <span class="mono">playwright</span> 1.59.1 → 1.62.1 : <b>0 blocage sur 10</b>.</p>
@@ -545,23 +534,23 @@ footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
   </div>
 
   <div class="items" id="pane-all" role="tabpanel" aria-labelledby="t-all">
-    <div class="item" data-k="now"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">D2 — garder <span class="mono">filament:upgrade</span> en <span class="mono">post-autoload-dump</span> ?<em>bloquant · tranché « oui » le 09/08, rouvert par la revue du 10/08</em></span><span class="chev">›</span></button>
+    <div class="item" data-k="now"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">✅ <span class="mono">filament:upgrade</span> en <span class="mono">post-autoload-dump</span><em>tranché le 2026-08-20 — et appliqué</em></span><span class="chev">›</span></button>
       <div class="body"><div class="in">
-        <p><b>Pourquoi c'était « oui » :</b> les assets Filament sont gitignorés (AC8). Un <span class="mono">composer install --no-dev</span> en production servirait sinon un panel <b>sans CSS ni JS</b>. L'exclusion et la republication sont un seul choix et sa conséquence.</p>
-        <p><b>Ce que la revue a ajouté, et qui n'était pas dans la balance :</b> la commande efface aussi les caches de configuration, de routes et de vues. Et le test qui garde la ligne passe sous <span class="mono">--no-scripts</span> — c'est-à-dire dans le mode exact que son message d'échec décrit comme le désastre à éviter.</p>
-        <p><b>Voies :</b> (a) garder et documenter le risque de cache · (b) remplacer par un <span class="mono">filament:assets</span> seul · (c) sortir la republication du cycle composer et la mettre dans l'entrypoint Docker.</p>
+        <p><b>Décision :</b> remplacé par <span class="mono">filament:assets --no-interaction</span>. La commande d'origine enchaînait <span class="mono">config:clear</span>, <span class="mono">route:clear</span>, <span class="mono">view:clear</span> — tout <span class="mono">composer install</span> sur un hôte ayant fait <span class="mono">config:cache</span> effaçait ses caches de production.</p>
+        <p><b>Et le garde a changé d'objet :</b> il vérifie désormais que <b>les assets existent après déploiement</b>, plus qu'une ligne existe dans <span class="mono">composer.json</span>. L'ancien test était vert sous <span class="mono">--no-scripts</span> — exactement le mode que son message d'échec décrivait comme le désastre à éviter.</p>
       </div></div></div>
 
-    <div class="item" data-k="now"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">D3 — que fait-on du chemin <span class="mono">config:cache</span> / <span class="mono">route:cache</span> ?<em>bloquant · aucun test ne peut atteindre cet état</em></span><span class="chev">›</span></button>
+    <div class="item" data-k="now"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">✅ Le chemin <span class="mono">config:cache</span> / <span class="mono">route:cache</span><em>tranché le 2026-08-20 — trois correctifs distincts</em></span><span class="chev">›</span></button>
       <div class="body"><div class="in">
-        <p>Deux mécanismes de la story 1.10a sont mis en défaut par le chemin de production réel (<span class="mono">docker/php/scripts/docker-entrypoint.sh</span>) :</p>
         <ul>
-          <li>Une liste CIDR de proxys configurée dans <span class="mono">.env</span> est <b>ignorée</b> après <span class="mono">config:cache</span> — <span class="mono">request()->ip()</span> rend alors l'IP du load balancer, donc <b>un seul seau de rate limiting pour tous les clients</b>. C'est le déni de service que le contre-test interdit, atteint par l'autre bout.</li>
-          <li>Après <span class="mono">route:cache</span> construit module allumé, éteindre <span class="mono">MODULE_ADMIN_ENABLED</span> rend <b>500</b>, pas 404.</li>
+          <li><b>Proxys</b> — la valeur n'est plus lue dans <span class="mono">withMiddleware()</span>, où ni <span class="mono">env()</span> ni <span class="mono">config()</span> ne sont lisibles, mais posée par <span class="mono">CoreServiceProvider::boot()</span>.</li>
+          <li><b>Gate de module</b> — l'entrypoint invalide le cache de routes quand la configuration des modules a changé, ou refuse de démarrer sur un cache incohérent. Sans ça, éteindre le module rendait <b>500</b> au lieu de 404.</li>
+          <li><b>Validation</b> — <span class="mono">config/proxies.php</span> levait une <span class="mono">RuntimeException</span> <em>pendant le chargement de la configuration</em> : une faute de frappe rendait l'application non bootable, <b>commandes de récupération comprises</b>. La validation est sortie vers une commande de contrôle appelée avant <span class="mono">config:cache</span> — refus toujours dur, application réparable, contrôle testable.</li>
         </ul>
-        <p><b>Voies :</b> (a) déplacer la lecture dans un fichier de configuration cachable (<span class="mono">src/config/proxies.php</span> existe déjà dans l'arbre de travail) · (b) interdire <span class="mono">route:cache</span> tant que les modules sont pilotés par l'environnement · (c) documenter et vivre avec.</p>
       </div></div></div>
 
+    <div class="item" data-k="now"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">W9 — un Given de l'AC5 n'est pas composable, et c'est écrit<em>reporté avec sa mesure, pas contourné</em></span><span class="chev">›</span></button>
+      <div class="body"><div class="in"><p>Le 3ᵉ Given de l'AC5 — une tentative refusée survit-elle à un <span class="mono">X-Forwarded-For</span> forgé ? — n'est pas composable sous <span class="mono">Livewire::test()</span> : <span class="mono">RequestBroker</span> désactive les middlewares et <span class="mono">REMOTE_ADDR</span> n'y est pas pilotable. <b>Établi par un contre-test qui a rougi</b>, puis reporté avec sa mesure plutôt que fabriquer un vert. C'est la forme correcte d'un aveu.</p></div></div></div>
     <div class="item" data-k="now"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">La rétrospective d'Epic 1 : <span class="mono">optional</span> ou due ?<em>marquée optionnelle dans sprint-status.yaml</em></span><span class="chev">›</span></button>
       <div class="body"><div class="in"><p>L'Epic 1 est le seul epic dont l'exécution a produit une doctrine (la boucle qualité, la règle du rouge observé, le catalogue des garde-fous silencieux, et maintenant le plafond de revues). Le marquer <span class="mono">optional</span> et passer à l'Epic 2 revient à jeter la seule matière première dont les dix epics suivants pourraient hériter.</p></div></div></div>
 
@@ -886,7 +875,7 @@ footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
         <p class="mut">Un garde-fou a prouvé sa valeur au passage : la révision Chromium attendue est passée de 1217 à 1234. Le script la <b>dérive</b> de <span class="mono">browsers.json</span> au lieu de la coder en dur — la suite serait rouge à l'instant si le spike avait écrit « 1217 ».</p>
       </div></div></div>
 
-    <div class="item"><button aria-expanded="false"><span class="dot d-now"></span><span class="ttl">La porte : <span class="mono">/admin</span> authentifié<em>story 1.10a · en revue</em></span><span class="chev">›</span></button>
+    <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">La porte : <span class="mono">/admin</span> authentifié<em>story 1.10a · <span style="color:var(--ok)">done</span> le 2026-08-20 · 2 passes de revue</em></span><span class="chev">›</span></button>
       <div class="body"><div class="in">
         <p><b>Ce que ça fait —</b> un panel Filament v5 <b>vide</b>, monté dans le module Admin, refusé par défaut : <span class="mono">canAccessPanel()</span> exige le rôle <span class="mono">super-admin</span>. Le rôle est semé ; <b>aucun compte ne l'est</b> — l'administrateur se crée avec <span class="mono">php artisan make:filament-user</span>.</p>
         <p><b>Ce qu'elle n'a délibérément pas fait —</b> aucune ressource Filament, aucun thème, Sanctum laissé <b>inerte</b> (sa table n'existe pas), CSP toujours éteinte.</p>
@@ -899,50 +888,46 @@ footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
 <section id="reviews">
   <div class="eyebrow">07 — Performance des revues</div>
   <h2 style="font-size:24px;margin-bottom:10px">Une revue de code coûte. Est-ce qu'elle paie ?</h2>
-  <p class="lede">La question a été posée pour de vrai, et instruite sur les <b>15 passes de revue</b> qu'ont subies les 13 stories de l'Epic 1. La réponse n'est pas « oui » ni « non » : elle dépend du <b>rang</b> de la passe, et l'effondrement est net.</p>
+  <p class="lede">La question a été posée pour de vrai, et instruite sur les <b>16 passes de revue</b> qu'ont subies les 13 stories de l'Epic 1. La réponse n'est pas « oui » ni « non » : elle dépend du <b>rang</b> de la passe, et l'effondrement est net. <b>La 16ᵉ passe — celle du 2026-08-20 — a en partie démenti la règle tirée des 15 premières</b>, et c'est écrit plus bas plutôt que corrigé en silence.</p>
 
   <div class="grid g3" style="margin-bottom:24px">
     <div class="card panel" style="padding:20px">
-      <div class="eyebrow" style="margin-bottom:8px">Passe 1</div>
-      <div style="font-size:30px;font-weight:600;font-family:var(--mono);letter-spacing:-.02em">117</div>
-      <p style="font-size:13px;color:var(--text-2);margin:6px 0 0">correctifs appliqués sur 13 stories — <b>9 par story</b>. Zéro d'entre eux ne répare une revue précédente.</p>
+      <div class="eyebrow" style="margin-bottom:8px">Passe 1 · 13 passes</div>
+      <div style="font-size:30px;font-weight:600;font-family:var(--mono);letter-spacing:-.02em">108</div>
+      <p style="font-size:13px;color:var(--text-2);margin:6px 0 0">correctifs <b>appliqués</b>. Aucun ne répare une revue précédente — par construction, il n'y en a pas.</p>
     </div>
     <div class="card panel" style="padding:20px;border-color:var(--border-hi)">
-      <div class="eyebrow" style="margin-bottom:8px">Passe 2</div>
-      <div style="font-size:30px;font-weight:600;font-family:var(--mono);letter-spacing:-.02em">27 <span style="font-size:15px;color:var(--warn)">· 22 % de réparation</span></div>
-      <p style="font-size:13px;color:var(--text-2);margin:6px 0 0">Et le résultat est <b>bimodal</b>, pas moyen : une passe 2 à <b>0 correctif</b> (story 1.3) et une à <b>21</b> (story 1.9).</p>
+      <div class="eyebrow" style="margin-bottom:8px">Passe 2 · 4 passes</div>
+      <div style="font-size:30px;font-weight:600;font-family:var(--mono);letter-spacing:-.02em">50 <span style="font-size:15px;color:var(--warn)">· 18 % de réparation</span></div>
+      <p style="font-size:13px;color:var(--text-2);margin:6px 0 0"><b>Bimodal, pas moyen</b> : de <b>0</b> correctif (1.3) à <b>23</b> (1.10a). Plus <b>8 constats simplement retrouvés</b>, faute d'avoir été appliqués.</p>
     </div>
     <div class="card panel" style="padding:20px;border-color:rgba(239,68,68,.4)">
-      <div class="eyebrow" style="margin-bottom:8px">Passe 3</div>
+      <div class="eyebrow" style="margin-bottom:8px">Passe 3 · 1 passe</div>
       <div style="font-size:30px;font-weight:600;font-family:var(--mono);letter-spacing:-.02em;color:var(--err)">5 <span style="font-size:15px">· 80 % de réparation</span></div>
       <p style="font-size:13px;color:var(--text-2);margin:6px 0 0">Quatre correctifs sur cinq ne font que réparer la passe 2. Dont <b>un revert pur</b>.</p>
     </div>
   </div>
 
   <figure>
-  <svg viewBox="0 0 1120 250" role="img" aria-label="Part des correctifs qui ne font que réparer la passe précédente : 0 % en passe 1, 22 % en passe 2, 80 % en passe 3">
+  <svg viewBox="0 0 1120 250" role="img" aria-label="Part des correctifs qui réparent la passe précédente : 0 % en passe 1, 18 % en passe 2, 80 % en passe 3">
     <text x="28" y="30" fill="rgba(255,255,255,.38)" font-size="11" letter-spacing="1.6" class="m">PART DES CORRECTIFS QUI RÉPARENT LA PASSE PRÉCÉDENTE</text>
-
     <line x1="150" y1="196" x2="1080" y2="196" stroke="#1F1F22"/>
 
-    <!-- passe 1 -->
     <text x="132" y="86" fill="rgba(255,255,255,.6)" font-size="12.5" text-anchor="end">Passe 1</text>
     <rect x="150" y="66" width="800" height="28" rx="4" fill="rgba(255,255,255,.26)"/>
-    <text x="966" y="86" fill="rgba(255,255,255,.6)" font-size="12" class="m">117 correctifs · 0 % réparation</text>
+    <text x="966" y="86" fill="rgba(255,255,255,.6)" font-size="12" class="m">108 correctifs · 0 % réparation</text>
 
-    <!-- passe 2 -->
     <text x="132" y="136" fill="rgba(255,255,255,.6)" font-size="12.5" text-anchor="end">Passe 2</text>
-    <rect x="150" y="116" width="144" height="28" rx="4" fill="rgba(255,255,255,.26)"/>
-    <rect x="294" y="116" width="41" height="28" fill="#F59E0B"/>
-    <text x="351" y="136" fill="rgba(255,255,255,.6)" font-size="12" class="m">27 correctifs · 22 % réparation</text>
+    <rect x="150" y="116" width="303" height="28" rx="4" fill="rgba(255,255,255,.26)"/>
+    <rect x="453" y="116" width="67" height="28" fill="#F59E0B"/>
+    <text x="536" y="136" fill="rgba(255,255,255,.6)" font-size="12" class="m">50 correctifs · 18 % réparation · + 8 constats retrouvés</text>
 
-    <!-- passe 3 -->
     <text x="132" y="186" fill="rgba(255,255,255,.6)" font-size="12.5" text-anchor="end">Passe 3</text>
     <rect x="150" y="166" width="7" height="28" rx="2" fill="rgba(255,255,255,.26)"/>
-    <rect x="157" y="166" width="27" height="28" fill="#EF4444"/>
-    <text x="200" y="186" fill="#EF4444" font-size="12" class="m">5 correctifs · 80 % réparation · dont 1 revert pur</text>
+    <rect x="157" y="166" width="30" height="28" fill="#EF4444"/>
+    <text x="203" y="186" fill="#EF4444" font-size="12" class="m">5 correctifs · 80 % réparation · dont 1 revert pur</text>
 
-    <text x="150" y="228" fill="rgba(255,255,255,.38)" font-size="11.5">Largeur ∝ nombre de correctifs. Segment coloré = correctifs dont l'objet est une régression introduite par la passe précédente.</text>
+    <text x="150" y="228" fill="rgba(255,255,255,.38)" font-size="11.5">Largeur ∝ nombre de correctifs. Segment coloré = correctifs dont l'objet est une régression, ou un correctif défaillant, de la passe précédente.</text>
   </svg>
   <figcaption>Une seule story a subi trois passes : la <b>1.1</b>. Le titre de sa section round 2, écrit à l'époque par le développement lui-même, est <em>« fixes des régressions introduites par P1-P20 »</em>. Celui du round 3 : <em>« fixes des régressions introduites par F1-F6 »</em>. Le document contient même la phrase — <em>« F3 et F6 ont chacun introduit une régression de sévérité comparable à ce qu'ils fixaient »</em>.</figcaption>
   </figure>
@@ -972,7 +957,7 @@ footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
       <tr><td><b>1.11</b> composants Blade</td><td class="num">1</td><td class="num">22</td><td class="num mut">—</td><td class="num mut">—</td><td>30 constats, 22 correctifs, tous dans le même commit, aucun report.</td></tr>
       <tr><td><b>1.12</b> time-as-texture</td><td class="num">1</td><td class="num">22</td><td class="num mut">—</td><td class="num mut">—</td><td>4 décisions, 8 reports. Trois défauts de fond trouvés — la dérive Carbon ↔ Intl aux changements d'heure n'était atteignable par aucun test existant.</td></tr>
       <tr><td><b>1.13</b> layouts</td><td class="num">1</td><td class="num">4</td><td class="num mut">—</td><td class="num mut">—</td><td>Aucun constat <span class="mono">high</span>. 4 mutations rejouées, 4 rouges.</td></tr>
-      <tr><td><b>1.10a</b> panel admin</td><td class="num">1<span class="mut"> +1 dû</span></td><td class="num" style="color:var(--err)">10 ouverts</td><td class="num mut">à faire</td><td class="num mut">—</td><td>Les 3 constats de tête <b>reproduits sur la pile qui tourne</b>. C'est la passe 1 la plus rentable du dépôt — et ses correctifs ne sont pas appliqués.</td></tr>
+      <tr><td><b>1.10a</b> panel admin</td><td class="num hi">2</td><td class="num" style="color:var(--warn)">1 <span class="mut">/10</span></td><td class="num" style="color:var(--ok)">23</td><td class="num mut">—</td><td><b>Le contre-exemple.</b> La passe 1 a proposé 10 correctifs ; <b>1 seul a été appliqué</b>, 2 ont manqué leur but, 10 sont restés intacts. La passe 2 — 4 couches, sans connaître la liste — en a <b>retrouvé 8</b> et produit 23 correctifs. La règle écrite le matin aurait dit « pas de passe 2 ». Elle aurait eu tort.</td></tr>
     </tbody>
   </table>
   </div>
@@ -983,13 +968,22 @@ footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
     <p style="font-size:16px;margin-bottom:14px"><b>Plafond : deux passes de revue de code par story. La seconde relit ce que la première a écrit.</b></p>
     <div class="tagrow">
       <span class="tag hot">compte dans le quota : /bmad-code-review</span>
-      <span class="tag hot">compte : /bmad-review-adversarial-general</span>
+      <span class="tag hot">compte : /bmad-review <span class="mut">(lentille adversariale)</span></span>
       <span class="tag on">hors quota : /security-review</span>
       <span class="tag on">hors quota : composer audit · npm audit</span>
       <span class="tag on">hors quota : make security-scan</span>
     </div>
     <p style="font-size:13.5px;color:var(--text-2)">La sécurité est <b>hors quota</b> parce qu'un scanner ne fabrique pas de la confiance : il constate. Deux revues d'opinion qui disent la même chose ne valent pas mieux qu'une ; deux audits de dépendances à deux dates différentes, si — <span class="mono">composer audit</span> a rapporté <b>7 advisories en une seule session</b> le 2026-08-06, toutes publiées dans les 48 h.</p>
-    <p style="font-size:13.5px;color:var(--text-2);margin-bottom:0"><b>Ce qui distingue une passe 2 utile d'une passe 2 stérile</b> n'est pas le zèle du relecteur, c'est <b>le périmètre</b>. La 1.9 a relu du code neuf jamais lu ; la 1.3 a relu du code déjà lu. Une passe 2 qui ne peut pas nommer ce que la passe 1 a <em>écrit</em> n'a rien à faire.</p>
+    <p style="font-size:13.5px;color:var(--text-2);margin-bottom:0"><b>Ce qui distingue une passe 2 utile d'une passe 2 stérile</b> n'est pas le zèle du relecteur, c'est <b>le périmètre</b>. La 1.9 a relu du code neuf jamais lu ; la 1.3 a relu du code déjà lu. <b>⚠️ Cette formulation a été amendée le jour même</b> — voir l'encadré ci-dessous.</p>
+  </div>
+
+  <div class="card" style="padding:24px;border-color:var(--warn);margin-top:22px">
+    <p style="font-size:15px;margin-bottom:12px"><b style="color:var(--warn)">⚠️ Amendement du même jour — la clause ci-dessus était trop étroite.</b></p>
+    <p style="font-size:13.5px;color:var(--text-2)">Le plafond a été écrit le matin sur 15 passes. <b>La 16ᵉ, l'après-midi, l'a partiellement démenti</b> — le démenti annoncé au paragraphe suivant, arrivé en quelques heures.</p>
+    <p style="font-size:13.5px;color:var(--text-2)">Appliquée littéralement à la story 1.10a, la clause « une passe 2 n'est utile que si elle a du code neuf à lire » aurait conclu <b>« pas de passe 2 »</b> : la passe 1 n'avait quasiment rien écrit. Elle aurait eu tort — la passe 2 a produit <b>23 correctifs et 5 décisions</b>. Raison : la passe 1 n'avait rien écrit <em>parce que ses constats n'avaient pas été consommés</em>. La passe 2 n'a pas relu du code neuf, elle a <b>fermé la passe 1</b>.</p>
+    <p style="font-size:15px;margin:16px 0 12px;padding-left:15px;border-left:2px solid var(--lava)"><b>La 2ᵉ passe existe pour CLORE la première</b> — soit en relisant ce que ses correctifs ont écrit, soit en vérifiant que ses constats ont été consommés. Une passe 2 qui ne peut nommer ni l'un ni l'autre n'a rien à faire.</p>
+    <p style="font-size:13.5px;color:var(--text-2)"><b>Corollaire, plus important que le plafond lui-même :</b> appliquer les constats de la passe 1 est ce qui rend la passe 2 bon marché. Ne pas les appliquer transforme le budget de revue en budget de <b>re-découverte</b> — huit constats retrouvés à quatre couches, c'est-à-dire payés deux fois.</p>
+    <p style="font-size:13.5px;color:var(--text-2);margin-bottom:0">🔴 <b>Et la démonstration la plus dure vient du même endroit.</b> Le correctif <span class="mono">TRUSTED_PROXIES</span> de la passe 1 était <b>inopérant en production</b> : l'<span class="mono">env()</span> avait changé de <em>fichier</em>, pas de <em>moment</em>. Deux couches recommandaient même d'y lire <span class="mono">config('proxies.at')</span> — recommandation <b>fausse</b>, qui aurait fermé la confiance aux proxys en silence. La leçon n'est pas « les revues sont mauvaises » : c'est que <b>le correctif d'une revue est du code non revu</b>, et que c'est exactement ce que la 2ᵉ passe est là pour lire.</p>
   </div>
 
   <div class="note warn" style="margin-top:22px"><b>Ce que cette mesure ne dit pas</b> — et qui empêcherait d'en tirer plus qu'elle ne porte. Elle compte des <b>correctifs</b>, pas de la <b>gravité</b> : une passe à 1 correctif qui ferme un trou d'authentification bat une passe à 22 correctifs de nommage. Elle porte sur <b>un seul epic</b>, <b>un seul relecteur</b> et des stories de front pour la plupart. Et l'échantillon des passes 3 est de <b>un</b>. Le plafond est donc une règle de coût, pas une loi de la nature : il vaut jusqu'à ce qu'une story le démente — auquel cas c'est le démenti qu'on écrit, pas le plafond qu'on contourne.</div>

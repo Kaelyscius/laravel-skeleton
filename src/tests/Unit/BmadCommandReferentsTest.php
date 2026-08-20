@@ -73,6 +73,11 @@ use Tests\Support\RepoFile;
 const PROCESS_DOCS = [
     'docs/process/02-bmad-workflow.md',
     'docs/process/03-boucle-qualite.md',
+    // La reading room PRESCRIT elle aussi des commandes — sa carte « plafond »
+    // nomme celles qui comptent dans le quota. Un document qui prescrit entre
+    // dans ce garde-fou, quel que soit son format : l'extraction est textuelle
+    // et les blocs `bmad-referents:ignore` sont déjà des commentaires HTML.
+    'docs/reading-room/index.html',
 ];
 
 /**
