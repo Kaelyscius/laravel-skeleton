@@ -33,9 +33,9 @@ uses(RefreshDatabase::class);
 |    coûteux de la Story 1.13, y compris ENTRE DEUX MUTATIONS.
 |  - Le verdict ne vient PAS du code de sortie de `pest` (le plugin ne rend pas
 |    la main ~1 run sur 2) : `make test-browser` lit le rapport JUnit.
-|  - Base semée obligatoire : `/_time` passe par SetCurrentStreamer, qui fait un
-|    firstOrFail(). Sans Streamer, la page répond 404 et le test rougit pour la
-|    mauvaise raison.
+|  - Base semée obligatoire : `/_time` passe par SetCurrentStreamer. Sans
+|    Streamer, il lève NoStreamerConfiguredException, la page répond 500 et le
+|    test rougit pour la mauvaise raison.
 |
 | ⚠️ Pas de temporisation fixe : cette suite tourne sur DEUX Chromium
 | différents. On lit jusqu'à une condition, avec une BORNE.

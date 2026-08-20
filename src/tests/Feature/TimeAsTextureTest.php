@@ -1018,9 +1018,11 @@ it('fait porter data-temporal aux 4 composants, une fois chacun (AC10)', functio
 
 it('répond 200 sur la page de démonstration du temps (T10)', function (): void {
     /*
-     * Cette page passe par le groupe `web`, donc par SetCurrentStreamer, qui
-     * fait un firstOrFail(). Sans streamer semé, elle répond 404 — et les tests
-     * navigateur rougiraient pour une raison étrangère aux composants.
+     * Cette page passe par le groupe `web`, donc par SetCurrentStreamer. Sans
+     * streamer semé, il lève NoStreamerConfiguredException et elle répond 500 —
+     * et les tests navigateur rougiraient pour une raison étrangère aux
+     * composants. (Avant le 2026-08-10 c'était un 404 : voir l'entrée fermée de
+     * deferred-work.md.)
      */
     App\Core\Models\Streamer::factory()->create();
 

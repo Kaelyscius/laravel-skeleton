@@ -1,5 +1,29 @@
 # Boucle qualité par story
 
+<!-- bmad-referents:ignore — bloc HISTORIQUE : il NOMME les commandes dépréciées pour
+     expliquer la migration. Sans ce marqueur, le garde-fou rougirait sur le commentaire
+     qui explique son propre motif — piège déjà rencontré dans ce dépôt (grep textuel de
+     la 1.10a). Voir src/tests/Unit/BmadCommandReferentsTest.php. -->
+
+> 🔄 **Noms de commandes re-pointés le 2026-08-20 sur BMad 6.11.0.**
+> `/bmad-create-story` et `/bmad-dev-story` sont **dépréciés** : `bmad-build` est désormais la
+> méthode d'implémentation officielle, et elle **fusionne** la création de story et son
+> implémentation — ce n'est pas un simple renommage. `/bmad-review-adversarial-general` est
+> déprécié au profit de `/bmad-review`, qui regroupe en lentilles les quatre anciens skills de
+> revue (adversariale, edge-case, verification-gap, structure/prose).
+>
+> Les anciens noms **redirigent encore** ; rien ne garantit qu'ils le feront toujours.
+> `src/tests/Unit/BmadCommandReferentsTest.php` verrouille l'invariant : toute commande `bmad-*`
+> citée hors bloc historique, ici et dans `02-bmad-workflow.md`, doit résoudre vers un skill
+> installé et **non déprécié**.
+>
+> ⚠️ Ce garde-fou est **local uniquement**, et c'est écrit plutôt que subi : `.claude/skills/`
+> est gitignoré (`.gitignore:229`), donc la CI n'a pas les skills et le test s'y déclare
+> *skipped* — bruyamment, jamais vert par extinction. C'est le bon compromis : la dérive naît
+> sur le poste du développeur au moment d'une mise à jour BMad, et c'est là que le test tourne.
+
+<!-- /bmad-referents:ignore -->
+
 > Écrit le 2026-08-07, à partir de ce que ce projet a réellement produit comme
 > défauts — pas d'un catalogue de bonnes pratiques.
 >
@@ -67,13 +91,13 @@ ferait rougir un tel test. Le résolveur de noms, c'est Laravel — un test qui
 passe par un rendu réel échoue nativement sur un composant inexistant.
 
 ```
-/bmad-create-story          # puis relire les AC AVANT de lancer le dev
+/bmad-build                 # puis relire les AC AVANT de lancer le dev
 ```
 
 ### Étape 1 — Développement
 
 ```
-/bmad-dev-story _bmad-output/implementation-artifacts/<story>.md
+/bmad-build _bmad-output/implementation-artifacts/<story>.md
 ```
 
 Règle unique pendant le dev : **tout garde-fou ajouté doit avoir été vu rouge
@@ -99,7 +123,7 @@ revue.
 |---|---|
 | **S** | `/bmad-code-review` — les 3 layers, contexte frais |
 | **R** | idem + relecture ciblée de l'invariant touché |
-| **C** | idem + `/bmad-review-adversarial-general` sur la surface sensible — **2 passes MAX**, cf. plafond ci-dessous |
+| **C** | idem + `/bmad-review` (lentille adversariale) sur la surface sensible — **2 passes MAX**, cf. plafond ci-dessous |
 
 Ne pas empiler les revues « pour être sûr ». Deux revues qui disent la même
 chose ne valent pas mieux qu'une ; elles coûtent juste le double et fabriquent
@@ -119,8 +143,7 @@ de la confiance.
 > | Passe 2 (3 passes) | **27** | **22 %** |
 > | Passe 3 (1 passe) | **5** | **80 %**, dont un revert pur |
 >
-> **Ce qui compte dans le quota** : `/bmad-code-review` et
-> `/bmad-review-adversarial-general`.
+> **Ce qui compte dans le quota** : `/bmad-code-review` et `/bmad-review`.
 > **Ce qui en est exclu** : `/security-review`, `composer audit`, `npm audit`,
 > `make security-scan` — un scanner ne fabrique pas de la confiance, il
 > constate, et `composer audit` a sorti 7 advisories en une session le
@@ -156,6 +179,48 @@ de la confiance.
 > La revue adversariale ne l'a pas trouvé — **elle l'a posé**. Et la passe 3 est
 > repassée dessus sans le voir : elle regardait le *parsing* de la variable, pas
 > ce que sa valeur par défaut autorisait.
+>
+> ### ⚠️ AMENDEMENT DU 2026-08-20 — la clause ci-dessus était trop étroite
+>
+> Le plafond a été écrit le matin, sur les 15 passes d'alors. **La 2ᵉ passe de la story 1.10a,
+> passée le même jour, l'a partiellement démenti** — et c'est le démenti annoncé au paragraphe
+> suivant, arrivé en quelques heures.
+>
+> La clause disait : *une passe 2 n'est utile que si elle a du code neuf à lire.* Appliquée
+> littéralement à la 1.10a, elle aurait conclu **« pas de passe 2 »** : la passe 1 n'avait
+> quasiment rien écrit. Elle aurait eu tort. La passe 2 a produit **23 correctifs et 5
+> décisions**, et son constat de tête est le suivant :
+>
+> 📊 **Des 13 constats de la passe 1 : 1 résolu (P9), 2 traités sans atteindre leur but, 10
+> intacts.** Les quatre couches de la passe 2, **qui ne connaissaient pas cette liste**, en ont
+> retrouvé huit indépendamment.
+>
+> Autrement dit : la passe 1 n'avait quasiment rien écrit **parce que ses constats n'avaient pas
+> été consommés**. La passe 2 n'a pas relu du code neuf — elle a **fermé la passe 1**.
+>
+> **Formulation corrigée, et c'est elle qui fait foi :**
+>
+> > **La 2ᵉ passe existe pour CLORE la première** — soit en relisant ce que ses correctifs ont
+> > écrit, soit en vérifiant que ses constats ont été consommés. Une passe 2 qui ne peut nommer
+> > ni l'un ni l'autre n'a rien à faire.
+>
+> Corollaire opérationnel, plus important que le plafond lui-même : **appliquer les constats de
+> la passe 1 est ce qui rend la passe 2 bon marché.** Ne pas les appliquer transforme le budget
+> de revue en budget de re-découverte — huit constats retrouvés à quatre couches, c'est-à-dire
+> payés deux fois.
+>
+> 🔴 **Et la démonstration la plus dure vient du même endroit.** Le correctif `TRUSTED_PROXIES`
+> de la passe 1 était **inopérant en production** : il avait déplacé l'`env()` de
+> `bootstrap/app.php` vers `config/proxies.php`, puis `require` ce fichier depuis le même
+> callback. L'`env()` avait changé de **fichier**, pas de **moment** — sous `config:cache`, la
+> liste de proxys de l'opérateur était remplacée en silence par `REMOTE_ADDR`. Mesuré :
+> `app()->bound('config')` vaut **false** dans le callback `withMiddleware()`. C'est la
+> **troisième itération** du même défaut, sur trois passes de revue différentes, en trois mois.
+> Deux couches recommandaient même d'y lire `config('proxies.at')` — recommandation **fausse**,
+> qui aurait fermé la confiance aux proxys en silence.
+>
+> La leçon n'est pas « les revues sont mauvaises ». C'est que **le correctif d'une revue est du
+> code non revu**, et que c'est exactement ce que la 2ᵉ passe est là pour lire.
 >
 > ### Ce que ce plafond n'est pas
 >
@@ -205,8 +270,35 @@ Améliorer la couverture n'est jamais un but en soi : on ajoute un test parce
 qu'on a nommé le défaut qu'il attraperait. Si on n'arrive pas à le nommer, on
 n'écrit pas le test — on aurait fabriqué un garde-fou silencieux de plus.
 
-`make test-drift` (mutation testing, déjà installé) répond mieux que la
-couverture, et c'est l'outil à privilégier sur une story de niveau **C**.
+⛔ **UNE PHRASE SE TROUVAIT ICI, ET ELLE ÉTAIT FAUSSE.** Elle recommandait
+`make test-drift` comme « mutation testing, déjà installé » et « l'outil à
+privilégier sur une story de niveau C ». Constaté le 2026-08-09 (Story 1.10a) :
+`pestphp/pest-plugin-drift` n'est pas un outil de mutation — c'est le
+**migrateur PHPUnit → Pest**, et il **réécrit `tests/` sur place**. Un seul appel
+a réécrit 7 fichiers, supprimé un invariant délibéré avec sa justification, et
+injecté des imports cassés. Ce dépôt étant déjà entièrement en Pest, la commande
+n'a de toute façon plus d'objet.
+
+**Ce qui la remplace sur une story de niveau C : la campagne de mutation
+MANUELLE.** On casse le code volontairement, une mutation à la fois, et on
+regarde quel test rougit. Elle n'est pas un pis-aller — c'est la seule méthode
+qui oblige à *nommer* le défaut qu'un garde-fou attrape.
+
+Trois règles, payées chacune par une story :
+
+- **Une mutation à la fois, et on restaure entre chaque.** (1.13 : `MB-G`
+  masquait `MB-H` — deux mutations ne sont orthogonales que si elles ne
+  partagent aucun *mécanisme*, pas seulement aucun test.)
+- **Compter ce qu'on rejoue vraiment.** (Revue de la 1.12 : la campagne
+  annonçait 18 mutations, 33 avaient été jouées.)
+- **Rejouer la campagne après toute réécriture des tests.** (1.10a : neuf
+  mutations avaient été observées avant un refactor du mécanisme de requête ;
+  elles ne prouvaient plus rien sur le code livré.)
+
+Une mutation qui laisse tout vert n'est pas un échec de la campagne : c'est sa
+trouvaille. La 1.10a en a eu une — un test nommé « la limite est de 5 » restait
+vert avec la limite à 500, parce qu'il comptait les coups portés au seau et non
+la limite. Le test a été réécrit.
 
 ### Étape 6 — Commit et hygiène documentaire
 
@@ -261,10 +353,10 @@ comme une porte.
 
 ```bash
 # 0. Definition-of-ready : chaque nom des AC résout
-/bmad-create-story
+/bmad-build
 
 # 1. Dev — tout garde-fou ajouté doit être vu rouge
-/bmad-dev-story <story>
+/bmad-build <story>
 
 # 2. Portes automatiques
 make test && make quality-ratchet
@@ -272,14 +364,16 @@ make test-browser                     # si rendu
 
 # 3. Revue (S/R/C)
 /bmad-code-review
-/bmad-review-adversarial-general       # C uniquement
+/bmad-review                           # C uniquement — lentille adversariale
 
 # 4. Sécurité (R et C)
 /security-review && make security-scan
 
 # 5. Couverture : le code neuf est-il exercé ? les branches d'erreur ?
 php artisan test --coverage
-make test-drift                        # C : mutation plutôt que couverture
+# C : campagne de mutation MANUELLE — une mutation à la fois, restaurer entre chaque,
+#     compter ce qu'on rejoue, et rejouer après toute réécriture des tests.
+#     ⛔ PAS `make test-drift` : c'est le migrateur PHPUnit → Pest, il réécrit tests/.
 
 # 6. Commit — le message dit ce qui a été OBSERVÉ
 ```

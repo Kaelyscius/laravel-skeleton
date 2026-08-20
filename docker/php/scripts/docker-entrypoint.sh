@@ -74,8 +74,47 @@ fi
 if [ -f "/var/www/html/artisan" ]; then
    echo -e "${YELLOW}Configuration de Laravel...${NC}"
 
+   # ─────────────────────────────────────────────────────────────────────────
+   # ⛔ LE CONTRÔLE DES PROXYS EST HORS DU `if production` (finding de revue, 2026-08-20)
+   #
+   # Il y était, et c'était un trou : un hôte `staging`, `preprod` ou `demo` —
+   # tout ce qui n'est pas LITTÉRALEMENT « production » — démarrait sans contrôle,
+   # avec le `TRUSTED_PROXIES=*` hérité d'un vieux `.env`, c'est-à-dire dans l'état
+   # exact que ce contrôle a été écrit pour refuser. Il est bon marché (il lit la
+   # configuration) : on le passe partout sauf en local/testing, où un opérateur
+   # bricole et n'a pas à être arrêté.
+   # ─────────────────────────────────────────────────────────────────────────
+   if [ "$APP_ENV" != "local" ] && [ "$APP_ENV" != "testing" ]; then
+       php artisan proxies:check || exit 1
+   fi
+
    if [ "$APP_ENV" = "production" ]; then
        echo -e "${YELLOW}Optimisation pour la production...${NC}"
+
+       # ─────────────────────────────────────────────────────────────────────
+       # ⚠️ ON PURGE AVANT DE RECONSTRUIRE (décision D7, revue du 2026-08-20)
+       #
+       # Les caches de routes et de configuration sont construits À PARTIR DE
+       # L'ENVIRONNEMENT COURANT. Un cache hérité d'un démarrage précédent — image
+       # dont le build a exécuté `route:cache`, volume persistant, redéploiement
+       # partiel — survit sinon au changement d'un `MODULE_*_ENABLED`.
+       #
+       # Conséquence mesurée en revue : des routes cachées MODULE ACTIVÉ laissent
+       # `/admin` résoluble après bascule à `MODULE_ADMIN_ENABLED=false`. Plus
+       # aucun panel n'est enregistré, `PanelRegistry::getDefault()` lève
+       # `NoDefaultPanelSetException`, et le visiteur reçoit **500** — alors que
+       # l'AC2 de la Story 1.10a exige 404. Aucun test ne peut atteindre cet état :
+       # `Tests\Support\ModuleBoot` boote toujours une application jetable NON
+       # cachée. Le garde-fou ne pouvait donc être qu'ici.
+       # ─────────────────────────────────────────────────────────────────────
+       php artisan optimize:clear
+
+       # ⛔ `proxies:check` a déjà tourné ci-dessus, AVANT `config:cache` — l'ordre
+       # compte : le refus de `TRUSTED_PROXIES` ne vit plus dans le chargement de
+       # `config/` (décision D8, où une exception rendait l'application non
+       # bootable, commandes de réparation comprises), et il ne doit pas s'exécuter
+       # sur une configuration déjà mise en cache.
+
        php artisan config:cache
        php artisan route:cache
        php artisan view:cache

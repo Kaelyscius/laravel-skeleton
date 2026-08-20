@@ -650,9 +650,11 @@ it('précharge désormais les polices, et n\'écrit toujours pas de bandeau de c
 
 it('répond 200 sur les deux pages de démonstration des layouts (T7)', function (): void {
     /*
-     * Ces pages passent par le groupe `web`, donc par SetCurrentStreamer, qui
-     * fait un firstOrFail(). Sans streamer semé, elles répondent 404 — et les
-     * tests navigateur rougiraient pour une raison étrangère aux layouts.
+     * Ces pages passent par le groupe `web`, donc par SetCurrentStreamer.
+     * Sans streamer semé, il lève NoStreamerConfiguredException et elles
+     * répondent 500 — et les tests navigateur rougiraient pour une raison
+     * étrangère aux layouts. (Avant le 2026-08-10 c'était un 404 : voir
+     * l'entrée fermée de deferred-work.md.)
      */
     App\Core\Models\Streamer::factory()->create();
 

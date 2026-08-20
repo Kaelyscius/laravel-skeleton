@@ -13,8 +13,18 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Single source of truth for streamer-configurable data (tagline, bilingual bios,
  * CTAs, social handles) consumed by tenant-aware components (Press Kit Epic 8,
- * CTAs Epic 5). A fork-streamer overrides these via Filament SettingsResource
- * (Story 1.10) — never hardcode a streamer's data in views (ADR-0001).
+ * CTAs Epic 5). A fork-streamer overrides these via a Filament SettingsResource
+ * — never hardcode a streamer's data in views (ADR-0001).
+ *
+ * ⚠️ CETTE RESSOURCE N'EXISTE PAS ENCORE, et la référence a été corrigée le
+ * 2026-08-09 (Story 1.10a). Le renvoi disait « Story 1.10 » ; la 1.10 a été
+ * scindée, et la moitié qui porte la SettingsResource (1.10b) est partie en
+ * **Epic 5** — un back-office qui édite des champs que rien n'affiche est un
+ * vrai-vert inutile. La Story 1.10a livre le panel `/admin` vide, authentifié
+ * et gaté ; elle n'y met aucune ressource.
+ *
+ * Aujourd'hui, ces colonnes se modifient donc en base ou par un seeder. C'est
+ * un état transitoire assumé, pas un oubli.
  *
  * Invariants:
  *  - NO `streamer_id` column: this model IS the streamer.
@@ -71,7 +81,10 @@ final class Streamer extends Model
      *  3. Only `http`/`https` survive. A `javascript:` or `data:` URL in an
      *     `href` executes on click, and Blade escaping stops attribute
      *     breakout, not scheme abuse. Today only the streamer writes this
-     *     column — Story 1.10a puts a Filament form in front of it.
+     *     column, directly in the database: la Story 1.10a livre un panel
+     *     `/admin` VIDE, et le formulaire Filament qui éditera cette colonne
+     *     appartient à la 1.10b, déplacée en Epic 5. Le contrôle ci-dessus est
+     *     donc la seule barrière, et il le restera plus longtemps que prévu.
      *  4. Malformed entries are dropped, not rendered half-empty: a link with no
      *     URL is a dead end pretending to be a destination.
      *

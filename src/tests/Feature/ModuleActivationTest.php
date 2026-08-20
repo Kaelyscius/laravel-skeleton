@@ -10,10 +10,7 @@ use App\Modules\Public\Providers\PublicServiceProvider;
 use App\Modules\Reviews\Providers\ReviewsServiceProvider;
 use App\Providers\AppServiceProvider;
 use Illuminate\Container\Container;
-use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
-use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Bootstrap\LoadEnvironmentVariables;
-use Illuminate\Support\Facades\Facade;
+use Tests\Support\ModuleBoot;
 
 /**
  * Boots a SECOND, independent application with the given module ENV overrides
@@ -24,93 +21,27 @@ use Illuminate\Support\Facades\Facade;
  * during bootstrap. Once the test application is up, its providers are already
  * registered — mutating config afterwards proves nothing.
  *
- * ⚠️ `$_SERVER` is set as well as `putenv()`, and that is not belt-and-braces :
- * Laravel's `Env` helper consults **`$_SERVER` first**. Setting only `putenv()`
- * leaves `env()` returning the old value — the exact mechanism that let the whole
- * suite run on the development database until 2026-07-31.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ⚙️ LE CORPS DE CETTE MÉCANIQUE A ÉTÉ EXTRAIT VERS `Tests\Support\ModuleBoot`
+ * (Story 1.10a). Il n'a pas changé : les trois pièges déjà payés — `$_SERVER`
+ * consulté avant `getenv()`, `.env` rechargé APRÈS les surcharges, `$_ENV`
+ * restauré — y sont documentés à l'identique et au même endroit que le code
+ * qui les évite.
  *
- * ⚠️⚠️ Et poser les variables AVANT le bootstrap ne suffit pas : le
- * bootstrapper `LoadEnvironmentVariables` lit `.env` ensuite et gagne. Or
- * `.env.example` déclare `MODULE_LIVE_ENABLED=true`, et la CI reconstruit `.env`
- * à partir de lui — ces trois tests passaient donc en local (dont le `.env` ne
- * contenait pas ces clés) et échouaient en CI. Un test vert par accident
- * d'environnement : le motif dominant du projet, appliqué au garde-fou censé le
- * combattre. Les surcharges sont donc RÉAPPLIQUÉES juste après le chargement du
- * `.env` et avant `LoadConfiguration`, ce qui les rend indépendantes du contenu
- * du fichier.
+ * Le motif de l'extraction est celui de `RouteTable` (Story 1.13) : la
+ * Story 1.10a avait besoin de la même mécanique pour observer une autre chose
+ * (la table de routage du panel Filament), et recopier ces 60 lignes aurait
+ * garanti qu'une des deux copies dérive en silence.
  *
- * Creating an Application re-binds the global container instance, so the caller's
- * container and facades are restored in `finally`, otherwise every subsequent
- * test in the process would resolve against this throwaway app.
+ * Cette fonction reste, avec sa signature d'origine, parce que six tests de ce
+ * fichier l'appellent et qu'un renommage de confort n'est pas une amélioration.
  *
  * @param  array<string, string>  $env
  * @return array<string, bool>  clés = FQCN des providers chargés
  */
 function bootAppWithModuleEnv(array $env): array
 {
-    $previousContainer = Container::getInstance();
-    /** @var array<string, string|null> $previousServer */
-    $previousServer = [];
-    /** @var array<string, string|null> $previousEnv */
-    $previousEnv = [];
-
-    foreach ($env as $key => $value) {
-        // Resserré en string|null dès la capture : `$_SERVER` est `mixed`, et la
-        // restauration réinjecte cette valeur dans une chaîne interpolée.
-        $previousServer[$key] = isset($_SERVER[$key]) && is_scalar($_SERVER[$key])
-            ? (string) $_SERVER[$key]
-            : null;
-        // `$_ENV` est capturé AUSSI, et ce n'est pas de la symétrie décorative :
-        // le rappel `afterBootstrapping` y écrit, et ne pas le restaurer faisait
-        // fuiter le module éteint sur le test SUIVANT — qui échouait alors sur
-        // une assertion sans rapport. Constaté le 2026-08-07.
-        $previousEnv[$key] = isset($_ENV[$key]) && is_scalar($_ENV[$key])
-            ? (string) $_ENV[$key]
-            : null;
-        $_SERVER[$key] = $value;
-        putenv("{$key}={$value}");
-    }
-
-    try {
-        /** @var Application $app */
-        $app = require base_path('bootstrap/app.php');
-
-        // Rejoue les surcharges APRÈS que `.env` a été lu, sinon `.env` gagne.
-        $app->afterBootstrapping(LoadEnvironmentVariables::class, function () use ($env): void {
-            foreach ($env as $key => $value) {
-                $_SERVER[$key] = $value;
-                $_ENV[$key] = $value;
-                putenv("{$key}={$value}");
-            }
-        });
-
-        $app->make(ConsoleKernel::class)->bootstrap();
-
-        return $app->getLoadedProviders();
-    } finally {
-        foreach ($env as $key => $_) {
-            if ($previousServer[$key] === null) {
-                unset($_SERVER[$key]);
-                putenv($key);
-            } else {
-                $_SERVER[$key] = $previousServer[$key];
-                putenv("{$key}={$previousServer[$key]}");
-            }
-
-            if ($previousEnv[$key] === null) {
-                unset($_ENV[$key]);
-            } else {
-                $_ENV[$key] = $previousEnv[$key];
-            }
-        }
-
-        Container::setInstance($previousContainer);
-        Facade::clearResolvedInstances();
-
-        if ($previousContainer instanceof Application) {
-            Facade::setFacadeApplication($previousContainer);
-        }
-    }
+    return ModuleBoot::loadedProviders($env);
 }
 
 /*
