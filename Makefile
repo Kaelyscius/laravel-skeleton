@@ -511,6 +511,23 @@ update-packages: ## Vérifier et installer packages devenus compatibles
 artisan: ## Exécuter artisan (usage: make artisan cmd="migrate")
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan $(cmd)
 
+.PHONY: artisan-it
+artisan-it: ## Exécuter artisan en INTERACTIF (usage: make artisan-it cmd="make:filament-user")
+	@# ⚠️ `-it` est indispensable pour toute commande qui POSE DES QUESTIONS.
+	@# `make artisan` n'alloue ni stdin ni TTY : `make:filament-user` y meurt sans
+	@# poser sa première question. Trois documents recommandaient pourtant
+	@# `make artisan cmd="make:filament-user"` — relevé en revue le 2026-08-20
+	@# (finding Q16), sur le chemin de création du PREMIER administrateur.
+	@$(DOCKER) exec -it -u 1000:1000 $(PHP_CONTAINER) php artisan $(cmd)
+
+.PHONY: filament-user
+filament-user: ## Créer le premier administrateur du panel /admin (interactif)
+	@echo "$(CYAN)👤 Création d'un utilisateur Filament — le rôle super-admin doit exister ($(YELLOW)make artisan cmd=\"db:seed\"$(CYAN)).$(NC)"
+	@$(DOCKER) exec -it -u 1000:1000 $(PHP_CONTAINER) php artisan make:filament-user
+	@echo "$(YELLOW)⚠️  Le compte n'a encore AUCUN rôle : /admin lui répondra 403.$(NC)"
+	@echo "$(CYAN)   Assignez-le : $(NC)make artisan cmd=\"tinker\"$(CYAN) puis$(NC)"
+	@echo "$(CYAN)   User::query()->where('email','vous@exemple.test')->firstOrFail()->assignRole('super-admin');$(NC)"
+
 .PHONY: composer
 composer: ## Exécuter composer (usage: make composer cmd="install")
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) composer $(cmd)
@@ -623,8 +640,35 @@ test-coverage: ## Tests avec couverture
 	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --coverage-html coverage
 
 .PHONY: test-drift
-test-drift: ## Tests avec détection de code non couvert (Drift)
-	@echo "$(CYAN)🎯 Exécution des tests avec Drift...$(NC)"
+test-drift: ## ⛔ DESTRUCTIF — migre les tests PHPUnit vers Pest (RÉÉCRIT tests/). Pas une analyse.
+	@echo "$(RED)⛔ ATTENTION — 'pest --drift' N'EST PAS UN OUTIL D'ANALYSE.$(NC)"
+	@echo "$(YELLOW)   C'est le MIGRATEUR PHPUnit → Pest de pestphp/pest-plugin-drift.$(NC)"
+	@echo "$(YELLOW)   Il RÉÉCRIT les fichiers de tests/ sur place, sans demander.$(NC)"
+	@echo ""
+	@echo "$(YELLOW)   Mesuré le 2026-08-09 (Story 1.10a) : un seul appel a réécrit 7 fichiers,$(NC)"
+	@echo "$(YELLOW)   supprimé l'invariant délibéré de tests/Unit/ExampleTest.php avec toute sa$(NC)"
+	@echo "$(YELLOW)   justification, et injecté des imports cassés dans deux autres.$(NC)"
+	@echo ""
+	@echo "$(YELLOW)   Ce dépôt est DÉJÀ entièrement en Pest : cette commande n'a plus d'objet.$(NC)"
+	@echo "$(YELLOW)   Pour éprouver un garde-fou, la méthode du projet est la campagne de$(NC)"
+	@echo "$(YELLOW)   mutation manuelle — docs/process/03-boucle-qualite.md §Étape 5.$(NC)"
+	@echo ""
+	@echo "$(YELLOW)   Pour l'exécuter malgré tout : COMMITTEZ D'ABORD, puis relisez le diff.$(NC)"
+	@echo "$(CYAN)   Confirmez avec : make test-drift-force$(NC)"
+	@echo ""
+	@echo "$(RED)   Cette cible sort en ERREUR volontairement : un pas de CI ou un script$(NC)"
+	@echo "$(RED)   qui l'appelle ne doit pas lire un succès là où rien n'a été exécuté.$(NC)"
+	@exit 1
+
+.PHONY: test-drift-force
+test-drift-force: ## Exécute réellement la migration Drift (voir l'avertissement de test-drift)
+	@echo "$(YELLOW)🎯 Migration Drift (destructive) — le diff de tests/ est à relire.$(NC)"
+	@git diff --quiet -- src/tests || { \
+		echo "$(RED)⛔ L'arbre de travail porte des modifications non committées sous src/tests.$(NC)"; \
+		echo "$(RED)   Drift RÉÉCRIT ces fichiers sur place : sans commit, le diff est irrécupérable.$(NC)"; \
+		echo "$(YELLOW)   Committez d'abord, puis relancez.$(NC)"; \
+		exit 1; \
+	}
 	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --drift
 
 .PHONY: test-feature

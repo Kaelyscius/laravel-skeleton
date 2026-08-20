@@ -76,6 +76,32 @@ if [ -f "/var/www/html/artisan" ]; then
 
    if [ "$APP_ENV" = "production" ]; then
        echo -e "${YELLOW}Optimisation pour la production...${NC}"
+
+       # ─────────────────────────────────────────────────────────────────────
+       # ⚠️ ON PURGE AVANT DE RECONSTRUIRE (décision D7, revue du 2026-08-20)
+       #
+       # Les caches de routes et de configuration sont construits À PARTIR DE
+       # L'ENVIRONNEMENT COURANT. Un cache hérité d'un démarrage précédent — image
+       # dont le build a exécuté `route:cache`, volume persistant, redéploiement
+       # partiel — survit sinon au changement d'un `MODULE_*_ENABLED`.
+       #
+       # Conséquence mesurée en revue : des routes cachées MODULE ACTIVÉ laissent
+       # `/admin` résoluble après bascule à `MODULE_ADMIN_ENABLED=false`. Plus
+       # aucun panel n'est enregistré, `PanelRegistry::getDefault()` lève
+       # `NoDefaultPanelSetException`, et le visiteur reçoit **500** — alors que
+       # l'AC2 de la Story 1.10a exige 404. Aucun test ne peut atteindre cet état :
+       # `Tests\Support\ModuleBoot` boote toujours une application jetable NON
+       # cachée. Le garde-fou ne pouvait donc être qu'ici.
+       # ─────────────────────────────────────────────────────────────────────
+       php artisan optimize:clear
+
+       # ⛔ AVANT `config:cache`, PAS APRÈS. `TRUSTED_PROXIES` mal renseigné n'est
+       # plus refusé pendant le chargement de `config/` (décision D8 : une
+       # exception levée là rendait l'application non bootable, commandes de
+       # réparation comprises). Le refus est ici, où il arrête le déploiement sans
+       # emporter la console avec lui.
+       php artisan proxies:check || exit 1
+
        php artisan config:cache
        php artisan route:cache
        php artisan view:cache

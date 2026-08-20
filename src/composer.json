@@ -10,6 +10,7 @@
   "license": "MIT",
   "require": {
     "php": "^8.5",
+    "filament/filament": "^5",
     "laravel/framework": "^13",
     "laravel/horizon": "^5.0",
     "laravel/nightwatch": "^1.0",
@@ -81,7 +82,8 @@
     ],
     "post-autoload-dump": [
       "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-      "@php artisan package:discover --ansi"
+      "@php artisan package:discover --ansi",
+      "@php artisan filament:assets --ansi --no-interaction"
     ],
     "post-update-cmd": [
       "@php artisan vendor:publish --tag=laravel-assets --ansi --force"

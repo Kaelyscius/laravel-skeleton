@@ -31,7 +31,9 @@ L'appareil de vérification est réparé — 3 workflows CI verts sur le dernier
 runner est fait, `make test-browser` existe et son rouge a été observé. Epic 1 : stories 1.1 → 1.8,
 1.11, 1.12 et 1.13 `done`, **1.9 `done`** (implémentée le 2026-08-09, puis **DEUX passes de revue**
 le même jour : 21 correctifs + 5 reports à la première, 21 correctifs + 6 reports à la seconde),
-**1.10a `backlog` — dernière story d'Epic 1**, Epics 2 à 11 non démarrés.
+**1.10a `review` — implémentée les 2026-08-09/10, revues de niveau C à faire**, Epics 2 à 11 non
+démarrés. Le squelette a désormais **une porte** : `/admin`, authentifiée, refusée par défaut,
+et qui s'éteint avec `MODULE_ADMIN_ENABLED=false`.
 
 **La typographie a un corps.** Les quatre faces IBM Plex sont self-hostées, servies depuis le
 domaine de l'application, et un navigateur a **constaté** qu'elles sont chargées — pas déclarées.
@@ -309,27 +311,189 @@ Trois choses à retenir, qui resserviront :
 > un état, pas une 5ᵉ surface). Le code la commentait sans que le document le
 > dise — forme exacte du motif dominant.
 
-## Prochaine action — la **1.10a**, dernière story d'Epic 1
+## ✅ Story 1.10a — IMPLÉMENTÉE les 2026-08-09/10 (le squelette a une porte)
 
-> ✅ **La 1.9 est `done`.** Elle a été revue **deux fois** le 2026-08-09, en fenêtres neuves, le
-> fichier de story passé en argument (donc ADR-0013 embarqué par son champ `context:`). La
-> seconde passe portait sur l'état d'après les correctifs de la première — c'est-à-dire sur les
-> trois changements structurels écrits *pendant* une revue, que personne n'avait relus.
+**Livré** : `filament/filament ^5` (v5.7.6, 30 installs, `composer audit` 0, `npm audit` 0), un
+panel `/admin` **vide** monté dans le module `Admin`, `User implements FilamentUser` +
+`HasRoles`, un `RoleSeeder` idempotent, et **38 tests neufs** (179 → **217**). Ratchet **0/0/0**,
+PHPStan niveau 10, 34 tests navigateur toujours verts.
+
+**Quatre helpers de tests extraits**, tous pour le motif déjà écrit par `RouteTable` (« dupliquer
+des lignes délicates garantit qu'une des deux copies dérive ») : `Tests\Support\ModuleBoot` (la
+mécanique de boot d'application jetable, sortie de `ModuleActivationTest` pour qu'un autre fichier
+puisse tourner **seul**) et `Tests\Support\HttpProbe` (requête HTTP typée à travers le noyau —
+dans une closure Pest, PHPStan résout `$this` en `TestCall`, ce qui coûtait 49 erreurs au niveau 10).
+
+### Les cinq choses qu'elle a trouvées, toutes mesurées
+
+1. 🔴 **`MODULE_ADMIN_ENABLED=false` servait `/admin` en 302.** `filament:install --panels`
+   enregistre son `PanelProvider` dans `bootstrap/providers.php`, qui est **inconditionnel**.
+   ADR-0009 §Conséquences promettait l'inverse. Corrigé : le provider vit sous
+   `App\Modules\Admin\Providers\Filament\` et c'est `AdminServiceProvider::register()` qui
+   l'enregistre. `/admin` répond désormais **404** module éteint — vu rouge avant correction.
+
+2. 🔴 **Le rate limiting du login ne limitait rien, et la cause était ailleurs.**
+   `TRUSTED_PROXIES` valait `*`, que Laravel traduit par
+   `setTrustedProxies(['0.0.0.0/0', '::/0'])` — *toute* adresse d'Internet devient un proxy de
+   confiance. Symfony remonte alors `X-Forwarded-For` jusqu'à l'entrée **la plus à gauche**,
+   écrite par le client. Mesuré sous la topologie réelle : `X-Forwarded-For: 198.51.100.42,
+   203.0.113.9` → `request()->ip()` = **198.51.100.42**. La clé de seau en dérivant, un attaquant
+   obtenait **un seau neuf par tentative**.
+   **Défaut passé à `REMOTE_ADDR`** (le pair immédiat, et lui seul) : la détection HTTPS continue
+   de marcher sans configuration, et le préfixe forgé est ignoré. `*` écrit explicitement reste
+   honoré — le neutraliser en douce ferait mentir le fichier de configuration.
+   ⚠️ **La story se trompait sur un point** : elle disait `TRUSTED_PROXIES` « absente de `.env`
+   **et** de `.env.example` ». Elle était bien dans `.env.example:90`, avec un commentaire qui la
+   **justifiait** (« safe quand l'app est TOUJOURS derrière un reverse-proxy » — faux : Apache
+   *ajoute* à `X-Forwarded-For`, il ne remplace pas).
+
+3. ⛔ **`make test-drift` est DESTRUCTIF, et le dépôt le documentait à l'envers.**
+   `pestphp/pest-plugin-drift` n'est **pas** un outil de mutation ni de couverture : c'est le
+   **migrateur PHPUnit → Pest**. Un seul appel a **réécrit 7 fichiers de tests**, supprimé
+   l'invariant délibéré de `tests/Unit/ExampleTest.php` *avec toute sa justification*, et injecté
+   des imports cassés dans deux autres. La cible `make test-drift` affiche désormais un
+   avertissement et n'exécute plus rien (`make test-drift-force` pour forcer) ; `CLAUDE.md` est
+   corrigé aux trois endroits où il l'annonçait comme une analyse.
+   ⚠️ **Conséquence pour la boucle qualité** : l'étape 5 du niveau C nommait `make test-drift`
+   « la mutation plutôt que la couverture ». Cette exigence reposait sur une prémisse fausse. Ce
+   qui l'a remplacée : une **campagne de mutation manuelle de 15 mutations, 15 rouges observés**.
+
+4. ⛔ **`filament:install` a réécrit `composer.json` en entier** (indentation 2 → 4 espaces),
+   noyant son unique ajout de fond dans un diff de 153 lignes. C'est le motif qui avait fait
+   retirer `boost:update` de `post-update-cmd` le 2026-08-09, en pire : l'outil masquait sa propre
+   modification. Mise en forme restaurée à la main ; diff ramené à **3 insertions**.
+
+5. **La CSP ne touche pas le panel, et la mise en garde était sans objet.** Mesuré, CSP forcée :
+   `/_layouts` porte l'en-tête, `/admin/login` non — Filament construit sa propre pile et ne
+   traverse pas le groupe `web`. Le commentaire de `bootstrap/app.php` qui annonçait le contraire
+   est corrigé dans le même commit.
+
+### Les deux questions ouvertes, tranchées
+
+- **Q1 — `TRUSTED_PROXIES` restreint, ou clé de seau indépendante du client ?** → **(a)**, la
+  cause. Le correctif vaut pour toutes les limitations à venir (`api/*`, `register`,
+  `comment.store`) et pour la protection de `/pulse` (Story 3.2).
+- **Q2 — `filament:upgrade` en `post-autoload-dump` ?** → **oui, par nécessité.** Les assets
+  publiés étant gitignorés (AC8), un `composer install --no-dev` en production servirait sinon un
+  panel **sans CSS ni JS**. L'exclusion et la republication sont un seul choix et sa conséquence.
+
+### Ce qu'elle n'a délibérément PAS fait
+
+Aucune ressource Filament (la `SettingsResource` de la 1.10b est en **Epic 5**) · aucun
+`vendor:publish` Sanctum (il reste **inerte**, sa table n'existe pas) · aucun thème · la CSP
+**n'est pas allumée** (`CSP_ENABLED=false` reste la valeur du dépôt) · le `firstOrFail()` de
+`SetCurrentStreamer` **n'est pas corrigé** — entrée toujours **ouverte** de `deferred-work.md`,
+elle touche la couche tenancy et demande son propre rouge d'abord.
+
+## Prochaine action — les **revues de la 1.10a**, puis la clôture d'Epic 1
+
+> ✅ **La 1.10a est implémentée** (2026-08-09/10) et passée en `review`. **Elle n'est PAS `done`** :
+> c'est la seule story de **niveau C — Critique** du projet, et sa boucle qualité impose des
+> revues que le développement ne peut pas se donner à lui-même.
+
+> ⚠️ **CETTE SECTION A CHANGÉ LE 2026-08-20.** Elle annonçait **trois** revues à faire. C'est
+> faux sur les deux moitiés : la première est **déjà passée** (le 2026-08-10, `/bmad-code-review`
+> en mode `full`, 25 fichiers / 2 640 lignes, 3 décisions + 10 correctifs + 3 reports), et il n'y
+> en aura pas trois — **le plafond est désormais de DEUX passes de revue de code par story**
+> (`docs/process/03-boucle-qualite.md` §Étape 3, décidé sur mesure le 2026-08-20).
+
+### Ce qu'il reste, dans l'ordre
+
+**1. Traiter les 13 constats de la passe 1** — ils sont **tous non cochés** dans la story.
+Vérifiés sur disque le 2026-08-20, toujours ouverts : `P2` (SHA `3f345f2` figé en dur,
+`FilamentPublishedAssetsTest.php:117` — rouge garanti dès que ce commit n'est plus HEAD),
+`P3` (`src/public/fonts/filament` n'existe pas — un tiers du garde-fou d'assets ne garde rien),
+`P4` (`canAccessPanel()` : muter en `return $this->hasRole('super-admin')` laisse toute la suite
+verte), `P8` (nom de test énonçant l'inverse de son assertion), `P9` (`HttpProbe::html()` sans
+consommateur). **`D1` fait exception** : son correctif est **sur disque**
+(`App\Core\Exceptions\NoStreamerConfiguredException`) et `deferred-work.md` le déclare résolu —
+**seule la case de la story n'est pas cochée.** Écart code ↔ document = le motif du projet.
+
+**2. La passe 2 — et c'est la DERNIÈRE.** Elle doit porter sur **ce que les correctifs P1→P10
+auront écrit**, pas relire Filament une troisième fois. C'est la différence mesurée entre la
+passe 2 de la 1.9 (21 correctifs, elle relisait du code neuf) et celle de la 1.3 (0 correctif,
+elle relisait du code déjà lu).
 
 ```
-/bmad-create-story 1.10a
+/bmad-code-review _bmad-output/implementation-artifacts/1-10a-install-filament-v5-sanctum-permission.md
 ```
 
-**`1.13 ✅ → 1.12 ✅ → 1.9 ✅ → 1.10a`** — la 1.10a (Filament v5 + Sanctum + Spatie Permission,
-panel `/admin` qui s'ouvre et s'authentifie, rate limiting login 5/min/IP) **ferme l'Epic 1**.
-C'est la première story de la séquence qui n'est pas du front : son consommateur immédiat est
-Alex qui se connecte.
+⚠️ **Passer le fichier de story en argument** : sans lui, le champ `context:` n'est pas lu et les
+trois ADR (0009, 0010, 0002) ne sont pas embarqués.
+
+**3. `/security-review` + `composer audit && npm audit` + `make security-scan`** — **hors quota**,
+obligatoires en niveau C. Un scanner ne fabrique pas de la confiance, il constate.
+
+**4. Commit.** 34 entrées non commitées portent la story, dont la couche d'authentification et
+`bootstrap/app.php`. **Aucune CI ne les a vues** : le vert des 3 workflows parle de `3f345f2`.
+
+**5. `1-10a-…` → `done`, puis `epic-1-retrospective`** — les 13 stories d'Epic 1 livrées.
+
+### 6. 🔀 PUIS FUSIONNER LA READING ROOM — ne pas l'oublier ici
+
+Une documentation globale interactive a été construite le 2026-08-20 **dans un worktree isolé**,
+précisément pour ne pas perturber la 1.10a en cours. Elle attend la clôture de la story.
+
+```bash
+git worktree list                       # /home/alex/myLaravelSkeleton-reading-room [docs/reading-room]
+git merge --no-ff docs/reading-room     # depuis main, une fois la 1.10a commitée
+git worktree remove ../myLaravelSkeleton-reading-room && git branch -d docs/reading-room
+```
+
+**Le merge a été éprouvé à blanc le 2026-08-20**, contre un `main` simulé portant la 1.10a
+commitée : **propre**, aucun conflit, et `docs/process/03-boucle-qualite.md` conserve **les deux**
+modifications (le plafond de revues côté branche, la correction `test-drift` côté `main`). Suite
+Unit dans l'état fusionné : **20 verts**.
+
+Ce qu'elle apporte : `docs/reading-room/index.html` (page autonome, hors ligne, sans CDN) +
+`src/tests/Unit/ReadingRoomReferentsTest.php`. ⚠️ **Elle n'a AUCUNE autorité** — la hiérarchie
+reste ADR > `epics.md` + `sprint-status.yaml` > `ETAT.md`, et elle se range dessous. Elle le
+déclare sur elle-même. Ce qu'elle garantit en revanche : **chaque fichier qu'elle cite existe**,
+gardé par 3 assertions, dont une mutation qui a **survécu** au premier jet (19ᵉ instance du motif,
+cette fois dans le garde-fou lui-même) puis une campagne rejouée — **5 mutations, 5 rouges**.
+
+### Créer le premier administrateur — la commande à connaître
+
+Aucun compte administrateur n'est semé, **délibérément** : un `super-admin` semé porterait un mot
+de passe connu du dépôt, et `db:seed` tourne dans `make fresh`, en CI et au déploiement. Le seeder
+pose le **rôle**, l'opérateur pose l'**utilisateur** :
+
+```bash
+make artisan cmd="db:seed"     # crée le rôle super-admin (idempotent)
+make filament-user             # crée le compte — INTERACTIF, d'où une cible dédiée
+```
+
+Puis assigner le rôle, dans un tinker interactif :
+
+```bash
+make artisan cmd="tinker"
+# >>> App\Models\User::query()->where('email', 'vous@exemple.test')->firstOrFail()->assignRole('super-admin');
+```
+
+> ⚠️ **`make artisan cmd="make:filament-user"` NE FONCTIONNE PAS**, et la recette recopiée ici
+> auparavant ne pouvait pas marcher : `make artisan` lance `docker compose exec` **sans `-i` ni
+> `-t`**, donc une commande qui pose des questions n'a ni stdin ni terminal. Relevé en revue le
+> 2026-08-20 (finding Q16) — sur le chemin de création du **premier** administrateur, c'est-à-dire
+> la toute première chose qu'un fork-streamer exécute. La cible `make filament-user` alloue le TTY ;
+> `make artisan-it cmd="…"` fait la même chose pour n'importe quelle autre commande interactive.
+> Le `tinker --execute` d'origine, avec ses guillemets doubles échappés à travers Make et deux
+> shells, était fragile pour la même raison : il est remplacé par un tinker interactif.
+
+Sans le rôle, le compte existe mais `/admin` répond **403** — c'est le comportement voulu :
+appartenir à la table `users` n'accorde rien.
 
 ### Commande d'ouverture de la prochaine session
 
 ```bash
 make up-local && make test && make quality-ratchet && make npm-build && make test-browser
-# attendu : 179 tests exit 0 · ratchet 0/0/0 · 34 tests navigateur verts
+# attendu : 241 tests exit 0 · ratchet 0/0/0 · 34 tests navigateur verts
+#            (179 → 241 : +61 tests apportés par la 1.10a et sa revue)
+#
+# ⚠️ Le chiffre a été FAUX en trois endroits jusqu'au 2026-08-20 : le dossier
+#    annonçait 217 quand la suite en comptait 226, puis 240 après les correctifs
+#    de revue. C'est le motif que T10 signale — « compter ce qu'on rejoue
+#    vraiment » — appliqué à la commande d'ouverture de session elle-même, qui
+#    énonçait donc un attendu impossible à atteindre.
 ```
 
 ⛔ **`make npm-build` AVANT chaque `make test-browser`** dès que `app.js`, la CSS **ou

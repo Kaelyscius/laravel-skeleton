@@ -145,8 +145,35 @@ Améliorer la couverture n'est jamais un but en soi : on ajoute un test parce
 qu'on a nommé le défaut qu'il attraperait. Si on n'arrive pas à le nommer, on
 n'écrit pas le test — on aurait fabriqué un garde-fou silencieux de plus.
 
-`make test-drift` (mutation testing, déjà installé) répond mieux que la
-couverture, et c'est l'outil à privilégier sur une story de niveau **C**.
+⛔ **UNE PHRASE SE TROUVAIT ICI, ET ELLE ÉTAIT FAUSSE.** Elle recommandait
+`make test-drift` comme « mutation testing, déjà installé » et « l'outil à
+privilégier sur une story de niveau C ». Constaté le 2026-08-09 (Story 1.10a) :
+`pestphp/pest-plugin-drift` n'est pas un outil de mutation — c'est le
+**migrateur PHPUnit → Pest**, et il **réécrit `tests/` sur place**. Un seul appel
+a réécrit 7 fichiers, supprimé un invariant délibéré avec sa justification, et
+injecté des imports cassés. Ce dépôt étant déjà entièrement en Pest, la commande
+n'a de toute façon plus d'objet.
+
+**Ce qui la remplace sur une story de niveau C : la campagne de mutation
+MANUELLE.** On casse le code volontairement, une mutation à la fois, et on
+regarde quel test rougit. Elle n'est pas un pis-aller — c'est la seule méthode
+qui oblige à *nommer* le défaut qu'un garde-fou attrape.
+
+Trois règles, payées chacune par une story :
+
+- **Une mutation à la fois, et on restaure entre chaque.** (1.13 : `MB-G`
+  masquait `MB-H` — deux mutations ne sont orthogonales que si elles ne
+  partagent aucun *mécanisme*, pas seulement aucun test.)
+- **Compter ce qu'on rejoue vraiment.** (Revue de la 1.12 : la campagne
+  annonçait 18 mutations, 33 avaient été jouées.)
+- **Rejouer la campagne après toute réécriture des tests.** (1.10a : neuf
+  mutations avaient été observées avant un refactor du mécanisme de requête ;
+  elles ne prouvaient plus rien sur le code livré.)
+
+Une mutation qui laisse tout vert n'est pas un échec de la campagne : c'est sa
+trouvaille. La 1.10a en a eu une — un test nommé « la limite est de 5 » restait
+vert avec la limite à 500, parce qu'il comptait les coups portés au seau et non
+la limite. Le test a été réécrit.
 
 ### Étape 6 — Commit et hygiène documentaire
 
@@ -219,7 +246,9 @@ make test-browser                     # si rendu
 
 # 5. Couverture : le code neuf est-il exercé ? les branches d'erreur ?
 php artisan test --coverage
-make test-drift                        # C : mutation plutôt que couverture
+# C : campagne de mutation MANUELLE — une mutation à la fois, restaurer entre chaque,
+#     compter ce qu'on rejoue, et rejouer après toute réécriture des tests.
+#     ⛔ PAS `make test-drift` : c'est le migrateur PHPUnit → Pest, il réécrit tests/.
 
 # 6. Commit — le message dit ce qui a été OBSERVÉ
 ```

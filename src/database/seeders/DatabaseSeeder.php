@@ -20,6 +20,13 @@ final class DatabaseSeeder extends Seeder
         // Tenant-root Streamer (Story 1.3) — idempotent, exactly one row (tenancy v1).
         $this->call(StreamerSeeder::class);
 
+        // Rôles reconnus par l'application (Story 1.10a) — idempotent.
+        // ⚠️ Pose le RÔLE `super-admin`, jamais un utilisateur qui le porte :
+        // un administrateur semé aurait un mot de passe connu du dépôt, et
+        // cette commande tourne dans `make fresh`, en CI et au déploiement.
+        // L'opérateur crée son compte avec `php artisan make:filament-user`.
+        $this->call(RoleSeeder::class);
+
         // User::factory(10)->create();
 
         // Idempotent guard keeps `db:seed` re-runnable: the fixed email would

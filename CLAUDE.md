@@ -79,7 +79,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make test-unit` - Run unit tests only
 - `make test-feature` - Run feature tests only
 - `make test-coverage` - Run tests with coverage report
-- `make test-drift` - Run tests with Drift (detect uncovered code)
+- `make test-drift` - ⛔ **DESTRUCTIF, et mal nommé** : `pest --drift` est le *migrateur PHPUnit → Pest*, pas un outil d'analyse. Il **réécrit `tests/` sur place**. Ce dépôt est déjà entièrement en Pest, donc la commande n'a plus d'objet ; elle affiche désormais un avertissement et n'exécute rien (`make test-drift-force` pour forcer). Pour éprouver un garde-fou, la méthode du projet est la **campagne de mutation manuelle** (`docs/process/03-boucle-qualite.md` §Étape 5)
 
 ### Diagnostics & Troubleshooting
 - `make diagnostic` - Run complete diagnostic suite (PHP 8.5 + Laravel 13)
@@ -278,7 +278,7 @@ voir [ADR-0010](docs/adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md).
 
 ### Testing Setup
 - **Pest framework** for modern PHP testing
-- **Pest Plugin Drift** for detecting uncovered code and mutation testing
+- **Pest Plugin Drift** — migrateur PHPUnit → Pest (⛔ *pas* de la couverture ni de la mutation : la description précédente était fausse, corrigée le 2026-08-09 après qu'un appel a réécrit 7 fichiers de tests)
 - Separate test suites for Unit and Feature tests
 - PostgreSQL test database (`laravel_test`) for testing
 - Coverage reporting available
@@ -313,6 +313,9 @@ voir [ADR-0010](docs/adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md).
 
 ## Installed Packages & Features
 
+### Admin Panel
+- **filament/filament** (^5) - Panel d'administration `/admin`. Le `PanelProvider` vit sous `App\Modules\Admin\Providers\Filament\` et **non** dans `bootstrap/providers.php`, pour que `MODULE_ADMIN_ENABLED=false` l'éteigne réellement (ADR-0009). Accès refusé par défaut : `User::canAccessPanel()` exige le rôle `super-admin`. Le rôle est semé par `RoleSeeder` ; l'administrateur, lui, se crée avec **`make filament-user`** — aucun compte n'est semé. ⚠️ Pas `make artisan cmd="make:filament-user"` : la recette `artisan` n'alloue ni stdin ni TTY, donc une commande interactive y meurt (relevé en revue le 2026-08-20). La version en prose ne fige plus de numéro de patch : `composer.json` déclare `^5` et `AdminPanelDependenciesTest` gèle ce littéral — trois granularités dont deux n'étaient gardées par rien.
+
 ### Laravel Core Packages
 - **laravel/horizon** (^5.0) - Queue monitoring and management
 - **laravel/telescope** (^5.0) - Application debugging and insights (désactivé en production)
@@ -324,13 +327,13 @@ voir [ADR-0010](docs/adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md).
 - **spatie/laravel-csp** (^3.0) - Content Security Policy headers for XSS protection
 - **spatie/laravel-health** (^1.0) - Application health checks (DB, Cache, Queue, Disk, etc.)
 - **spatie/laravel-schedule-monitor** (^4.0) - Monitor scheduled tasks and cron jobs
-- **spatie/laravel-permission** (^7.0) - Role and permission management (PHP ^8.4 + Laravel ^12)
+- **spatie/laravel-permission** (^8) - Role and permission management. ⚠️ La contrainte réelle est `^8` (8.3.0 installée) ; `epics.md` prescrivait `^7.0`, ce qui aurait **rétrogradé** le paquet — gardé par `src/tests/Unit/AdminPanelDependenciesTest.php`
 - **spatie/laravel-activitylog** (^5.0) - Activity logging (PHP ^8.4 + Laravel ^12)
 
 ### Testing Packages
 - **pestphp/pest** (^4.0) - Modern testing framework
 - **pestphp/pest-plugin-laravel** (^4.0) - Laravel integration for Pest
-- **pestphp/pest-plugin-drift** (^4.0) - Mutation testing, detect uncovered code
+- **pestphp/pest-plugin-drift** (^4.0) - Migration PHPUnit → Pest, **destructive et à usage unique**. Ne fait ni mutation testing ni détection de couverture — la mention précédente était erronée (constaté Story 1.10a)
 
 ### Development Packages
 - **fruitcake/laravel-debugbar** (^4.0) - Debug bar (ownership transférée de barryvdh/ en v4.0, namespace `Fruitcake\LaravelDebugbar`)

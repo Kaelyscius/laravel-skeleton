@@ -22,6 +22,19 @@ _ide_helper_models.php
 # seconde source de vérité, capable de diverger de la version verrouillée dans
 # package-lock.json sans qu'aucun test ne le voie.
 /public/fonts
+# Publié par `php artisan filament:install` / `filament:upgrade` (Story 1.10a).
+# Même motif, autre gestionnaire de versions : ces fichiers sont dérivés de la
+# version de filament/* verrouillée dans composer.lock.
+#
+# ⚠️ `/public/fonts/filament` est nommé BIEN QU'IL SOIT DÉJÀ couvert par la
+# règle `/public/fonts` ci-dessus. Cette couverture est HÉRITÉE, pas décidée :
+# elle a été posée pour @fontsource. Le jour où @fontsource disparaîtra,
+# quelqu'un retirera `/public/fonts` en toute bonne foi et les fontes de
+# Filament redeviendront suivies, sans qu'un seul test ne bouge. La ligne
+# explicite empêche ce retour silencieux — et un test vérifie qu'elle est là.
+/public/css/filament
+/public/js/filament
+/public/fonts/filament
 /public/hot
 /public/storage
 /storage/*.key
