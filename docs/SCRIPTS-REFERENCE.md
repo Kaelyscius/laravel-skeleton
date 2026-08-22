@@ -1,6 +1,6 @@
 # 📚 Scripts Reference - Documentation Complète
 
-**Total**: 26 scripts shell organisés en 5 catégories
+**Total**: 33 scripts shell organisés en 6 catégories
 
 ---
 
@@ -8,9 +8,10 @@
 
 ```
 scripts/
-├── *.sh                 # Scripts racine (15 fichiers)
-├── install/            # Installation modulaire (9 scripts)
-├── lib/                # Bibliothèques partagées (4 scripts)
+├── *.sh                 # Scripts racine (12 fichiers)
+├── install/            # Installation modulaire (11 scripts)
+├── lib/                # Bibliothèques partagées (5 scripts)
+├── ops/                # Exploitation — sauvegardes (2 scripts)
 ├── security/           # Sécurité (1 script)
 └── setup/              # Configuration (2 scripts)
 ```
@@ -276,15 +277,16 @@ make check-compatibility
 
 ## 📚 Scripts Bibliothèque (lib/) - NE PAS TOUCHER
 
-### 18-21. Bibliothèques partagées
+### 18-22. Bibliothèques partagées
 **Chemin**: `scripts/lib/*.sh`
 
 | Script | Rôle |
 |--------|------|
 | `common.sh` | Fonctions communes (colors, logging) |
-| `logging.sh` | Système de logs |
+| `logging.sh` | Système de logs — affichage sur **stderr**, fichier sur `$LOG_FILE` |
 | `docker.sh` | Utilitaires Docker |
 | `laravel.sh` | Helpers Laravel |
+| `runtime.sh` | Primitives d'exécution : `die`, `retry`, `require_cmd`, `ensure_idempotent`, `arm_err_trap` (Story 2.1) |
 
 **Utilisation**: Sourcés par autres scripts
 ```bash
@@ -320,7 +322,7 @@ source "$(dirname "$0")/lib/common.sh"
 
 ## 📊 Résumé - Actions Recommandées
 
-### ✅ À GARDER (Scripts essentiels) - 24 scripts
+### ✅ À GARDER (Scripts essentiels) - 27 scripts
 
 #### Scripts racine (7)
 - ✅ `install.sh` - Orchestrateur
@@ -331,10 +333,10 @@ source "$(dirname "$0")/lib/common.sh"
 - ✅ `check-package-compatibility.sh` - Compatibilité
 - ✅ `configure-test-database.sh` - Tests DB
 
-#### Modules install/ (9)
+#### Modules install/ (11)
 - ✅ Tous les scripts `install/*.sh`
 
-#### Bibliothèques lib/ (4)
+#### Bibliothèques lib/ (5)
 - ✅ Tous les scripts `lib/*.sh`
 
 #### Setup & Security (3)
