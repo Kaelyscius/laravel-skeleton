@@ -100,11 +100,74 @@ final class ShellProbe
     }
 
     /**
+     * L'orchestrateur d'installation — sujet de la story 2.2.
+     *
+     * Sourçable : sa garde `BASH_SOURCE[0] = $0` l'empêche de s'auto-exécuter,
+     * ce qui permet de remplacer `execute_module` par un compteur sans toucher
+     * à la boucle, au fail-fast ni au calcul de sentinelle.
+     */
+    public static function installScript(): string
+    {
+        return self::repoRoot() . '/scripts/install.sh';
+    }
+
+    /**
+     * Un module d'installation, par son identifiant (`10-laravel-core`).
+     */
+    public static function installModuleScript(string $module): string
+    {
+        return self::repoRoot() . '/scripts/install/' . $module . '.sh';
+    }
+
+    /**
+     * Le script HÔTE du lockfile d'installation.
+     */
+    public static function lockfileScript(): string
+    {
+        return self::repoRoot() . '/scripts/install-lockfile.sh';
+    }
+
+    /**
      * Le sujet VERSIONNÉ du trap ERR, relisible et lançable à la main.
      */
     public static function trapSubject(): string
     {
         return dirname(__DIR__) . '/Fixtures/shell/trap-subject.sh';
+    }
+
+    /**
+     * Le sujet VERSIONNÉ de l'idempotence, relisible et lançable à la main.
+     */
+    public static function idempotenceSubject(): string
+    {
+        return dirname(__DIR__) . '/Fixtures/shell/idempotence-subject.sh';
+    }
+
+    /**
+     * Les modules énumérés par l'orchestrateur, lus SUR DISQUE.
+     *
+     * Écrite en dur dans le test, la liste resterait juste après un module
+     * ajouté ou renommé — donc verte sur une boucle qui aurait cessé de le
+     * couvrir. Les identifiants viennent du tableau `INSTALL_MODULES`, qui est
+     * aussi le grain des sentinelles.
+     *
+     * @return list<string>
+     */
+    public static function installModules(): array
+    {
+        $source = file_get_contents(self::installScript());
+
+        if ($source === false) {
+            throw new RuntimeException('Orchestrateur illisible : ' . self::installScript());
+        }
+
+        if (preg_match('/readonly INSTALL_MODULES=\((.*?)\n\)/s', $source, $block) !== 1) {
+            throw new RuntimeException('Tableau INSTALL_MODULES introuvable dans l’orchestrateur.');
+        }
+
+        preg_match_all('/"([^":]+):/', $block[1], $matches);
+
+        return $matches[1];
     }
 
     /**

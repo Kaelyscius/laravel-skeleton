@@ -23,6 +23,8 @@ set -e
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/logging.sh"
 source "$SCRIPT_DIR/../lib/common.sh"
+# `die` — utilisé par le refus de nettoyage ci-dessous. Story 2.2.
+source "$SCRIPT_DIR/../lib/runtime.sh"
 
 # Initialiser le logging
 init_logging "10-laravel-core"
@@ -210,34 +212,254 @@ is_laravel_installed() {
 }
 
 #
+# Nom de base de la racine d'état, telle qu'elle apparaît DANS la cible.
+#
+# L'orchestrateur peut la déplacer par `INSTALL_STATE_DIR` ; le module n'en voit
+# que la variable d'environnement. Deux cas seulement nous intéressent ici :
+# elle est sous la cible (il faut la préserver), ou elle est ailleurs (rien à
+# faire). Comparer les chemins ABSOLUS, jamais les chaînes brutes : un
+# `INSTALL_STATE_DIR` relatif ou avec un `//` ferait échouer un `case` textuel.
+#
+# 🔴 LA RACINE D'ÉTAT EST TYPÉE : un VRAI RÉPERTOIRE, et pas un lien.
+# Même discipline qu'`ensure_idempotent`, qui refuse explicitement une
+# sentinelle-répertoire (`runtime.sh:231`) : lecture et écriture doivent parler
+# du même objet. Sans ce typage, mesuré à la revue 2 :
+#   • un FICHIER nommé `.install-state` était exclu de la mesure de vacuité ET
+#     de la suppression — répertoire réputé vide, fichier resté, et le
+#     `composer create-project` suivant échouait sur un répertoire non vide ;
+#   • un SYMLINK `.install-state` pointant vers un dossier interne faisait
+#     supprimer le dossier RÉEL pendant que le journal annonçait « racine
+#     d'état préservée ».
+# Ce qui n'est pas un vrai répertoire n'est donc pas une racine d'état : c'est
+# une entrée ordinaire, comptée et supprimée comme telle (pour un lien, seul le
+# lien part — jamais sa cible).
+#
+install_state_basename_in() {
+    local target_dir="$1"
+    local state_dir="${INSTALL_STATE_DIR:-$target_dir/.install-state}"
+
+    local absolute_target
+    absolute_target="$(cd "$target_dir" 2>/dev/null && pwd)" || return 1
+
+    # ⚠️ Le `|| return 1` d'une AFFECTATION porte le statut de la DERNIÈRE
+    # substitution — ici `basename`, qui rend toujours 0. La garde était donc du
+    # code mort (relevé revue 2). Le `cd` est évalué séparément, ce qui la rend
+    # vivante.
+    local state_parent
+    state_parent="$(cd "$(dirname "$state_dir")" 2>/dev/null && pwd)" || return 1
+
+    local state_name
+    state_name="$(basename "$state_dir")"
+
+    if [ "$state_parent" != "$absolute_target" ]; then
+        return 1
+    fi
+
+    local candidate="$absolute_target/$state_name"
+
+    if [ -L "$candidate" ]; then
+        log_warn "Racine d'état ignorée : $candidate est un lien symbolique, pas un répertoire."
+        return 1
+    fi
+
+    if [ ! -d "$candidate" ]; then
+        if [ -e "$candidate" ]; then
+            log_warn "Racine d'état ignorée : $candidate existe mais n'est pas un répertoire."
+        fi
+        return 1
+    fi
+
+    echo "$state_name"
+    return 0
+}
+
+#
+# Entrées d'un répertoire, racine d'état exclue — noms de base, un par ligne.
+#
+# 🔴 `[ -e ]` SEUL PERD LES LIENS SYMBOLIQUES CASSÉS (relevé revue 2) : `-e`
+# suit le lien, donc il est faux sur un lien pendant. Une cible n'en contenant
+# qu'un était jugée VIDE, tout le nettoyage était sauté, la fonction rendait 0
+# en journalisant « nettoyé avec succès », et `composer create-project`
+# échouait ensuite sur un répertoire non vide. `-e || -L` voit les deux.
+#
+# Cette énumération sert À LA FOIS la mesure de vacuité et la post-condition :
+# une seule lecture, donc pas de divergence possible entre « ce qu'on a compté »
+# et « ce qu'on vérifie avoir supprimé ».
+#
+list_target_entries() {
+    local target_dir="$1"
+    local state_basename="$2"
+
+    local entry name
+    for entry in "$target_dir"/* "$target_dir"/.*; do
+        # `-e` pour ce qui existe, `-L` pour les liens pendants que `-e` rate.
+        # Le `glob` non apparié se rend lui-même : les deux tests l'écartent.
+        if [ ! -e "$entry" ] && [ ! -L "$entry" ]; then
+            continue
+        fi
+
+        name="${entry##*/}"
+
+        if [ "$name" = "." ] || [ "$name" = ".." ]; then
+            continue
+        fi
+
+        if [ -n "$state_basename" ] && [ "$name" = "$state_basename" ]; then
+            continue
+        fi
+
+        printf '%s\n' "$name"
+    done
+}
+
+#
 # Nettoyer le répertoire cible avant installation
+#
+# 🔴 CE CHEMIN ÉTAIT DESTRUCTEUR SANS CONDITION (story 2.2, boucle 1).
+# Il n'est atteint que lorsque `is_laravel_installed` rend faux — c'est-à-dire
+# exactement l'état d'une install crashée en plein `composer create-project` :
+# un `vendor/` à moitié rempli, un `composer.json` déjà écrit, mais pas encore
+# les quatre fichiers de `LARAVEL_CORE_FILES`. Le `find -delete` d'alors
+# effaçait ce travail en silence, à chaque relance.
+#
+# 🔴 ET IL DÉTRUISAIT LA RACINE D'ÉTAT ELLE-MÊME (revue 1).
+# PROUVÉ PAR EXÉCUTION : une cible portant
+# `.install-state/{00-prerequisites-done,05-composer-setup-done,started-at}`
+# ressortait avec **0** fichier d'état et un code retour **0**. Ce n'est pas un
+# cas tordu, c'est le chemin NOMINAL d'un fork-streamer : après les modules 00
+# et 05, la cible n'est JAMAIS « vraiment vide ».
+#
+# 🔴 TROISIÈME ITÉRATION DU MÊME DÉFAUT, ET C'EST ELLE QUI INSTRUIT (revue 2).
+# Les deux premières parades employaient un MOTEUR DE MOTIFS là où un littéral
+# était voulu :
+#   1. `find -mindepth 1 -delete` nu — aucune exclusion ;
+#   2. `-path … -prune -o` — `-delete` implique `-depth`, sous lequel `-prune`
+#      est un no-op ;
+#   3. `-not -path "$target/$etat"` — `-path` prend un GLOB, pas une chaîne.
+#      Mesuré : une cible nommée `pro[1]jet` ressortait à `etat=0`,
+#      `started-at` DÉTRUIT, code retour 0. Les crochets font une classe de
+#      caractères ; le motif ne correspond plus à son propre chemin, donc rien
+#      n'est exclu. C'est EXACTEMENT le mécanisme du défaut corrigé en sens
+#      inverse dans `install-lockfile.sh` (un `grep` appliquant une regex à
+#      `projet[1]_node`) — deux fois la même erreur dans la même story.
+#
+# La parade retenue n'a PLUS DE MOTEUR DE MOTIFS DU TOUT : on supprime les
+# entrées énumérées, une par une, par comparaison littérale de noms de base.
+# Aucun glob, aucune regex, donc aucun chemin ne peut s'y soustraire.
 #
 clean_target_directory() {
     local target_dir="$1"
-    
+
     log_debug "Nettoyage du répertoire: $target_dir"
-    
-    # Afficher le contenu actuel pour diagnostic
-    if [ "$(ls -A "$target_dir" 2>/dev/null | wc -l)" -gt 0 ]; then
-        log_debug "Contenu actuel du répertoire:"
-        ls -la "$target_dir" 2>/dev/null | head -10 || true
-        
-        log_info "Nettoyage complet du répertoire $target_dir..."
-        
-        # Supprimer tout le contenu, y compris les fichiers cachés
-        find "$target_dir" -mindepth 1 -delete 2>/dev/null || {
-            log_debug "Fallback: suppression avec rm -rf"
-            rm -rf "$target_dir"/{*,.*} 2>/dev/null || true
-        }
-        
-        # Vérifier que le répertoire est maintenant vide
-        local remaining_files=$(ls -A "$target_dir" 2>/dev/null | wc -l)
-        if [ "$remaining_files" -gt 0 ]; then
-            log_warn "Fichiers restants après nettoyage: $remaining_files"
+
+    # Nom à préserver, ou chaîne vide si la racine d'état vit ailleurs (ou
+    # n'est pas un vrai répertoire).
+    local state_basename=""
+    state_basename="$(install_state_basename_in "$target_dir")" || state_basename=""
+
+    if [ -n "$state_basename" ]; then
+        log_debug "Racine d'état préservée: $target_dir/$state_basename"
+    fi
+
+    # Contenu de la cible, RACINE D'ÉTAT EXCLUE. C'est cette liste — et non
+    # `ls -A` nu — qui décide si le répertoire est « vraiment vide » : sinon la
+    # présence des sentinelles suffirait à déclencher le nettoyage qui les
+    # efface, ce qui est précisément le défaut corrigé ici.
+    local entries=()
+    local name
+    while IFS= read -r name; do
+        [ -n "$name" ] && entries+=("$name")
+    done < <(list_target_entries "$target_dir" "$state_basename")
+
+    if [ ${#entries[@]} -gt 0 ]; then
+        log_debug "Contenu actuel du répertoire (hors racine d'état): ${entries[*]}"
+
+        # Marqueurs d'une installation PARTIELLE : leur présence prouve qu'un
+        # travail a déjà eu lieu ici, et `is_laravel_installed` a pourtant rendu
+        # faux. Effacer serait détruire une reprise possible.
+        #
+        # ⚖️ La liste va DÉLIBÉRÉMENT au-delà de `composer.json`/`vendor/`.
+        # Effacer le `.env` d'un opérateur — clé d'application, identifiants de
+        # base, secrets d'API — est du même ordre qu'effacer son `vendor/`, à
+        # ceci près que `vendor/` se réinstalle et qu'un `.env` ne se retrouve
+        # pas. `storage/` porte les uploads et les logs ; `database/` les
+        # migrations écrites à la main.
+        local candidates=(
+            "composer.json"
+            "composer.lock"
+            ".env"
+            "artisan"
+            "vendor"
+            "storage"
+            "database"
+            "app"
+            "node_modules"
+        )
+
+        local partial_markers=()
+        local candidate
+
+        for candidate in "${candidates[@]}"; do
+            # `-e || -L` ici aussi : un `.env` remplacé par un lien pendant
+            # reste la trace d'un travail de l'opérateur.
+            if [ -e "$target_dir/$candidate" ] || [ -L "$target_dir/$candidate" ]; then
+                if [ -d "$target_dir/$candidate" ] && [ ! -L "$target_dir/$candidate" ]; then
+                    partial_markers+=("$candidate/")
+                else
+                    partial_markers+=("$candidate")
+                fi
+            fi
+        done
+
+        if [ ${#partial_markers[@]} -gt 0 ]; then
+            if [ "${INSTALL_FORCE:-false}" = "true" ]; then
+                log_warn "🧨 INSTALL_FORCE : nettoyage autorisé malgré une installation partielle (${partial_markers[*]})"
+            else
+                # ⚠️ LE MESSAGE NOMME LES DEUX SORTIES, et pas seulement `--force`.
+                # Ce module s'exécute aussi SEUL (`install.sh --only 10-laravel-core`
+                # le lance en sous-processus, et un opérateur peut l'appeler
+                # directement) : il n'a alors AUCUN drapeau `--force` à offrir.
+                # La seule sortie y est la variable d'environnement, que la
+                # rédaction précédente passait sous silence (relevé revue 2).
+                die "Refus de nettoyer $target_dir : installation Laravel partielle détectée (${partial_markers[*]}). Aucun fichier n'a été supprimé. Sorties possibles : relancer l'installeur avec --force, exporter INSTALL_FORCE=true si vous lancez ce module seul, ou vider le répertoire à la main."
+            fi
+        fi
+
+        # ⚠️ Le message ne promet la préservation QUE lorsqu'il y a une racine
+        # d'état à préserver. La rédaction précédente l'annonçait toujours, y
+        # compris quand `.install-state` s'était révélé n'être pas un
+        # répertoire — une phrase fausse à côté d'un code juste, le motif que
+        # cette story passe son temps à corriger.
+        if [ -n "$state_basename" ]; then
+            log_info "Nettoyage du répertoire $target_dir (racine d'état $state_basename préservée)..."
+        else
+            log_info "Nettoyage complet du répertoire $target_dir (aucune racine d'état à préserver)..."
+        fi
+
+        # ⛔ SUPPRESSION LITTÉRALE, ENTRÉE PAR ENTRÉE — AUCUN MOTEUR DE MOTIFS.
+        # `entries` a été construite par comparaison de noms de base, la racine
+        # d'état déjà écartée. Rien ici n'interprète `*`, `?` ni `[…]`, donc
+        # aucun chemin de cible ne peut contourner l'exclusion — c'est la seule
+        # propriété que les trois parades précédentes n'avaient pas.
+        # `rm -rf --` : le `--` protège d'un nom commençant par `-`.
+        local doomed
+        for doomed in "${entries[@]}"; do
+            rm -rf -- "${target_dir:?}/${doomed:?}" 2>/dev/null || true
+        done
+
+        # Vérifier que le répertoire est vide — MÊME énumération que ci-dessus,
+        # donc mêmes règles : racine d'état exclue, liens pendants vus.
+        local remaining=()
+        while IFS= read -r name; do
+            [ -n "$name" ] && remaining+=("$name")
+        done < <(list_target_entries "$target_dir" "$state_basename")
+
+        if [ ${#remaining[@]} -gt 0 ]; then
+            log_warn "Fichiers restants après nettoyage: ${remaining[*]}"
             return 1
         fi
     fi
-    
+
     log_debug "Répertoire nettoyé avec succès"
     return 0
 }

@@ -36,6 +36,18 @@ on:
       # déclenchait AUCUNE CI : le garde-fou existe, mais rien ne le rejoue.
       - 'scripts/lib/**'
       - 'scripts/install/**'
+      # L'orchestrateur lui-même n'était PAS dans cette liste : `scripts/install/**`
+      # ne couvre pas `scripts/install.sh`. On pouvait donc casser l'idempotence
+      # de l'installeur (Story 2.2) sans qu'aucun run ne démarre. Même motif pour
+      # le lockfile, qui vit à la racine de `scripts/`.
+      - 'scripts/install.sh'
+      - 'scripts/install-lockfile.sh'
+      # Le Makefile est SUJET DE TEST depuis la story 2.2 : un test vérifie que
+      # `install-lockfile` est appelé après `npm-install` et jamais en prod.
+      # Sans cette entrée, on peut casser la chaîne d'installation sans qu'aucun
+      # run ne démarre — exactement le défaut que cette story corrige pour
+      # `scripts/install.sh`, reconduit un cran plus loin.
+      - 'Makefile'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main, develop]
@@ -60,6 +72,18 @@ on:
       # déclenchait AUCUNE CI : le garde-fou existe, mais rien ne le rejoue.
       - 'scripts/lib/**'
       - 'scripts/install/**'
+      # L'orchestrateur lui-même n'était PAS dans cette liste : `scripts/install/**`
+      # ne couvre pas `scripts/install.sh`. On pouvait donc casser l'idempotence
+      # de l'installeur (Story 2.2) sans qu'aucun run ne démarre. Même motif pour
+      # le lockfile, qui vit à la racine de `scripts/`.
+      - 'scripts/install.sh'
+      - 'scripts/install-lockfile.sh'
+      # Le Makefile est SUJET DE TEST depuis la story 2.2 : un test vérifie que
+      # `install-lockfile` est appelé après `npm-install` et jamais en prod.
+      # Sans cette entrée, on peut casser la chaîne d'installation sans qu'aucun
+      # run ne démarre — exactement le défaut que cette story corrige pour
+      # `scripts/install.sh`, reconduit un cran plus loin.
+      - 'Makefile'
       - '.github/workflows/ci.yml'
   workflow_dispatch:
 

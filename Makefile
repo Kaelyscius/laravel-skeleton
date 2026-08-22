@@ -108,13 +108,13 @@ help: ## Afficher l'aide principale
 install: install-dev ## Alias pour install-dev (par défaut en développement)
 
 .PHONY: install-dev
-install-dev: build up-dev install-laravel npm-install setup-ssl ## Installation complète DÉVELOPPEMENT (avec Node, Mailpit, Adminer, etc.)
+install-dev: build up-dev install-laravel npm-install install-lockfile setup-ssl ## Installation complète DÉVELOPPEMENT (avec Node, Mailpit, Adminer, etc.)
 	@echo "$(GREEN)🎉 Installation DÉVELOPPEMENT terminée !$(NC)"
 	@echo "$(CYAN)📦 Services actifs: PHP, Apache, PostgreSQL, Redis, Node, Mailpit, Adminer$(NC)"
 	@$(MAKE) _show_urls
 
 .PHONY: install-dev-full
-install-dev-full: build up-dev-full install-laravel npm-install setup-ssl ## Installation DÉVELOPPEMENT COMPLÈTE (+ Dozzle, IT-Tools, Watchtower)
+install-dev-full: build up-dev-full install-laravel npm-install install-lockfile setup-ssl ## Installation DÉVELOPPEMENT COMPLÈTE (+ Dozzle, IT-Tools, Watchtower)
 	@echo "$(GREEN)🎉 Installation DÉVELOPPEMENT COMPLÈTE terminée !$(NC)"
 	@echo "$(CYAN)📦 Services actifs: Tous les services + monitoring$(NC)"
 	@$(MAKE) _show_urls
@@ -132,7 +132,7 @@ install-prod: build up install-laravel-prod setup-ssl ## Installation PRODUCTION
 install-fast: install-dev-fast ## Alias pour install-dev-fast
 
 .PHONY: install-dev-fast
-install-dev-fast: build-fast up-dev install-laravel npm-install-fast setup-ssl ## Installation DEV optimisée avec cache (recommandé)
+install-dev-fast: build-fast up-dev install-laravel npm-install-fast install-lockfile setup-ssl ## Installation DEV optimisée avec cache (recommandé)
 	@echo "$(GREEN)🎉 Installation DÉVELOPPEMENT rapide terminée !$(NC)"
 	@$(MAKE) _show_urls
 
@@ -425,6 +425,36 @@ install-laravel: ## Installer Laravel complet (packages + permissions + MCP Clau
 	@echo "  $(YELLOW)make npm-dev$(NC)         → Lancer Vite en mode watch"
 	@echo "  $(YELLOW)make quality-all$(NC)     → Vérifier la qualité du code"
 	@echo ""
+
+# =============================================================================
+# LOCKFILE D'INSTALLATION
+# =============================================================================
+#
+# Écrit src/.install-state/lock.yml : empreinte de composer.lock + versions PHP
+# et Node RÉELLEMENT installées, plus la fenêtre started_at/finished_at.
+#
+# ⚠️ Cible HÔTE, et non une étape d'`install.sh`. Deux raisons mesurées :
+#   • le conteneur php n'a ni CLI docker ni socket, il ne peut donc pas
+#     interroger le conteneur node — or c'est le node du conteneur NODE qui
+#     produit node_modules/ ;
+#   • `npm-install` tourne APRÈS `install-laravel` dans toutes les chaînes
+#     ci-dessus : un lockfile écrit en fin d'install.sh décrirait un
+#     node_modules/ inexistant.
+#
+# ⛔ `install-prod` / `install-prod-fast` NE L'APPELLENT PAS, et c'est écrit
+# plutôt que subi : ces chaînes ne jouent pas `npm-install`, donc le conteneur
+# node n'y est pas démarré (profil `dev` éteint). Le script refuserait
+# bruyamment — ce qui est le bon comportement, mais ferait échouer une
+# installation de production correcte.
+.PHONY: install-lockfile
+install-lockfile: ## Écrire src/.install-state/lock.yml (empreintes + versions réelles)
+	$(call check_container,$(PHP_CONTAINER_NAME))
+	$(call check_container,$(NODE_CONTAINER_NAME))
+	@echo "$(CYAN)🔒 Génération du lockfile d'installation...$(NC)"
+	@COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) \
+		PHP_CONTAINER_NAME=$(PHP_CONTAINER_NAME) \
+		NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
+		$(SCRIPT_DIR)/install-lockfile.sh
 
 .PHONY: install-laravel-prod
 install-laravel-prod: ## Installer Laravel PRODUCTION (sans packages dev)

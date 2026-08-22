@@ -1,6 +1,6 @@
 # 📚 Scripts Reference - Documentation Complète
 
-**Total**: 33 scripts shell organisés en 6 catégories
+**Total**: 34 scripts shell organisés en 6 catégories
 
 ---
 
@@ -8,7 +8,7 @@
 
 ```
 scripts/
-├── *.sh                 # Scripts racine (12 fichiers)
+├── *.sh                 # Scripts racine (13 fichiers)
 ├── install/            # Installation modulaire (11 scripts)
 ├── lib/                # Bibliothèques partagées (5 scripts)
 ├── ops/                # Exploitation — sauvegardes (2 scripts)
@@ -30,21 +30,53 @@ scripts/
 - Gère les logs et erreurs
 - Créé par la refactorisation pour remplacer l'ancien monolithe
 
-**Modules lancés** (dans l'ordre):
-1. `00-prerequisites.sh` - Vérifications système
-2. `05-composer-setup.sh` - Configuration Composer
-3. `10-laravel-core.sh` - Installation Laravel
-4. `20-database.sh` - Base de données
-5. `30-packages-prod.sh` - Packages production
-6. `40-packages-dev.sh` - Packages développement
-7. `50-quality-tools.sh` - Outils qualité (PHPStan, ECS, Rector)
-8. `60-nightwatch.sh` - Laravel Nightwatch
-9. `99-finalize.sh` - Finalisation
+**Modules lancés** (dans l'ordre): les **11** entrées du tableau
+`INSTALL_MODULES` — `00`, `05`, `10`, `20`, `30`, `35`, `40`, `45`, `50`, `60`,
+`99`. ⚠️ La numérotation ne comporte ni `01`, ni `06`, ni `07` : plusieurs
+documents de planification en supposent, à tort.
+
+**Idempotence** (Story 2.2): chaque module franchi pose une sentinelle
+`<cible>/.install-state/<module>-done`. Une install interrompue **reprend
+d'elle-même** au module qui a échoué — inutile de taper `--resume-from`. Un
+module en échec ne pose PAS sa sentinelle : il sera rejoué. `--force` ignore et
+réécrit toutes les sentinelles. La racine d'état est surchargeable par
+`INSTALL_STATE_DIR`.
+
+⚠️ Elle vit sous la **cible** (donc `src/.install-state/`) et non à la racine du
+dépôt : celle-ci est montée `ro` dans les conteneurs php et node. `test -w` y rend
+pourtant VRAI — seule l'écriture réelle tranche.
 
 **Utilisation**:
 ```bash
 make install-laravel  # Appelle ce script
+./scripts/install.sh --force        # tout rejouer
+./scripts/install.sh --list-modules # voir les 11 identifiants
 ```
+
+---
+
+### 1bis. 🔒 **install-lockfile.sh** - ESSENTIEL
+**Chemin**: `scripts/install-lockfile.sh`
+**Utilisé par**: `make install-lockfile`, appelé par `install-dev`, `install-dev-full`,
+`install-dev-fast` **après** `npm-install`
+**Description**: Écrit `src/.install-state/lock.yml` — empreinte sha256 de
+`src/composer.lock`, version PHP du conteneur php, version Node du conteneur
+**node**, `started_at` / `finished_at`.
+
+**Pourquoi un script HÔTE et non une étape d'`install.sh`** (contraintes mesurées):
+- le conteneur php n'a **ni CLI docker ni socket** : il ne peut pas interroger le
+  conteneur node ;
+- les deux conteneurs n'ont pas le même node — c'est celui du conteneur **node**
+  qui produit `node_modules/` ;
+- `npm-install` tourne **après** `install-laravel` : un lockfile écrit en fin
+  d'`install.sh` décrirait un `node_modules/` inexistant.
+
+⛔ **Aucune valeur de repli.** Conteneur absent, `composer.lock` absent,
+horodatage de début absent : le script meurt en nommant ce qui manque, et
+**rien** n'est écrit.
+
+⛔ **Non appelé par `install-prod` / `install-prod-fast`** : ces chaînes ne jouent
+pas `npm-install`, le conteneur node n'y tourne donc pas.
 
 ---
 
@@ -178,16 +210,6 @@ make check-compatibility
 
 ---
 
-### 10. 📝 **create-gitkeep.sh** (694B)
-**Description**: Créé fichiers .gitkeep dans dossiers vides
-
-**Utilisation**:
-```bash
-./scripts/create-gitkeep.sh
-```
-
----
-
 ### 11. 🔧 **setup-git-hooks.sh** (4.9K)
 **Description**: Configure hooks Git (pre-commit, pre-push)
 
@@ -218,60 +240,24 @@ make check-compatibility
 
 ---
 
-## 🔴 Scripts Potentiellement Obsolètes (À vérifier)
+## 🔴 Scripts « potentiellement obsolètes » — SECTION SUPPRIMÉE
 
-### 13. 💾 **backup-before-cleanup.sh** (5.3K)
-**Description**: Backup avant nettoyage
-
-**Statut**: ⚠️ Peut-être obsolète (cleanup déjà fait)
-
-**Utilisation**:
-```bash
-./scripts/backup-before-cleanup.sh
-```
-
-**Recommandation**: Probablement **PEUT ÊTRE SUPPRIMÉ** si cleanup terminé
-
----
-
-### 14. 🔄 **setup-auto-update.sh** (2.7K)
-**Description**: Setup auto-updates (ancien système)
-
-**Statut**: ⚠️ Remplacé par setup-watchtower-simple.sh
-
-**Recommandation**: **À SUPPRIMER** (doublon avec Watchtower)
-
----
-
-### 15. 🧪 **test-installation-complete.sh** (5.8K)
-**Description**: Test installation complète
-
-**Statut**: ⚠️ Utilité limitée
-
-**Utilisation**:
-```bash
-./scripts/test-installation-complete.sh
-```
-
-**Recommandation**: Garder pour debug, ou intégrer dans `make diagnostic`
-
----
-
-### 16. 🧪 **test-watchtower.sh** (778B)
-**Description**: Test Watchtower
-
-**Statut**: ⚠️ Script de test unitaire
-
-**Recommandation**: **PEUT ÊTRE SUPPRIMÉ** (tests déjà validés)
-
----
-
-### 17. ✅ **validate-all-fixes.sh** (8.2K)
-**Description**: Valide tous les fix appliqués
-
-**Statut**: ⚠️ Historique des corrections
-
-**Recommandation**: **À ARCHIVER** (fixes déjà appliqués)
+> 🔴 **Cette section décrivait cinq scripts qui n'existent pas**, en détaillant
+> leur taille, leur usage et une recommandation pour chacun :
+> `backup-before-cleanup.sh`, `setup-auto-update.sh`,
+> `test-installation-complete.sh`, `test-watchtower.sh`, `validate-all-fixes.sh`
+> — plus `create-gitkeep.sh` un peu plus haut. **Six fiches complètes pour zéro
+> fichier sur disque**, avec des octets au B près.
+>
+> Ils avaient probablement été supprimés il y a longtemps ; la documentation,
+> elle, ne l'a jamais su. C'est la forme documentaire du motif dominant du
+> dépôt : *l'affirmation précède son référent*, et plus la fiche est détaillée,
+> plus elle inspire confiance. Relevé à la **revue 2** de la Story 2.2.
+>
+> ⚠️ Un test compte désormais les scripts **sur disque** et exige que chacun
+> soit nommé dans ce fichier — mais il ne peut pas, seul, empêcher d'y décrire
+> un fichier absent. Ce qui protège de cela est l'inventaire complet ci-dessous,
+> exhaustif et daté.
 
 ---
 
@@ -304,15 +290,23 @@ source "$(dirname "$0")/lib/common.sh"
 
 | Ordre | Script | Fonction |
 |-------|--------|----------|
-| 00 | `prerequisites.sh` | Vérifications pré-install |
-| 05 | `composer-setup.sh` | Config Composer |
-| 10 | `laravel-core.sh` | Laravel de base |
-| 20 | `database.sh` | Base de données |
-| 30 | `packages-prod.sh` | Packages production |
-| 40 | `packages-dev.sh` | Packages développement |
-| 50 | `quality-tools.sh` | PHPStan, ECS, Rector |
-| 60 | `nightwatch.sh` | Laravel Nightwatch |
-| 99 | `finalize.sh` | Finalisation |
+| 00 | `00-prerequisites.sh` | Vérifications pré-install |
+| 05 | `05-composer-setup.sh` | Config Composer |
+| 10 | `10-laravel-core.sh` | Laravel de base |
+| 20 | `20-database.sh` | Base de données |
+| 30 | `30-packages-prod.sh` | Packages production |
+| 35 | `35-configure-spatie-packages.sh` | Config packages Spatie |
+| 40 | `40-packages-dev.sh` | Packages développement |
+| 45 | `45-configure-pest.sh` | Config Pest |
+| 50 | `50-quality-tools.sh` | PHPStan, ECS, Rector |
+| 60 | `60-nightwatch.sh` | Laravel Nightwatch |
+| 99 | `99-finalize.sh` | Finalisation |
+
+> ⚠️ Ce tableau annonçait **9** modules pour **11** sur disque (`35` et `45`
+> manquaient) et amputait chaque nom de son préfixe d'ordre — alors que ce
+> préfixe EST l'identifiant public du module : c'est ce que prennent `--only`,
+> `--resume-from`, et c'est le grain des sentinelles d'idempotence
+> (`.install-state/<module>-done`). Corrigé le 2026-08-22 (Story 2.2).
 
 **Utilisation**: Appelés automatiquement par `scripts/install.sh`
 
@@ -322,61 +316,58 @@ source "$(dirname "$0")/lib/common.sh"
 
 ## 📊 Résumé - Actions Recommandées
 
-### ✅ À GARDER (Scripts essentiels) - 27 scripts
+### ✅ INVENTAIRE COMPLET — 34 scripts, tous présents sur disque
 
-#### Scripts racine (7)
-- ✅ `install.sh` - Orchestrateur
-- ✅ `fix-permissions.sh` - Permissions WSL
-- ✅ `setup-env-optimizations.sh` - Optimisations
-- ✅ `setup-watchtower-simple.sh` - Watchtower
-- ✅ `diagnostic-tools.sh` - Diagnostics
-- ✅ `check-package-compatibility.sh` - Compatibilité
-- ✅ `configure-test-database.sh` - Tests DB
+> 🔴 **Ce bloc était faux, et il l'était deux fois.** Corrigé à la **revue 2** de
+> la Story 2.2, après une première correction incomplète à la revue 1.
+>
+> - Le total annonçait **27** pour des sous-totaux à **28** — arithmétique
+>   corrigée à la revue 1, avec un encadré qui augmentait la confiance accordée
+>   au bloc.
+> - Mais l'**inventaire** restait faux : il prescrivait d'archiver ou de
+>   supprimer **six scripts qui n'existent pas** (`backup-before-cleanup.sh`,
+>   `validate-all-fixes.sh`, `test-installation-complete.sh`,
+>   `setup-auto-update.sh`, `test-watchtower.sh`, `create-gitkeep.sh`), et il
+>   **omettait trois scripts bien présents** — dont `assert-tracked-files.sh` et
+>   `quality-ratchet.sh`, les deux que le bloc gelé de cette story inscrit en
+>   `Never: toucher` parce qu'ils sont bloquants en CI.
+>
+> Une arithmétique juste sur un inventaire faux est pire qu'un compteur faux :
+> elle se relit comme vérifiée. La liste ci-dessous est désormais **comptée sur
+> disque par un test** (`InstallSentinelsTest`), qui exige que **chaque** script
+> présent soit nommé ici.
+
+#### Scripts racine (13)
+- ✅ `install.sh` — Orchestrateur d'installation, idempotent depuis la Story 2.2
+- ✅ `install-lockfile.sh` — Lockfile d'installation (script **hôte**)
+- ✅ `assert-tracked-files.sh` — ⛔ **Bloquant en CI** : refuse qu'un fichier source soit gitignoré
+- ✅ `quality-ratchet.sh` — ⛔ **Bloquant en CI** : compteurs de dette monotones (0/0/0)
+- ✅ `fix-permissions.sh` — Permissions WSL/PhpStorm
+- ✅ `diagnostic-tools.sh` — Diagnostics PHP/Laravel
+- ✅ `check-package-compatibility.sh` — Compatibilité des paquets
+- ✅ `configure-test-database.sh` — Base de tests
+- ✅ `setup-env-optimizations.sh` — Optimisations d'environnement
+- ✅ `setup-watchtower-simple.sh` — Watchtower
+- ✅ `setup-git-hooks.sh` — Hooks git
+- ✅ `update-custom-images.sh` — Mise à jour des images Docker maison
+- ✅ `TEST-PROFILES.sh` — Vérification des profiles Docker Compose
 
 #### Modules install/ (11)
-- ✅ Tous les scripts `install/*.sh`
+- ✅ Tous les scripts `install/*.sh` — voir le tableau des modules plus haut
 
 #### Bibliothèques lib/ (5)
-- ✅ Tous les scripts `lib/*.sh`
+- ✅ Tous les scripts `lib/*.sh` — voir le tableau des bibliothèques plus haut
 
-#### Setup & Security (3)
-- ✅ `setup/interactive-setup.sh`
-- ✅ `setup/generate-configs.sh`
-- ✅ `security/snyk-scan.sh`
+#### Exploitation ops/ (2)
+- ✅ `ops/backup-local.sh` — Sauvegarde locale (ADR-0003)
+- ✅ `ops/backup-offsite.sh` — Sauvegarde hors site (ADR-0003)
 
-#### Utilitaires optionnels (1)
-- ✅ `setup-git-hooks.sh` - Git hooks
+#### Sécurité (1)
+- ✅ `security/snyk-scan.sh` — Scan de vulnérabilités
 
----
-
-### ⚠️ À ARCHIVER (Scripts historiques) - 3 scripts
-
-Créer dossier `scripts/archive/` et déplacer :
-
-```bash
-mkdir -p scripts/archive
-mv scripts/backup-before-cleanup.sh scripts/archive/
-mv scripts/validate-all-fixes.sh scripts/archive/
-mv scripts/test-installation-complete.sh scripts/archive/
-```
-
-**Raison**: Fixes déjà appliqués, utiles pour historique seulement
-
----
-
-### 🗑️ À SUPPRIMER (Doublons/obsolètes) - 2 scripts
-
-```bash
-rm scripts/setup-auto-update.sh      # Remplacé par setup-watchtower-simple.sh
-rm scripts/test-watchtower.sh        # Test unitaire obsolète
-```
-
----
-
-### 📝 Optionnels à garder (2 scripts)
-
-- `create-gitkeep.sh` - Utile pour structure projet
-- `update-custom-images.sh` - Utile pour updates Docker
+#### Configuration setup/ (2)
+- ✅ `setup/interactive-setup.sh` — Installation interactive
+- ✅ `setup/generate-configs.sh` — Génération des configurations
 
 ---
 
