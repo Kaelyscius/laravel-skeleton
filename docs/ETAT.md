@@ -45,6 +45,40 @@
 > trois commits**. `gh` (jeton, scopes `repo`+`workflow`) fonctionnait. C'est le piège qui avait
 > laissé `origin/main` bloqué à la Story 1.1 pendant sept stories `done`. Remède :
 > `eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519`, ou `gh auth setup-git`.
+> ✅ **Réglé le 2026-08-22** : `gh auth setup-git` + remote basculé en HTTPS. `git fetch`/`push`
+> fonctionnent sans agent ni passphrase.
+
+---
+
+## ➡️ PROCHAINE ACTION — Story 2.3 (`2-3-implement-dry-run-and-resume-from-flags`)
+
+**⛔ Deux pièges à lire AVANT d'écrire le moindre AC. Ils ne se déduisent d'aucun document de
+planification, et `epics.md` affirme le contraire du premier.**
+
+1. **`--dry-run` et `--resume-from` EXISTENT DÉJÀ** — `scripts/install.sh:169-180` (parsing),
+   `:307-316`, `:366-376`. `epics.md` demande de les « implémenter » ; ils sont là depuis
+   toujours. La valeur de la story n'est pas de les créer mais de les **refondre autour de
+   `run_cmd`** — la primitive que la story 2.1 avait **explicitement retirée** de son périmètre
+   après avoir vérifié qu'elle n'était spécifiée qu'à un seul endroit du plan : l'AC de la 2.3.
+
+2. **🔴 La branche `--dry-run` a déjà produit DEUX régressions pendant la 2.2**, et la 2.3 doit la
+   **reprendre**, pas l'ignorer :
+   - envelopper `execute_module` dans `ensure_idempotent` faisait **écrire les sentinelles en
+     simulation** (la simulation rend 0 sans rien faire, donc la post-condition était satisfaite) :
+     un `--dry-run` sur une racine d'état réelle marquait les 11 modules franchis, et l'install
+     suivante sautait **tout** en déclarant succès ;
+   - la branche séparée qui a corrigé cela **avalait ensuite les échecs de module** et rendait
+     « ✅ Installation terminée avec succès » pour un plan injouable.
+   La simulation vit désormais dans une branche distincte de la boucle (`install.sh:506-537`),
+   qui ne passe **ni** par `ensure_idempotent` **ni** par l'horodatage. Gardée par trois tests.
+
+**Niveau de cérémonie : R — Renforcé** (`03-boucle-qualite.md` §2 nomme « l'installeur »).
+Véhicule de test : `ShellProbe` + suite Unit — **Bats n'arrive qu'en story 2.4**.
+
+**Rappel d'environnement** : la CI ne se déclenche que sur `main`/`develop`. Une branche de story
+ne produit **aucun run** ; le verdict n'existe qu'au merge.
+
+---
 
 ---
 
