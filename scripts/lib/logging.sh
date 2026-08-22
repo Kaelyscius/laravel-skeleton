@@ -94,9 +94,14 @@ log() {
     # Écrire dans le fichier de log (sans couleurs)
     echo "$formatted_message" >> "$LOG_FILE"
     
-    # Afficher à l'écran si pas en mode silencieux
+    # Afficher à l'écran si pas en mode silencieux.
+    # >&2 : les diagnostics vont sur STDERR. Mesuré le 2026-08-22 — sur stdout,
+    # toute capture `x=$(fonction_qui_journalise)` avalait la bannière et la
+    # rendait comme VALEUR : `detect_working_directory` rendait
+    # "[WARN ...] Structure non reconnue\n/chemin", donc un répertoire
+    # inexistant, donc non inscriptible. 10 sites de capture en dépendent.
     if [ "$QUIET" != "true" ]; then
-        echo -e "$colored_message"
+        echo -e "$colored_message" >&2
     fi
 }
 
@@ -276,6 +281,16 @@ init_logging() {
 export -f log log_debug log_info log_warn log_error log_success log_step
 export -f log_separator log_step_start log_step_end log_fatal log_error_summary
 export -f init_logging
+
+# 🔴 `_should_log` est PRIVÉE mais doit être exportée : `log()` l'appelle, et
+# `log()` est exportée. Sans elle, tout franchissement de frontière de processus
+# (`bash -c`, `xargs`, un `find -exec`) rendait le logging MUET — et pas
+# bruyamment : `if ! _should_log "$level"` sur une commande introuvable vaut
+# 127, donc `!` le rend VRAI, donc `log()` retournait tôt sans rien écrire.
+# Mesuré le 2026-08-22 : `bash -c "die msg 42"` sortait bien en 42, sans la
+# moindre bannière « ERREUR FATALE ». Une primitive fatale silencieuse est un
+# garde-fou qui ne garde rien. Gardé par ShellRuntimeLibTest.
+export -f _should_log
 
 # Variables globales exportées
 export DEBUG LOG_LEVEL LOG_FILE QUIET

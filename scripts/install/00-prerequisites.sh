@@ -11,9 +11,29 @@
 # Utilisation:
 #   ./00-prerequisites.sh
 #
-# Code de sortie:
+# Code de sortie (contrat, épinglé par src/tests/Unit/ShellRuntimeLibTest.php):
 #   0: Tous les prérequis sont satisfaits
 #   1: Des prérequis manquent ou sont invalides
+#
+# Ce module est le PILOTE des primitives de scripts/lib/runtime.sh. Il adopte
+# `retry` sur ses sondes réseau (:~280).
+#
+# ⛔ Il n'emploie PAS `require_cmd`, et c'est un choix mesuré, pas un oubli.
+# `require_cmd` est fatal AU PROCESSUS par contrat gelé (elle délègue à
+# `log_fatal`, qui appelle `exit`). Mesuré le 2026-08-22 sur la version
+# précédente de ce fichier : un `git` absent tuait le script DANS
+# `check_system_tools` — seule l'étape OUTILS SYSTÈME était atteinte, aucune
+# extension PHP n'était contrôlée, le récapitulatif n'était JAMAIS émis, et la
+# branche `if ! check_system_tools` de `main()` était devenue du code mort.
+# Or ce module est un RAPPORT de prérequis : son intérêt est de nommer en UNE
+# passe tout ce qui manque. Mourir au premier manque, c'est l'aller-retour que
+# `require_cmd` prétend justement supprimer. La boucle d'agrégation ci-dessous
+# garde donc un chemin NON FATAL (`return 1` → `has_errors` → sortie 1).
+#
+# ⛔ Il n'arme PAS le trap ERR — délibérément. Le script porte une quinzaine
+# d'affectations de la forme `local x=$(cmd)` : sous trap armé, la bannière
+# fatale devient la VALEUR de la variable et l'exécution se poursuit en exit 0.
+# Voir l'en-tête d'`arm_err_trap` dans scripts/lib/runtime.sh.
 #
 # =============================================================================
 
@@ -23,6 +43,7 @@ set -e
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/logging.sh"
 source "$SCRIPT_DIR/../lib/common.sh"
+source "$SCRIPT_DIR/../lib/runtime.sh"
 
 # Initialiser le logging
 init_logging "00-prerequisites"
@@ -81,26 +102,31 @@ readonly OPTIONAL_PHP_EXTENSIONS=(
 #
 check_system_tools() {
     log_step_start "OUTILS SYSTÈME" "Vérification des outils système requis"
-    
-    local missing_tools=()
+
     local start_time=$(date +%s)
-    
+    local missing_tools=()
+
+    # Agrégation NON FATALE : on vérifie les 7 outils, on les nomme TOUS, et on
+    # rend 1 pour que `main()` poursuive les étapes suivantes et émette quand
+    # même le récapitulatif. Voir l'en-tête du fichier pour la raison — c'est le
+    # seul point de ce module où l'on renonce sciemment à `require_cmd`.
     for tool in "${REQUIRED_TOOLS[@]}"; do
-        if command -v "$tool" &> /dev/null; then
+        if command -v "$tool" > /dev/null 2>&1; then
             log_debug "✓ $tool: trouvé"
         else
             missing_tools+=("$tool")
             log_error "✗ $tool: manquant"
         fi
     done
-    
+
+    local duration=$(calculate_duration $start_time)
+
     if [ ${#missing_tools[@]} -ne 0 ]; then
-        log_error "Outils manquants: ${missing_tools[*]}"
+        log_error "Outils système requis manquants: ${missing_tools[*]}"
         log_error "Installez les outils manquants avant de continuer"
         return 1
     fi
-    
-    local duration=$(calculate_duration $start_time)
+
     log_step_end "OUTILS SYSTÈME" "$duration"
     return 0
 }
@@ -273,16 +299,20 @@ check_network_connectivity() {
         "raw.githubusercontent.com"
     )
     
+    # Une sonde réseau qui échoue une fois n'a rien prouvé : `retry` distingue
+    # l'indisponibilité réelle du hoquet. Les avertissements de `retry` partent
+    # dans $LOG_FILE même quand la sortie écran est redirigée (log() écrit dans
+    # les deux). RETRY_BASE_DELAY vaut 1 : une seule attente d'1s au pire.
     for repo in "${repositories[@]}"; do
-        if curl -s --max-time 10 --head "https://$repo" > /dev/null 2>&1; then
+        if retry 2 curl -sS --max-time 10 --head --output /dev/null "https://$repo"; then
             log_debug "✓ $repo: accessible"
         else
             log_warn "⚠ $repo: non accessible (pourrait affecter l'installation de packages)"
         fi
     done
-    
+
     # Tester la résolution DNS
-    if nslookup google.com > /dev/null 2>&1; then
+    if retry 2 nslookup google.com > /dev/null 2>&1; then
         log_debug "✓ Résolution DNS: fonctionnelle"
     else
         log_warn "⚠ Résolution DNS: problématique"
