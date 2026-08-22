@@ -4,9 +4,10 @@
 # PRIMITIVES D'EXÉCUTION PARTAGÉES
 # =============================================================================
 #
-# Quatre primitives que les scripts d'installation réimplémentaient à la main,
-# chacune dans sa variante : `die`, `retry`, `require_cmd`, `ensure_idempotent`.
-# Plus `arm_err_trap`, opt-in (voir plus bas pourquoi il n'est armé nulle part).
+# Cinq primitives que les scripts d'installation réimplémentaient à la main,
+# chacune dans sa variante : `die`, `retry`, `require_cmd`, `ensure_idempotent`,
+# `run_cmd`. Plus `arm_err_trap`, opt-in (voir plus bas pourquoi il n'est armé
+# nulle part).
 #
 # Utilisation:
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -256,6 +257,89 @@ ensure_idempotent() {
 }
 
 # =============================================================================
+# run_cmd — exécuter, ou seulement ANNONCER sous simulation
+# =============================================================================
+#
+# Arguments:
+#   $@: Commande à exécuter (vecteur : binaire ou fonction, puis arguments)
+#
+# Variables:
+#   INSTALL_DRY_RUN: `true` ⇒ la commande est JOURNALISÉE (`[DRY] …`) et n'est
+#                    PAS exécutée ; toute autre valeur (ou l'absence) ⇒
+#                    exécution réelle.
+#
+# Rend 0 en simulation, sinon le code RÉEL de la commande enveloppée. Ne meurt
+# JAMAIS d'elle-même — même contrat que `retry` : c'est à l'appelant de décider
+# si un échec est fatal. Un `run_cmd` qui mourrait tout seul rendrait la
+# simulation plus fatale que l'exécution réelle qu'elle décrit.
+#
+# ⚠️ ELLE LIT `INSTALL_DRY_RUN`, PAS `DRY_RUN`. `DRY_RUN` est une globale de
+# l'orchestrateur, jamais exportée (sondé le 2026-08-22 : un enfant voit
+# `<absent>`). Le préfixe `INSTALL_` marque la même frontière qu'`INSTALL_FORCE` :
+# dérivée UNE fois, sur le chemin d'exécution, lue par les sous-processus.
+#
+# 🔴 LE PLAN EST RÉPARTI SUR LES DEUX FLUX, ET LA PHRASE D'AVANT DISAIT LE
+# CONTRAIRE. Elle affirmait « la trace part sur STDERR ; `> plan.txt` rend un
+# fichier vide ». MESURÉ, deux fois : `install.sh --dry-run --only
+# 10-laravel-core` émet la MAJORITÉ de ses lignes `[DRY]` sur **STDOUT**.
+#
+# Pourquoi : `log_info` écrit bien sur stderr (`logging.sh:104`), mais
+# l'orchestrateur lance les modules en `"$module_file" … 2>&1 | tee -a
+# "$LOG_FILE"` (`install.sh`, `execute_module`) — ce `2>&1` replie le stderr du
+# MODULE dans le stdout de l'orchestrateur. Les lignes émises par le module
+# sortent donc sur stdout, celles émises par l'orchestrateur sur stderr.
+#
+# ⚖️ LA SEULE CAPTURE COMPLÈTE EST DONC CELLE QUI PREND LES DEUX :
+#   ./scripts/install.sh --dry-run > plan.txt 2>&1     # ✅ le plan ENTIER
+#   ./scripts/install.sh --dry-run 2>&1 | tee plan.txt # ✅ idem, à l'écran aussi
+#   ./scripts/install.sh --dry-run > plan.txt          # ⛔ INCOMPLET
+#   ./scripts/install.sh --dry-run 2> plan.txt         # ⛔ INCOMPLET
+# Le plan est aussi écrit dans `/tmp/laravel-install-<id>.log`, qui reste le
+# canal d'observation nommé par le spec. Cette répartition est PINNÉE par une
+# sonde qui capture les deux flux séparément et compte — un test qui lit
+# `2>&1` ne peut pas les distinguer, et c'est ce qui a laissé la phrase fausse
+# vivre cinq endroits durant.
+#
+# ⚠️ LES FRONTIÈRES D'ARGUMENTS SONT PRÉSERVÉES PAR `printf %q`.
+# `log_info "[DRY] $*"` aplatissait tout en une chaîne : un chemin contenant une
+# espace devenait indistinguable de deux arguments — sur la SEULE trace que la
+# simulation produit, et précisément pour la classe de chemins piégés qui a
+# coûté trois correctifs à la story 2.2.
+#
+# ⚠️ `run_cmd` PREND UN VECTEUR DE COMMANDE, PAS UN PIPELINE NI UNE REDIRECTION.
+#   • `run_cmd a | b` n'enveloppe QUE `a` : `b` tourne toujours, et en
+#     simulation il lit la sortie de `log_info` au lieu de celle de `a`.
+#   • `run_cmd cmd > fichier` fait CRÉER `fichier` par le shell appelant AVANT
+#     que `run_cmd` n'ait rien décidé — l'effet de bord survit à la simulation.
+# Dans ces deux cas, enfermer le tout dans une fonction et router LA FONCTION.
+# Même piège que la substitution de commande qui neutralise `die`.
+#
+run_cmd() {
+    # ⛔ LE PREMIER ARGUMENT VIDE EST REFUSÉ AUTANT QUE L'ABSENCE D'ARGUMENT.
+    # `run_cmd ""` franchissait la garde `$# -eq 0` : en réel il sortait 127
+    # (« command not found » sur la chaîne vide), et en simulation il produisait
+    # une ligne `[DRY]` qui ne nommait RIEN — une simulation qui annonce le
+    # vide. Même refus que `require_cmd` pour ses noms de binaires vides.
+    if [ $# -eq 0 ] || [ -z "$1" ]; then
+        die "run_cmd : aucune commande à exécuter (usage : run_cmd <commande…>)."
+    fi
+
+    if [ "${INSTALL_DRY_RUN:-false}" = true ]; then
+        local rendu
+        rendu="$(printf '%q ' "$@")"
+        log_info "[DRY] ${rendu% }"
+        return 0
+    fi
+
+    # Le code est capturé puis rendu explicitement : `"$@"` nu sous `set -e`
+    # tuerait l'appelant, et le contrat promet un code rendu, pas une mort.
+    local status=0
+    "$@" || status=$?
+
+    return "$status"
+}
+
+# =============================================================================
 # arm_err_trap — trap ERR, OPT-IN
 # =============================================================================
 #
@@ -270,6 +354,22 @@ ensure_idempotent() {
 # Ce qu'`arm_err_trap` garantit, et rien de plus : une COMMANDE NUE qui échoue
 # meurt en nommant son fichier et son numéro de ligne. Sujet de référence :
 # `src/tests/Fixtures/shell/trap-subject.sh`.
+#
+# 🔴 DEUXIÈME LIMITE, ÉCRITE PARCE QU'ELLE ÉTAIT TUE (report W20) : IL N'Y A
+# PAS DE `pipefail` ICI, DONC UN PIPELINE QUI ÉCHOUE À GAUCHE NE DÉCLENCHE RIEN.
+# `faux | tee -a "$LOG_FILE"` rend le code de `tee` — 0 — le trap ne se
+# déclenche pas, et le script continue. Le docblock promettait « une commande
+# nue » sans jamais dire que le pipeline en était exclu : un lecteur pouvait
+# croire le contraire.
+#
+# ⚖️ ET `pipefail` N'EST DÉLIBÉRÉMENT PAS POSÉ (Ask First du spec 2.3).
+# Neuf pipelines `| tee -a "$LOG_FILE"` de l'installeur dépendent de son
+# absence — ils capturent le code de gauche à la main par `${PIPESTATUS[0]}`
+# quand il les intéresse. L'armer ici changerait le comportement de tout script
+# qui appelle `arm_err_trap`, pour un bénéfice que rien ne mesure aujourd'hui.
+# Le comportement RÉEL est donc pinné par un test (`ShellRuntimeLibTest`) plutôt
+# que promis par une phrase : une prose qui décrit un `pipefail` inexistant est
+# exactement le garde-fou silencieux que ce dépôt refuse.
 #
 arm_err_trap() {
     # `set -E` : sans lui, le trap ERR n'est hérité par aucune fonction.
@@ -299,4 +399,4 @@ _runtime_on_err() {
 # EXPORT DES FONCTIONS
 # =============================================================================
 
-export -f die require_cmd retry ensure_idempotent arm_err_trap _runtime_on_err
+export -f die require_cmd retry ensure_idempotent run_cmd arm_err_trap _runtime_on_err

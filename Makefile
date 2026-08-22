@@ -25,6 +25,171 @@ BROWSER_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_test_browser
 # ne rend pas toujours la main après la fin des tests.
 BROWSER_TEST_TIMEOUT ?= 300
 
+# =============================================================================
+# DRAPEAUX DE SIMULATION ET DE REPRISE — PASS-THROUGH VERS scripts/install.sh
+# =============================================================================
+#
+# `--dry-run` et `--resume-from` EXISTENT dans `scripts/install.sh` depuis
+# longtemps ; ce qui manquait, c'est une porte d'entrée `make`. Sans elle, un
+# fork-streamer doit connaître le chemin du script — et le chemin réel passe par
+# `docker exec … /var/www/project/scripts/install.sh`, ce que personne ne tape
+# de tête.
+#
+#   make install-laravel DRY_RUN=true
+#   make install-laravel DRY_RUN=true RESUME_FROM=20-database
+#   make install-laravel RESUME_FROM=30-packages-prod
+#
+# ⚠️ Le plan est réparti sur STDOUT et STDERR : capture complète avec
+# `> plan.txt 2>&1` ou `2>&1 | tee plan.txt`.
+
+EMPTY :=
+SPACE := $(EMPTY) $(EMPTY)
+
+DRY_RUN_VALUE := $(strip $(DRY_RUN))
+RESUME_FROM_VALUE := $(strip $(RESUME_FROM))
+
+# 🔴 TOUTE LA VALIDATION EST PORTÉE PAR LES CIBLES, JAMAIS ÉVALUÉE AU PARSE
+# GLOBAL. `DRY_RUN` et `RESUME_FROM` sont des noms GÉNÉRIQUES : exportés dans le
+# shell de l'opérateur (ou hérités d'un CI), une validation inconditionnelle
+# faisait sortir en 2 des cibles qui n'ont rien à voir — mesuré :
+# `DRY_RUN=1 make help` et `RESUME_FROM=x make status` tuaient le Makefile
+# entier. Le bloc ci-dessous ne s'ouvre QUE si l'une des deux variables est
+# posée, et ne refuse QUE sur une cible d'installation (même discipline que le
+# garde composite, qui filtrait déjà `MAKECMDGOALS`).
+#
+# Effet de bord voulu : quand ni l'une ni l'autre n'est posée — le cas de
+# `make test`, `make up`, `make help` — RIEN ci-dessous n'est expansé, donc ni
+# le `sed` des modules ni l'`awk` du graphe ne tournent.
+ifneq ($(DRY_RUN_VALUE)$(RESUME_FROM_VALUE),)
+
+# Points d'entrée qui relaient réellement les drapeaux à `install.sh`.
+INSTALL_ENTRYPOINTS := install-laravel install-laravel-prod
+
+# ⛔ LES CHAÎNES COMPOSITES SONT DÉRIVÉES DU GRAPHE DE DÉPENDANCES, PAS ÉNUMÉRÉES.
+# 🔴 Mesuré : avec une liste écrite à la main, ajouter au Makefile
+# `install-dev-turbo: build up-dev install-laravel npm-install` produisait une
+# cible ACCEPTÉE sous `DRY_RUN=true` — elle bâtit des images, démarre des
+# conteneurs, puis lance une « simulation » — et la suite restait VERTE. Une
+# énumération ne peut pas garder ce qu'elle ne connaît pas.
+#
+# Règle : est composite toute cible dont les prérequis contiennent À LA FOIS un
+# `build*`/`up*` et un `install-laravel*` — ou un prérequis lui-même composite
+# (les alias `install: install-dev` doivent suivre). La fermeture transitive est
+# obtenue en repassant cinq fois sur le graphe, ce qui couvre très largement la
+# profondeur réelle (2).
+#
+# ⚠️ LA DÉRIVATION NE VOIT QUE LES PRÉREQUIS. Une cible qui appelle
+# `$(MAKE) install-laravel` depuis sa RECETTE est invisible du graphe : celles-là
+# sont listées à la main, et cette liste-ci est courte parce qu'elle est le
+# résidu, pas la règle.
+COMPOSITE_RECIPE_TARGETS := install-incremental
+
+COMPOSITE_INSTALL_TARGETS = $(sort $(COMPOSITE_RECIPE_TARGETS) $(shell awk ' \
+	/^[A-Za-z0-9_.\/-]+[ \t]*:[^=]/ { \
+		line = $$0; sub(/#.*/, "", line); \
+		idx = index(line, ":"); \
+		tgt = substr(line, 1, idx - 1); gsub(/[ \t]/, "", tgt); \
+		deps[tgt] = substr(line, idx + 1); \
+		if (!(tgt in seen)) { seen[tgt] = 1; order[++n] = tgt } \
+	} \
+	END { \
+		for (pass = 1; pass <= 5; pass++) { \
+			for (i = 1; i <= n; i++) { \
+				t = order[i]; c = split(deps[t], p, /[ \t]+/); b = 0; inst = 0; \
+				for (j = 1; j <= c; j++) { \
+					if (p[j] ~ /^(build|up)/) b = 1; \
+					if (p[j] ~ /^install-laravel/) inst = 1; \
+					if (p[j] in comp) { b = 1; inst = 1 } \
+				} \
+				if (b && inst) comp[t] = 1; \
+			} \
+		} \
+		for (t in comp) print t; \
+	}' $(firstword $(MAKEFILE_LIST))))
+
+INSTALL_GOALS = $(filter $(INSTALL_ENTRYPOINTS) $(COMPOSITE_INSTALL_TARGETS),$(MAKECMDGOALS))
+
+ifneq ($(strip $(INSTALL_GOALS)),)
+
+# ⛔ `DRY_RUN` EST VALIDÉE PAR COMPARAISON LITTÉRALE, PAS PAR `$(filter)`.
+# 🔴 `$(filter $(V),true false)` traite `%` comme un JOKER : `DRY_RUN=%` passait
+# la validation, puis n'était égal ni à `true` ni à `false` — donc installation
+# RÉELLE, en silence, sous un drapeau que l'opérateur croyait posé. `ifeq` est
+# une égalité de chaînes, sans motif.
+# Et sans validation du tout, `DRY_RUN=1`, `yes` ou `TRUE` faisaient exactement
+# la même chose : le pire mode de défaillance possible pour ce drapeau —
+# silencieux, et dans le sens destructeur.
+ifeq ($(DRY_RUN_VALUE),true)
+else ifeq ($(DRY_RUN_VALUE),false)
+else ifeq ($(DRY_RUN_VALUE),)
+else
+$(error DRY_RUN=« $(DRY_RUN) » invalide sur « $(INSTALL_GOALS) » — seules « true » et « false » sont acceptées. Une valeur comme 1, yes, TRUE ou % serait interprétée comme « pas de simulation » et lancerait une INSTALLATION RÉELLE en silence.)
+endif
+
+# ⛔ `RESUME_FROM` EST VALIDÉE CONTRE LA LISTE RÉELLE DES MODULES, LUE SUR DISQUE.
+# Trois raisons, et aucune n'est cosmétique :
+#   • la valeur est interpolée dans `docker exec … bash -c "… install.sh …"`,
+#     donc dans une chaîne passée à un shell : n'accepter qu'un identifiant
+#     connu ferme la question du quoting plutôt que de la déplacer ;
+#   • une liste RÉÉCRITE ici en dur divergerait d'`INSTALL_MODULES` au premier
+#     module ajouté ou renommé, sans que rien ne rougisse. Elle est donc
+#     EXTRAITE de `scripts/install.sh`, comme `ShellProbe::installModules()` le
+#     fait côté tests ;
+#   • l'appartenance est testée par `findstring` sur une liste DÉLIMITÉE, pas
+#     par `$(filter)` : là encore, `RESUME_FROM=%` passait le filtre.
+# ⚠️ Affectation RÉCURSIVE (`=`) : le `sed` ne tourne que si la valeur est posée.
+INSTALL_MODULE_IDS = $(shell sed -n '/^readonly INSTALL_MODULES=(/,/^)/p' $(SCRIPT_DIR)/install.sh \
+	| sed -n 's/^[[:space:]]*"\([^":]*\):.*/\1/p')
+
+ifneq ($(RESUME_FROM_VALUE),)
+ifeq ($(strip $(INSTALL_MODULE_IDS)),)
+$(error RESUME_FROM=« $(RESUME_FROM) » ne peut pas être validé : la liste INSTALL_MODULES n'a pas pu être lue dans $(SCRIPT_DIR)/install.sh. Refus plutôt que passage à l'aveugle.)
+endif
+ifeq ($(findstring |$(RESUME_FROM_VALUE)|,|$(subst $(SPACE),|,$(INSTALL_MODULE_IDS))|),)
+$(error RESUME_FROM=« $(RESUME_FROM) » n'est pas un module connu. Modules valides : $(INSTALL_MODULE_IDS))
+endif
+ifneq ($(filter install-laravel-prod install-prod install-prod-fast,$(MAKECMDGOALS)),)
+$(error RESUME_FROM n'a pas de sens sur « $(filter install-laravel-prod install-prod install-prod-fast,$(MAKECMDGOALS)) » : cette cible enchaîne cinq « install.sh --only <module> », et « --only X --resume-from Y » est contradictoire. Utilisez : make install-laravel RESUME_FROM=$(RESUME_FROM_VALUE))
+endif
+endif
+
+# ⛔ `DRY_RUN=true` SUR UNE CHAÎNE COMPOSITE EST REFUSÉ, BRUYAMMENT ET TÔT.
+# `install-dev-full` et ses cousines ont `build up-dev-full …` en PRÉREQUIS :
+# make les exécute AVANT toute recette, donc un garde posé dans le corps de la
+# règle arriverait après la construction des images et le démarrage des
+# conteneurs — exactement les effets de bord que `--dry-run` promet d'éviter.
+# Le refus est évalué à l'ANALYSE du Makefile : `$(error)` sort non-0 sans avoir
+# rien lancé.
+ifeq ($(DRY_RUN_VALUE),true)
+ifneq ($(filter $(COMPOSITE_INSTALL_TARGETS),$(MAKECMDGOALS)),)
+$(error DRY_RUN=true n'est pas supporté par « $(filter $(COMPOSITE_INSTALL_TARGETS),$(MAKECMDGOALS)) » : cette chaîne BÂTIT des images et DÉMARRE des conteneurs avant d'atteindre install.sh — une simulation n'y simulerait rien. Utilisez plutôt : make install-laravel DRY_RUN=true [RESUME_FROM=<module>])
+endif
+endif
+
+endif
+endif
+
+# Drapeaux relayés à l'invocation NOMINALE d'`install.sh` (`install-laravel`).
+INSTALL_FLAGS :=
+
+ifeq ($(DRY_RUN_VALUE),true)
+INSTALL_FLAGS += --dry-run
+endif
+
+ifneq ($(RESUME_FROM_VALUE),)
+INSTALL_FLAGS += --resume-from $(RESUME_FROM_VALUE)
+endif
+
+# Drapeaux relayés aux invocations `--only` (`install-laravel-prod`).
+# ⛔ JAMAIS `--resume-from` : `--only X --resume-from Y` est une combinaison
+# contradictoire dont la précédence n'est spécifiée nulle part. La cible entière
+# est refusée plus haut ; ce tableau distinct est la ceinture de cette bretelle.
+INSTALL_ONLY_FLAGS :=
+
+ifeq ($(DRY_RUN_VALUE),true)
+INSTALL_ONLY_FLAGS += --dry-run
+endif
+
 # Colors
 GREEN = \033[0;32m
 YELLOW = \033[0;33m
@@ -387,12 +552,33 @@ stop-profile: ## Arrêter un profile spécifique (usage: make stop-profile PROFI
 # =============================================================================
 
 .PHONY: install-laravel
-install-laravel: ## Installer Laravel complet (packages + permissions + MCP Claude Code)
+install-laravel: ## Installer Laravel complet [DRY_RUN=true] [RESUME_FROM=<module>] (packages + permissions + MCP)
 	$(call check_container,$(PHP_CONTAINER_NAME))
 	@echo "$(CYAN)🚀 Installation Laravel 12 + PHP 8.5...$(NC)"
 	@echo ""
 	@echo "$(BLUE)━━━ Étape 1/5 : Installation des packages et configuration ━━━$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh $(INSTALL_FLAGS)"
+# ⛔ SOUS SIMULATION, LA RECETTE S'ARRÊTE ICI — ET C'EST LE MÊME RAISONNEMENT
+# QUE POUR LES CHAÎNES COMPOSITES, MOT POUR MOT (relevé revue 1).
+# `DRY_RUN=true` n'atteignait que l'étape 1/5. Les étapes 2 à 5 s'exécutaient
+# ensuite POUR DE VRAI sur l'application de l'opérateur : `chown -R
+# www-data:www-data /var/www/html`, deux `find -exec chmod 775/664`,
+# `chmod +x artisan`, `chmod -R 775 storage bootstrap/cache`, puis
+# `fix-permissions-host` EN SUDO côté hôte. La porte d'entrée `make` de cette
+# story réintroduisait donc exactement la classe d'effet de bord qu'elle venait
+# de retirer de `validate_arguments`.
+#
+# ⚠️ Le branchement est fait à l'ANALYSE, pas dans le shell de la recette : un
+# `exit 0` dans une ligne de recette ne sort que de CETTE ligne, les suivantes
+# tournent quand même. Sous `DRY_RUN=true`, les lignes ci-dessous n'existent
+# tout simplement pas dans la recette.
+ifeq ($(DRY_RUN_VALUE),true)
+	@echo ""
+	@echo "$(YELLOW)🔍 DRY_RUN=true — étapes 2/5 à 5/5 SAUTÉES (permissions container, fix-permissions-host en sudo, MCP).$(NC)"
+	@echo "$(YELLOW)   Aucune de ces étapes ne simule quoi que ce soit : elles MUTENT l'arbre applicatif.$(NC)"
+	@echo "$(CYAN)   Plan complet : /tmp/laravel-install-*.log, ou capture des DEUX flux : make install-laravel DRY_RUN=true > plan.txt 2>&1$(NC)"
+	@echo ""
+else
 	@echo ""
 	@echo "$(BLUE)━━━ Étape 2/5 : Correction des permissions (dans le container) ━━━$(NC)"
 	@$(DOCKER) exec $(PHP_CONTAINER_NAME) sh -c "\
@@ -425,6 +611,7 @@ install-laravel: ## Installer Laravel complet (packages + permissions + MCP Clau
 	@echo "  $(YELLOW)make npm-dev$(NC)         → Lancer Vite en mode watch"
 	@echo "  $(YELLOW)make quality-all$(NC)     → Vérifier la qualité du code"
 	@echo ""
+endif
 
 # =============================================================================
 # LOCKFILE D'INSTALLATION
@@ -457,15 +644,21 @@ install-lockfile: ## Écrire src/.install-state/lock.yml (empreintes + versions 
 		$(SCRIPT_DIR)/install-lockfile.sh
 
 .PHONY: install-laravel-prod
-install-laravel-prod: ## Installer Laravel PRODUCTION (sans packages dev)
+install-laravel-prod: ## Installer Laravel PRODUCTION [DRY_RUN=true] (sans packages dev)
 	$(call check_container,$(PHP_CONTAINER_NAME))
 	@echo "$(CYAN)📦 Installation Laravel PRODUCTION (packages essentiels uniquement)$(NC)"
 	@echo "$(BLUE)→ Installation packages production$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 10-laravel-core"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 20-database"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 30-packages-prod"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 35-configure-spatie-packages"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 99-finalize"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 10-laravel-core $(INSTALL_ONLY_FLAGS)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 20-database $(INSTALL_ONLY_FLAGS)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 30-packages-prod $(INSTALL_ONLY_FLAGS)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 35-configure-spatie-packages $(INSTALL_ONLY_FLAGS)"
+	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 99-finalize $(INSTALL_ONLY_FLAGS)"
+# ⛔ Même raison qu'`install-laravel` : ce bloc `chown -R` + `find -exec chmod`
+# MUTE l'arbre applicatif, il ne le simule pas.
+ifeq ($(DRY_RUN_VALUE),true)
+	@echo "$(YELLOW)🔍 DRY_RUN=true — correction des permissions SAUTÉE (elle mute l'arbre applicatif).$(NC)"
+	@echo "$(GREEN)✅ Simulation d'installation PRODUCTION terminée — rien n'a été installé$(NC)"
+else
 	@echo "$(BLUE)→ Correction des permissions$(NC)"
 	@$(DOCKER) exec $(PHP_CONTAINER_NAME) sh -c "\
 		chown -R www-data:www-data /var/www/html 2>/dev/null || true && \
@@ -475,6 +668,7 @@ install-laravel-prod: ## Installer Laravel PRODUCTION (sans packages dev)
 		chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true"
 	@echo "$(GREEN)✅ Installation Laravel PRODUCTION terminée$(NC)"
 	@echo "$(YELLOW)⚠️  PHPStan, ECS, Rector, Pest NON installés (environnement production)$(NC)"
+endif
 
 
 .PHONY: test-packages
