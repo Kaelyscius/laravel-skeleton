@@ -9,6 +9,19 @@
 .phpstorm.meta.php
 _ide_helper.php
 _ide_helper_models.php
+# Sentinelles d'idempotence de l'installeur + lock.yml (Story 2.2).
+#
+# ANCRÉ (`/`), jamais un motif par nom : ce fichier documente trois fois la
+# faute inverse. `.install-state` non ancré avalerait n'importe quel répertoire
+# de ce nom à n'importe quelle profondeur, y compris un futur répertoire de
+# fixtures — et un fichier qu'on croit suivi mais qui ne l'est pas ne rougit
+# jamais.
+#
+# Ce contenu décrit UNE installation sur UNE machine (versions relevées dans
+# les conteneurs, horodatages, empreinte locale de composer.lock) : le versionner
+# créerait une seconde source de vérité, capable de diverger de composer.lock
+# sans qu'aucun test ne le voie.
+/.install-state
 /.fleet
 /.idea
 /.nova
