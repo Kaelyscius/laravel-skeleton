@@ -1,26 +1,39 @@
-# État du projet — 2026-08-09 (branche `main`)
+# État du projet — 2026-08-22 (branche `main`)
 
-> ✅ **Epic 1 terminé — 13/13 `done` le 2026-08-20.** La 1.10a, seule story de niveau **C**, a
-> passé les trois revues prescrites (`/bmad-code-review` passe 2, `/security-review`,
-> `/bmad-review` adversariale). **255 tests · 34 navigateur · ratchet 0/0/0 · PHPStan niveau 10 ·
-> `composer audit` 0 · `npm audit` 0.**
+> ✅ **Story 2.1 `done` — Epic 2 démarré, 1/13.** `main` = **`a076a91`**, poussé, **5 jobs CI verts**
+> (run 32580142920). **289 tests · 34 navigateur · ratchet 0/0/0.**
 >
-> ⚠️ La même faille de confiance aux proxys a dû être corrigée **trois fois** : `*`, puis
-> `REMOTE_ADDR` (qui désigne le CLIENT sous FastCGI), puis le tableau vide (falsy, donc lu comme
-> « jamais configuré », donc joker sur un `Host:` forgé). Défaut final : `TRUST_NOBODY =
-> ['0.0.0.0/32']`. Chaque correctif portait une justification confiante et fausse écrite à côté.
+> 🔴 **La trouvaille tient en une ligne, et elle n'était pas dans la bibliothèque.** `logging.sh`
+> affichait sur **stdout**, donc toute capture `x=$(fonction_qui_journalise)` avalait la bannière et
+> la rendait comme **valeur** : `detect_working_directory` rendait « [WARN] Structure non reconnue »
+> suivi du chemin — un répertoire inexistant, donc non inscriptible, donc pilote à **1**. Dix sites
+> capturent cette fonction. Correctif : `>&2`.
 >
-> **Rétrospective faite le 2026-08-20** → `_bmad-output/implementation-artifacts/epic-1-retro-2026-08-20.md`.
-> Verdict : **`accepted-with-open-items`**, critères déclarés. 15 actions inscrites au sprint status.
+> 🔴 **Le spec affirmait « les tests tournent dans le conteneur ». Faux.** Le job `tests` s'exécute
+> sur `ubuntu-latest` **nu**, et `src/**` était **déjà** en `paths:` : la CI serait partie rouge au
+> premier push, sur deux tests assertant `exit 0` sans condition. La CI a **tranché** : les 34 tests
+> ont tourné là-bas, dont « rend 0 **HORS conteneur** ». L'inconnue est levée, pas contournée.
 >
-> ⚠️ **FR-Scaff-6 (Pennant) n'a jamais été construit** et Epic 1 le comptait comme couvert : les FR
-> déclarés se lisent **9 sur 10**. Reporté en W13 vers Epic 9. Et **cinq garde-fous ont été prouvés
-> incapables de rougir** (mutation appliquée, pas déduite) — c'est une dette de *détection*, pas de
-> fonctionnement : le comportement livré est correct.
+> ⚖️ **Le `Never: toucher common.sh` n'a PAS eu à être levé** alors qu'Alex l'avait autorisé : le
+> recensement a montré la cause **en amont**, dans `logging.sh`, que le `Never` ne nomme pas.
+> `common.sh` (892 lignes, 15 consommateurs) reste intouché. *Une autorisation large n'oblige pas à
+> s'en servir.*
 >
-> **Prochaine étape : Epic 2** (`2-1-refactor-scripts-lib-common-sh`). Fenêtre à surveiller : A4,
-> le scan de couplage aveugle aux FQCN, doit être refait **avant Epic 4** — le premier epic à
-> écrire du code métier dans deux modules.
+> 🔴 **20ᵉ garde-fou silencieux, dans la story qui en pose un.** Le commentaire de `runtime.sh`
+> affirmait que le `readonly` de la sentinelle rendait la garde d'inclusion vérifiable, « mutation
+> vue rouge ». Mesuré : le retirer laisse **34 verts**. C'est le bloc `if` qui garde. La mutation
+> annoncée rouge ne l'avait jamais été — trouvée par un relecteur qui l'a **rejouée** au lieu de lire
+> la phrase.
+>
+> **Prochaine étape : story 2.2** (`2-2-idempotent-install-with-sentinel-lockfile`) — c'est elle qui
+> donne un lecteur à `ensure_idempotent`, livrée sans consommateur de production (W23).
+>
+> ⚠️ **10 reports ouverts, W14 à W23.** Les plus mordants : **W19** (l'inventaire traverse 1179
+> entrées de `_bmad/` et `.claude/` — cause probable de l'instabilité W16, qu'on avait attribuée à
+> Laravel), **W22** (le défaut de double-`source` reste vivant dans les 4 autres libs), **W17/W23**
+> (3 primitives sur 5 sans appelant, et 4 `retry` maison subsistent dans `scripts/lib/`).
+>
+> ⚠️ **Fenêtre inchangée : A4**, le scan de couplage aveugle aux FQCN, à refaire **avant Epic 4**.
 
 > Point d'entrée de reprise. **Un seul fichier, écrasé à chaque session, jamais accumulé.**
 > Il n'a aucune autorité : il pointe vers `epics.md` et `sprint-status.yaml`, jamais l'inverse.
