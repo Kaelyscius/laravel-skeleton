@@ -1,6 +1,54 @@
 # État du projet — 2026-08-22 (branche `main`)
 
-> ✅ **Story 2.1 `done` — Epic 2 démarré, 1/13.** `main` = **`a076a91`**, poussé, **5 jobs CI verts**
+> ✅ **Story 2.2 `done` — Epic 2 à 2/13.** `main` = **`eb397f4`**, poussé, **5 jobs CI verts**
+> (run 32593920247). **333 tests · ratchet 0/0/0 · `composer audit` 0 · `npm audit` 0.**
+> `ensure_idempotent`, livrée testée par la 2.1 **sans aucun appelant**, a enfin son lecteur de
+> production : l'orchestrateur source `runtime.sh` et enveloppe chaque module au grain module.
+> La reprise ne se tape plus (`--resume-from`), elle se **déduit de l'état sur disque**.
+>
+> 🔴 **Le défaut de tête n'était pas dans le code — il était dans une FIXTURE.** La racine d'état
+> `src/.install-state/` vivait dans le répertoire que `clean_target_directory` efface : sur le chemin
+> **nominal** d'un fork-streamer, après les modules 00 et 05, les sentinelles et l'horodatage étaient
+> détruits, **code retour 0**, et `make install-dev-full` échouait ensuite à sa dernière étape sur une
+> install réussie. **25 mutations ne l'avaient pas vu** : aucune fixture ne posait `.install-state/`
+> dans la cible, et la ligne de matrice « cible vraiment vide » décrivait un état qui **n'existe
+> jamais en production** après le module 00.
+>
+> 🔴🔴 **ET IL A ÉTÉ CORRIGÉ FAUX DEUX FOIS.** `-prune` est **inopérant sous `-depth`**, que `-delete`
+> implique. Son remplaçant `-not -path` prend un **MOTIF GLOB** : mesuré, un `[` dans le chemin du
+> dépôt (`pro[1]jet/src`) faisait repartir la protection à zéro — espaces et `?` passaient, les
+> crochets non. C'est le **même mécanisme, en sens inverse**, que le `grep` appliquant une regex à
+> `projet[1]_node` corrigé dans le lockfile à la passe précédente. **Un moteur de motif là où un
+> littéral était voulu, deux fois dans la même story.** La parade finale n'en emploie **aucun** :
+> comparaison littérale de basenames, `rm -rf --` un par un, vérifiée sur six chemins piégés.
+>
+> ⚖️ **Séparation imposée par la mesure, pas par un goût :** sentinelles côté **conteneur**, lockfile
+> côté **hôte**. La racine du dépôt est montée `ro` (`/proc/mounts`, et ⚠️ `test -w` y rend **VRAI** —
+> il ment) ; le conteneur php n'a **ni CLI docker ni socket**, donc il ne peut pas lire la version du
+> conteneur node — la seule qui ait produit `node_modules/`. Et `npm-install` tourne **après**
+> `install-laravel` : un lockfile écrit en fin d'`install.sh` décrirait un `node_modules/` inexistant.
+>
+> 🔬 **Trois garde-fous NEUFS étaient silencieux**, chacun vu rouge après correction : retirer
+> `export INSTALL_FORCE`, retirer le write-once de `started_at`, ou dévier le défaut de racine d'état
+> du lockfile laissaient chacun **19/19 vert**. Et le test « racine d'état inécrivable » avait **3 de
+> ses 4 assertions satisfaites par un AUTRE chemin de code** — un `log_warn` de métrologie déclaré
+> non fatal, pas le refus qu'il nomme.
+>
+> ⚠️ **Aucune install complète n'a jamais été jouée.** Le module 10 est éprouvé au grain fonction,
+> l'orchestrateur sourcé avec `execute_module` remplacé par un compteur. La preuve de bout en bout
+> appartient à la **story 2.4** (Bats). Les autres modules non idempotents (seeders rejoués en
+> `20-database.sh:319`, configs qualité écrasées en `50-quality-tools.sh:359`) restent **hors
+> périmètre**, par arbitrage écrit.
+>
+> 🩺 **Piège d'environnement relevé ce jour :** `git fetch`/`push` échouaient en `Permission denied
+> (publickey)` — aucun agent SSH chargé — et la référence locale `origin/main` était **périmée de
+> trois commits**. `gh` (jeton, scopes `repo`+`workflow`) fonctionnait. C'est le piège qui avait
+> laissé `origin/main` bloqué à la Story 1.1 pendant sept stories `done`. Remède :
+> `eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519`, ou `gh auth setup-git`.
+
+---
+
+> ✅ **Story 2.1 `done`.** `main` = **`a076a91`**, poussé, **5 jobs CI verts**
 > (run 32580142920). **289 tests · 34 navigateur · ratchet 0/0/0.**
 >
 > 🔴 **La trouvaille tient en une ligne, et elle n'était pas dans la bibliothèque.** `logging.sh`
