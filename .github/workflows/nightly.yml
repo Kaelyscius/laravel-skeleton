@@ -1,0 +1,315 @@
+name: Nightly E2E Install
+
+# =============================================================================
+# LE 4ᵉ BLOQUANT PROD — INSTALLATION RÉELLE, TOUTES LES NUITS (Story 2.4)
+# =============================================================================
+#
+# 🔴 CE QU'IL CORRIGE. Les stories 2.1, 2.2 et 2.3 ont TOUTES été mergées avec la
+# même réserve écrite : « aucune install complète n'a jamais été jouée ». Ce
+# workflow la lève : clone neuf, `make install-dev-full`, et un `/health` qui
+# SAIT rougir — la story 2.4 lui a d'abord donné de vraies sondes, parce qu'un
+# nightly bloquant asserté sur un endpoint rendant `200` en toute circonstance
+# n'aurait jamais pu échouer.
+#
+# ⛔ IL EST BLOQUANT, ET LE JOB `Nightly Summary` LE REND VRAI. Un job en échec
+# dont personne ne lit le résultat n'est pas un gate ; le résumé échoue
+# explicitement, comme le fait `ci.yml`.
+#
+# ⚖️ ÉCHEC D'INFRASTRUCTURE ≠ ÉCHEC D'INSTALLEUR. Un nightly qui rougit pour le
+# réseau du runner est désarmé en trois semaines. `tests/bats/lib/e2e.bash`
+# écrit un MARQUEUR quand la cause est une panne d'infrastructure, et l'étape
+# d'étiquetage ci-dessous le relit. Le run reste ROUGE dans les deux cas —
+# seule l'étiquette change, et c'est elle qui dit s'il faut réveiller quelqu'un
+# ou relancer.
+#
+# ⚠️ ACTIONS ÉPINGLÉES PAR SHA (même raison que `ci.yml` : un tag est un
+# pointeur mutable chez un tiers, exécuté avec le GITHUB_TOKEN du dépôt).
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# 🧪 COMMENT PROUVER QUE CE NIGHTLY PEUT ROUGIR
+#
+#   Actions → Nightly E2E Install → Run workflow → mutate_module = 20-database
+#
+# Le module est muté DANS LE CLONE (jamais dans le dépôt) par un `exit 42`
+# injecté en tête, l'installation échoue, et le rapport NOMME le module fautif.
+# Un run ainsi lancé DOIT être rouge : un run vert avec `mutate_module` posé
+# signifierait que ce workflow ne mesure rien.
+# =============================================================================
+
+on:
+  schedule:
+    # 03:17 UTC — décalé de l'heure ronde : les créneaux à :00 sont les plus
+    # chargés chez GitHub et les runs planifiés y sont retardés, voire sautés.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      mutate_module:
+        description: "Muter un module d'installation pour vérifier que ce nightly sait rougir (ex. 20-database). Laisser vide pour un run normal."
+        required: false
+        default: ''
+      window_limit_seconds:
+        description: "Plafond de la fenêtre d'installation lue dans le lockfile, en secondes (défaut : 900 = 15 min)."
+        required: false
+        default: '900'
+
+permissions:
+  contents: read
+
+# ⛔ UN SEUL LITTÉRAL POUR LE NOM DE PROJET COMPOSE (revue 2). Il était écrit
+# DEUX fois — au lancement du E2E et dans le filtre de nettoyage : changer l'un
+# sans l'autre laissait le nettoyage ne matcher plus rien, silencieusement.
+env:
+  E2E_PROJECT: e2e-install
+
+concurrency:
+  # Deux installations simultanées se disputeraient les ports 80/443 du runner
+  # si elles atterrissaient sur la même machine, et surtout : rien ne justifie
+  # d'en faire tourner deux.
+  group: nightly-e2e-install
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Install E2E (clone neuf · make install-dev-full · /health)
+    runs-on: ubuntu-latest
+    # La construction des images sans cache domine le temps de ce job ; la
+    # FENÊTRE D'INSTALLATION mesurée, elle, exclut ce temps (elle se lit dans
+    # le lockfile, entre `started_at` et `finished_at`).
+    timeout-minutes: 90
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # ⛔ HISTORIQUE COMPLET, ET CE N'EST PAS DU CONFORT : le test fait un
+          # `git clone` LOCAL de ce dépôt. Cloner depuis un dépôt superficiel
+          # est un cas particulier que git traite différemment ; on ne fait pas
+          # reposer un gate bloquant sur ce détail.
+          fetch-depth: 0
+
+      - name: 🔎 Environnement du runner (tracé avant tout verdict)
+        run: |
+          echo "docker: $(docker --version)"
+          echo "compose (plugin): $(docker compose version 2>/dev/null || echo 'absent')"
+          echo "docker-compose (v1): $(docker-compose --version 2>/dev/null || echo 'absent')"
+          echo "make: $(make --version | head -n 1)"
+          df -h / | tail -n 1
+
+      # ⛔ LES ENTRÉES SONT VALIDÉES AVANT D'ÊTRE UTILISÉES, ET DANS `env:`.
+      # 🔴 Deux défauts relevés en revue 1 : `window_limit_seconds` était
+      # interpolé DIRECTEMENT dans un `run:` (`${{ … }}`), donc injectable dans
+      # le shell du runner — alors que `mutate_module` passait correctement par
+      # `env:` ; et il n'était pas validé, si bien qu'une valeur non numérique
+      # produisait un « integer expression expected » ÉTIQUETÉ INSTALLEUR.
+      - name: 🔒 Valider les entrées du déclenchement manuel
+        env:
+          WINDOW_LIMIT: ${{ github.event.inputs.window_limit_seconds }}
+          MUTATE_MODULE: ${{ github.event.inputs.mutate_module }}
+        run: |
+          mkdir -p "${{ runner.temp }}/e2e/report"
+
+          fail() {
+            echo "$1" | tee "${{ runner.temp }}/e2e/report/INPUT_FAILURE" >&2
+            exit 1
+          }
+
+          if [ -n "$WINDOW_LIMIT" ]; then
+            case "$WINDOW_LIMIT" in
+              ''|*[!0-9]*) fail "window_limit_seconds=« $WINDOW_LIMIT » n'est pas un entier de secondes." ;;
+            esac
+            [ "$WINDOW_LIMIT" -gt 0 ] || fail "window_limit_seconds doit être strictement positif."
+          fi
+
+          if [ -n "$MUTATE_MODULE" ]; then
+            case "$MUTATE_MODULE" in
+              *[!a-z0-9-]*) fail "mutate_module=« $MUTATE_MODULE » : seuls [a-z0-9-] sont acceptés. La liste blanche réelle est appliquée par tests/bats/install.bats." ;;
+            esac
+            echo "⚠️ MUTATION DEMANDÉE sur « $MUTATE_MODULE » — ce run DOIT être rouge." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 🦇 Installation E2E (Bats)
+        env:
+          # Répertoire de travail FIXE hors du dépôt : les artefacts doivent
+          # être ramassables même quand le test échoue avant la fin.
+          E2E_WORKDIR: ${{ runner.temp }}/e2e
+          E2E_REPORT_DIR: ${{ runner.temp }}/e2e/report
+          E2E_MUTATE_MODULE: ${{ github.event.inputs.mutate_module }}
+          E2E_WINDOW_LIMIT_SECONDS: ${{ github.event.inputs.window_limit_seconds || '900' }}
+        run: |
+          mkdir -p "$E2E_REPORT_DIR"
+          make test-bats-e2e
+
+      # ⚖️ L'ÉTIQUETTE, PAS L'ABSOLUTION. Cette étape ne rattrape aucun échec :
+      # elle dit seulement de quoi il s'agit, pour que personne ne parte
+      # débugger l'installeur quand c'est le registre qui était en panne.
+      - name: 🏷️ Étiqueter la cause de l'échec
+        if: failure()
+        run: |
+          marker="${{ runner.temp }}/e2e/report/INFRASTRUCTURE_FAILURE"
+          input_marker="${{ runner.temp }}/e2e/report/INPUT_FAILURE"
+
+          {
+            echo "## 🌙 Nightly E2E — échec"
+            echo ""
+            if [ -f "$input_marker" ]; then
+              echo "### 🧾 Cause : **ENTRÉE INVALIDE** (paramètre du déclenchement manuel)"
+              echo ""
+              echo "Ni l'installeur ni l'infrastructure ne sont en cause."
+              echo ""
+              echo '```'
+              cat "$input_marker"
+              echo '```'
+            elif [ -f "$marker" ]; then
+              echo "### 🏗️ Cause : **INFRASTRUCTURE** (runner, réseau, registre)"
+              echo ""
+              echo "Ce n'est **pas** un défaut de l'installeur. Relancer le workflow est la bonne action."
+              echo ""
+              echo '```'
+              cat "$marker"
+              echo '```'
+            else
+              echo "### ❌ Cause : **INSTALLEUR**"
+              echo ""
+              echo "Aucune signature d'infrastructure dans le journal. Module fautif, s'il est nommé :"
+              echo ""
+              echo '```'
+              grep -F "Échec du module" "${{ runner.temp }}/e2e/report/install.log" \
+                "${{ runner.temp }}/e2e/report/install-container.log" 2>/dev/null | head -n 20 \
+                || echo "(aucune ligne « Échec du module » — voir les artefacts)"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -f "$input_marker" ]; then
+            echo "::error title=Nightly · ENTRÉE::Paramètre de déclenchement invalide."
+          elif [ -f "$marker" ]; then
+            echo "::error title=Nightly · INFRASTRUCTURE::Échec imputé à l'infrastructure du runner, pas à l'installeur."
+          else
+            echo "::error title=Nightly · INSTALLEUR::Échec imputé à l'installeur."
+          fi
+
+      - name: 📈 Fenêtre d'installation mesurée
+        if: always()
+        env:
+          # ⛔ PAR `env:`, JAMAIS PAR INTERPOLATION DANS LE CORPS (revue 2).
+          # Ce step était le TROISIÈME site, corrigé sur deux — et il tourne en
+          # `if: always()`, donc même quand la validation d'entrée a déjà
+          # échoué : le seul endroit où une valeur non validée atteignait encore
+          # un shell. Gardé par `src/tests/Unit/WorkflowInputSafetyTest.php`.
+          WINDOW_LIMIT: ${{ github.event.inputs.window_limit_seconds || '900' }}
+        run: |
+          metrics="${{ runner.temp }}/e2e/report/metrics.txt"
+
+          if [ -f "$metrics" ]; then
+            {
+              echo "## ⏱️ Fenêtre d'installation (lockfile \`started_at\` → \`finished_at\`)"
+              echo ""
+              echo '```'
+              cat "$metrics"
+              echo '```'
+              echo ""
+              echo "Plafond appliqué : ${WINDOW_LIMIT} s."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ Aucune fenêtre mesurée : l'installation n'a pas atteint l'écriture du lockfile." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 📤 Journaux d'installation (artefact)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-install-logs
+          path: ${{ runner.temp }}/e2e/report
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Le nettoyage ne décide d'aucun verdict — d'où le `|| true` assumé.
+      # ⛔ FILTRE PAR LABEL, PAS PAR SOUS-CHAÎNE DE NOM (revue 1).
+      # `--filter name=e2e-install` matche par SOUS-CHAÎNE : un conteneur
+      # étranger nommé « mon-e2e-install-perso » aurait été supprimé. C'est
+      # exactement le piège déjà consigné pour `POSTGRES_CONTAINER` dans le
+      # Makefile. `com.docker.compose.project` est posé par compose lui-même et
+      # vaut EXACTEMENT le nom de projet.
+      - name: 🧹 Arrêt de la pile E2E
+        if: always()
+        run: |
+          docker ps -aq --filter "label=com.docker.compose.project=$E2E_PROJECT" \
+            | xargs -r docker rm -f || true
+          docker volume ls -q --filter "label=com.docker.compose.project=$E2E_PROJECT" \
+            | xargs -r docker volume rm -f || true
+          docker network ls -q --filter "label=com.docker.compose.project=$E2E_PROJECT" \
+            | xargs -r docker network rm || true
+
+  summary:
+    name: Nightly Summary
+    runs-on: ubuntu-latest
+    needs: [install]
+    if: always()
+
+    steps:
+      - name: 📋 Résumé
+        run: |
+          echo "## 🌙 Nightly E2E Install" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Résultat |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Install E2E | ${{ needs.install.result }} |" >> $GITHUB_STEP_SUMMARY
+
+      # ⛔ C'EST CETTE ÉTAPE QUI REND LE NIGHTLY BLOQUANT. Sans elle, le
+      # workflow porterait un job rouge et un verdict global ambigu.
+      # ⛔ C'EST CETTE ÉTAPE QUI REND LE NIGHTLY BLOQUANT, ET LA SUIVANTE QUI LE
+      # REND LU. Un job rouge que personne ne regarde n'est pas un gate :
+      # GitHub notifie l'auteur du workflow planifié par courriel, et l'ISSUE
+      # ci-dessous rend l'échec visible dans le dépôt lui-même — y compris pour
+      # quelqu'un qui n'a pas activé les notifications.
+      - name: ❌ Échec si l'installation E2E a échoué
+        if: needs.install.result != 'success'
+        run: exit 1
+
+  # ===========================================================================
+  # ALERTE — un nightly rouge ouvre (ou rouvre) une issue
+  # ===========================================================================
+  alert:
+    name: Nightly Alert
+    runs-on: ubuntu-latest
+    needs: [install]
+    if: always() && needs.install.result != 'success' && github.event_name == 'schedule'
+
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: 🚨 Ouvrir ou mettre à jour l'issue de nightly rouge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+
+          titre="🌙 Nightly E2E rouge"
+
+          corps="Le nightly E2E d'installation a échoué.
+
+          Run : $RUN_URL
+
+          L'étiquette (INFRASTRUCTURE / INSTALLEUR / ENTRÉE) figure dans le résumé du job."
+
+          # ⛔ LE LABEL EST CRÉÉ AVANT D'ÊTRE UTILISÉ (revue 2). S'il n'existe
+          # pas, `gh issue create --label nightly` échoue, le repli crée une
+          # issue SANS label, et la recherche filtrée ne la retrouve jamais :
+          # une issue neuve chaque nuit, indéfiniment.
+          gh label create nightly --color B60205 --description "Nightly E2E d'installation" 2>/dev/null || true
+
+          # 🔴 `// empty` ET NON `.[0].number` NU (revue 2). Sur un ensemble
+          # vide, `--jq` imprime le LITTÉRAL « null » : `[ -n "null" ]` est
+          # VRAI, donc `gh issue comment null` échouait — sous `bash -e`, le job
+          # mourait à son PREMIER appel et l'issue n'était jamais créée. C'est
+          # le motif que `ci.yml` évite déjà pour cette raison exacte.
+          existante="$(gh issue list --state open --label nightly --search "$titre" --json number --jq '.[0].number // empty' || echo "")"
+
+          if [ -n "$existante" ]; then
+            gh issue comment "$existante" --body "$corps"
+          else
+            gh issue create --title "$titre" --label nightly --body "$corps"
+          fi

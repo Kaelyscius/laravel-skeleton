@@ -727,7 +727,10 @@ show_laravel_info() {
     log_info "🗄️ Database: $db_connection @ $db_host"
     
     # Cache et sessions
-    local cache_driver=$(grep "^CACHE_DRIVER=" .env 2>/dev/null | cut -d= -f2 || echo "file")
+    # ⚠️ CACHE_STORE : la clé lue par Laravel 11+ (`config/cache.php:17`).
+    # Lire `CACHE_DRIVER` faisait afficher « file » sur une application qui
+    # utilisait `database` — un diagnostic faux, donc pire qu'aucun.
+    local cache_driver=$(grep "^CACHE_STORE=" .env 2>/dev/null | cut -d= -f2 || echo "database")
     local session_driver=$(grep "^SESSION_DRIVER=" .env 2>/dev/null | cut -d= -f2 || echo "file")
     log_info "💾 Cache: $cache_driver | Sessions: $session_driver"
     

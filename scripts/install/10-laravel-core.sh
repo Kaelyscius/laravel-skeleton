@@ -1459,15 +1459,62 @@ patch_fresh_laravel_skeleton() {
 append_healthcheck_route() {
     cat >> routes/web.php << 'EOF'
 
-// Route de healthcheck pour Docker
+/*
+ * Route de santé — REPLI MINIMAL écrit par l'installeur.
+ *
+ * ⚠️ CE N'EST PAS LA ROUTE DU DÉPÔT. Celle-ci n'est écrite que si
+ * `routes/web.php` ne contient pas déjà `/health` — donc JAMAIS sur un clone,
+ * où la route à trois sondes (base, cache, file) est versionnée. Ce repli ne
+ * sert qu'au squelette recréé de zéro.
+ *
+ * ⛔ ELLE NE PEUT PAS APPELER `Spatie\Health` NI `App\HealthChecks\*` : ce
+ * module (10-laravel-core) tourne AVANT `35-configure-spatie-packages`, donc
+ * avant que le paquet n'existe. Une route qui les référencerait rendrait FATAL
+ * tout `php artisan` des modules suivants.
+ *
+ * 🔴 MAIS ELLE NE REND PAS `200` EN TOUTE CIRCONSTANCE — c'était le cas
+ * jusqu'au 2026-08-23, et c'est précisément le défaut que la story 2.4 existe
+ * pour supprimer : un endpoint de santé qui répond `ok` la base à terre. Elle
+ * fait donc le seul aller-retour possible sans dépendance : une requête sur la
+ * connexion par défaut, et `503` si elle échoue.
+ *
+ * Ce qu'elle atteste : la base répond. Ce qu'elle n'atteste pas : le cache, la
+ * file, ni quoi que ce soit du domaine.
+ */
 Route::get('/health', function () {
+    /*
+     * ⛔ `\Throwable` ET NON `PDOException` — LE MODULE 10 TOURNE AVANT LE 20.
+     *
+     * Entre les deux, la connexion n'est pas encore configurée : `DB` ne lève
+     * alors pas une erreur de connexion mais une `InvalidArgumentException`
+     * (« Database connection [x] not configured »), voire une erreur de pilote.
+     * Attraper la seule `PDOException` laisserait remonter un **500** — un
+     * « bug applicatif » — là où la réponse juste est **503**, « dépendance pas
+     * encore là ». Relevé en revue 2.
+     */
+    try {
+        \Illuminate\Support\Facades\DB::connection()->select('SELECT 1');
+    } catch (\Throwable $e) {
+        // Jamais le message : il porte le DSN.
+        return response()->json([
+            'status' => 'error',
+            'timestamp' => now()->toISOString(),
+            'service' => 'laravel',
+            'app' => config('app.name', 'Laravel'),
+            'attests' => 'fallback probe — database only',
+            'checks' => ['database' => ['status' => 'error']],
+        ], 503);
+    }
+
     return response()->json([
         'status' => 'ok',
         'timestamp' => now()->toISOString(),
         'service' => 'laravel',
-        'app' => config('app.name', 'Laravel')
+        'app' => config('app.name', 'Laravel'),
+        'attests' => 'fallback probe — database only',
+        'checks' => ['database' => ['status' => 'ok']],
     ]);
-});
+})->withoutMiddleware('web');
 EOF
 }
 

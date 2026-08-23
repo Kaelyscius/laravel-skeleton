@@ -53,6 +53,11 @@ GUARDED=(
     "src/resources"
     "src/routes"
     "src/tests"
+    # Story 2.4 : les tests shell Bats du E2E d'installation. Ils vivent hors de
+    # `src/` (ils pilotent Docker et l'hôte, que le conteneur php ne voit pas) et
+    # échappaient donc à ce garde-fou — un `.gitignore` trop large les aurait
+    # retirés d'un clone sans que rien ne le dise.
+    "tests"
 )
 
 # Exceptions légitimes — chemins réellement destinés à rester hors du dépôt.

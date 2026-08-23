@@ -456,7 +456,12 @@ EOF
 # 🔍 QUEUES & CACHE & SESSION (Redis)
 # ===========================================" >> "$temp_env"
     update_env_var "$temp_env" "QUEUE_CONNECTION" "redis"
-    update_env_var "$temp_env" "CACHE_DRIVER" "redis"
+    # ⚠️ CACHE_STORE, PAS CACHE_DRIVER : Laravel 11+ lit `CACHE_STORE`
+    # (`src/config/cache.php:17`). Écrire l'ancienne clé produisait un `.env`
+    # qui ANNONÇAIT Redis pendant que l'application utilisait `database` —
+    # mesuré le 2026-08-23 via la sonde cache de `/health`, qui restait verte
+    # avec Redis arrêté.
+    update_env_var "$temp_env" "CACHE_STORE" "redis"
     update_env_var "$temp_env" "SESSION_DRIVER" "redis"
     update_env_var "$temp_env" "SESSION_LIFETIME" "120"
 

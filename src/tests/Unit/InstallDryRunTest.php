@@ -1360,6 +1360,13 @@ it('une route /health impossible à créer FAIT ÉCHOUER l’installation', func
         echo "IDEM_STATUS=$statut"
         echo "OCCURRENCES_IDEM=$(grep -c "'/health'" routes/web.php | tr -d ' ')"
 
+        # ── 3) CE QUE LA ROUTE ÉMISE *FAIT*, pas seulement qu'elle existe ────
+        grep -q "SELECT 1" routes/web.php && echo "SONDE=oui" || echo "SONDE=non"
+        grep -q "], 503)" routes/web.php && echo "PEUT_ROUGIR=oui" || echo "PEUT_ROUGIR=non"
+        grep -q "catch (\\\\Throwable" routes/web.php && echo "ATTRAPE_TOUT=oui" || echo "ATTRAPE_TOUT=non"
+        grep -q "getMessage()" routes/web.php && echo "FUITE=oui" || echo "FUITE=non"
+        php -l routes/web.php > /dev/null 2>&1 && echo "PHP_VALIDE=oui" || echo "PHP_VALIDE=non"
+
         rm -rf "$bac"
         BASH
         , [
@@ -1375,6 +1382,33 @@ it('une route /health impossible à créer FAIT ÉCHOUER l’installation', func
     // Idempotent : un second passage n'ajoute pas une seconde route.
     expect($result['output'])->toContain('IDEM_STATUS=0');
     expect($result['output'])->toContain('OCCURRENCES_IDEM=1');
+
+    // 🔴 CE QUE LA ROUTE ÉMISE FAIT — et non le simple fait qu'elle existe.
+    // Relevé en revue 1 (story 2.4) : ce test comptait des occurrences de
+    // « '/health' » pendant que le corps émis rendait `200` EN TOUTE
+    // CIRCONSTANCE. Le seul test qui exécutait ce chemin ne pouvait pas voir
+    // le défaut que toute la story 2.4 existe pour supprimer.
+    //
+    // ⚠️ ET VOICI LA LIMITE, ÉCRITE PLUTÔT QUE LAISSÉE CROIRE (revue 2) : ces
+    // assertions épinglent une FORMULATION (`SELECT 1`, `], 503)`,
+    // `catch (\Throwable`), pas un COMPORTEMENT. La route émise n'est jamais
+    // exécutée par ce test — elle ne peut pas l'être : elle vit dans un
+    // squelette Laravel qui n'existe qu'au moment d'une reconstruction
+    // complète. Un `php -l` prouve qu'elle est analysable, rien de plus.
+    // Le comportement, lui, appartient au E2E Bats. Un renommage de la
+    // requête sonde ferait donc rougir ce test sans qu'aucun défaut existe :
+    // c'est le prix assumé d'un garde sur un gabarit.
+    expect($result['output'])->toContain('SONDE=oui');
+    expect($result['output'])->toContain('PEUT_ROUGIR=oui');
+    // Le module 10 tourne AVANT le 20 : entre les deux, la connexion n'est pas
+    // configurée et `DB` lève autre chose qu'une `PDOException`. Attraper le
+    // seul cas « connexion refusée » rendrait 500 au lieu de 503.
+    expect($result['output'])->toContain('ATTRAPE_TOUT=oui');
+    // 🔒 Le message d'exception porte le DSN : il ne doit jamais être publié.
+    expect($result['output'])->toContain('FUITE=non');
+    // Le heredoc produit du PHP réellement analysable — sinon le squelette
+    // recréé serait cassé au premier `php artisan` du module suivant.
+    expect($result['output'])->toContain('PHP_VALIDE=oui');
 });
 
 it('le rapport d’échec en simulation compte TOUS les modules franchis', function (): void {

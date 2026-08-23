@@ -117,6 +117,44 @@ return [
         'pulse*',
         '_boost*',
         '.well-known*',
+
+        /*
+         * 🔴 `health` AJOUTÉ EN STORY 2.4 (revue 2), ET C'EST UNE MESURE.
+         *
+         * Telescope enregistre chaque requête, chaque requête SQL et chaque
+         * interaction de cache — donc, sur `/health`, il rejoue vers les
+         * dépendances que la route vient de déclarer INJOIGNABLES, hors du
+         * portillon et hors du budget de sonde.
+         *
+         * Mesuré le 2026-08-23, conteneur redis réellement arrêté. D'abord la
+         * CAUSE, par bascule des drapeaux (noyau HTTP dans le conteneur php) :
+         *
+         *   TELESCOPE=on  PULSE=on   handle = 13,77 s
+         *   TELESCOPE=on  PULSE=off  handle = 12,91 s
+         *   TELESCOPE=off PULSE=on   handle =  6,39 s   ← Telescope pèse ~6,5 s
+         *   TELESCOPE=off PULSE=off  handle =  6,39 s   ← plancher : 2 portillons
+         *
+         * Puis l'EFFET de cette exclusion, sur de vraies requêtes HTTP :
+         *
+         *   avant : 13,74 s · 12,86 s        après : 9,59 s · 9,61 s
+         *
+         * ⚠️ ET LA PHRASE HONNÊTE EST CELLE-CI : l'exclusion retire ~4 s, pas
+         * les 6,5 s de la bascule. `ignore_paths` empêche l'ENREGISTREMENT,
+         * mais Telescope boote et ses observateurs restent branchés ; il reste
+         * ~3,2 s au-dessus du plancher, NON LOCALISÉES. C'est moins que les
+         * « ~7,5 s inexpliquées » de la revue 1, ce n'est pas zéro, et le dire
+         * vaut mieux que d'arrondir. Report tenu à jour dans `deferred-work.md`.
+         *
+         * ⚠️ Un harnais CLI (`Request::create`) ne mesure PAS cette exclusion :
+         * il rend 13,77 s même avec `health` dans la liste, parce que la requête
+         * qu'il fabrique n'est pas celle que Telescope consulte au démarrage de
+         * son enregistrement. Seule la mesure HTTP vaut ici.
+         *
+         * ⚖️ Et la sémantique le veut : une sonde de santé qui s'auto-observe
+         * fausse sa propre mesure, et remplit Telescope d'entrées à chaque
+         * sondage d'un superviseur.
+         */
+        'health',
     ],
 
     'ignore_commands' => [],

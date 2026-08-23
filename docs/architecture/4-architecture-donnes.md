@@ -40,7 +40,7 @@ Connexion Laravel :
 ## 4.3 Redis 8.6 — cache, queue, sessions
 
 Single instance, base 0 par défaut. Pas de cluster v1 (YAGNI). 
-- `CACHE_DRIVER=redis`
+- `CACHE_STORE=redis` ⚠️ *(clé corrigée le 2026-08-23 : Laravel 11+ lit `CACHE_STORE`. `CACHE_DRIVER` était lu par personne, et une application qui l'annonçait tournait en réalité sur le pilote `database` — mesuré par la sonde `/health` du cache, restée verte avec Redis arrêté.)*
 - `QUEUE_CONNECTION=redis` (sauf batches → PostgreSQL via Horizon config)
 - `SESSION_DRIVER=redis`
 - `BROADCAST_DRIVER=redis` (si Echo activé en v1.5)

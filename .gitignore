@@ -230,3 +230,5 @@ _bmad/
 
 # Settings locaux Claude Code (DOIT être local-only — unstage avec : git rm --cached .claude/settings.local.json)
 .claude/settings.local.json
+# Outils de test installés localement et épinglés (make test-bats)
+.tools/
