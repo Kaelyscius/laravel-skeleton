@@ -19,7 +19,7 @@
 #   --only MODULE       Exécuter seulement un module spécifique
 #   --resume-from MODULE Reprendre depuis un module spécifique
 #   --force             Ignorer les sentinelles et tout rejouer
-#   --dry-run           Simulation sans exécution réelle
+#   --dry-run           Simulation: aucun effet de bord hors journal
 #
 # Code de sortie:
 #   0: Installation réussie
@@ -40,9 +40,23 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/common.sh"
 # Story 2.2 — `ensure_idempotent` avait zéro appelant de production (report W23).
-# C'est ICI qu'elle en trouve un : les modules tournent en sous-processus
-# (`execute_module`), donc l'`export -f` de runtime.sh ne les atteint pas —
-# l'enveloppement doit se faire dans l'orchestrateur, pas dans les modules.
+# C'est ICI qu'elle en trouve un.
+#
+# 🔴 LA RAISON ÉCRITE ICI JUSQU'AU 2026-08-22 ÉTAIT FAUSSE, ET MESURÉE TELLE.
+# Elle disait : « les modules tournent en sous-processus, donc l'`export -f` de
+# runtime.sh ne les atteint pas ». Sondé — `bash -c 'declare -F
+# ensure_idempotent'` lancé depuis un shell qui a sourcé cette lib rend **oui** :
+# bash exporte les fonctions à ses enfants via `BASH_FUNC_x%%`. La prémisse
+# était donc l'inverse de la réalité, et `run_cmd` (story 2.3) en dépend
+# entièrement : c'est précisément parce que l'export TRAVERSE qu'un module
+# lancé en sous-processus peut router ses commandes par `run_cmd`.
+#
+# ⚖️ LA VRAIE RAISON DE L'ENVELOPPEMENT AU NIVEAU ORCHESTRATEUR EST LE GRAIN.
+# La sentinelle a pour identité le module (`10-laravel-core-done`), et « ce
+# module a-t-il été franchi ? » est une question que seul l'orchestrateur peut
+# poser : lui seul connaît la liste, l'ordre, `--only`, `--resume-from` et
+# `--force`. Un module qui s'auto-enveloppe déciderait de son propre saut sans
+# rien savoir de la séquence.
 source "$SCRIPT_DIR/lib/runtime.sh"
 
 # =============================================================================
@@ -63,6 +77,46 @@ readonly INSTALL_MODULES=(
     "60-nightwatch:Configuration de Nightwatch"
     "99-finalize:Finalisation et optimisation"
 )
+
+# =============================================================================
+# MODULES QUI SAVENT SIMULER
+# =============================================================================
+#
+# Sous `--dry-run`, un module inscrit ici est RÉELLEMENT LANCÉ : c'est lui qui
+# route ses commandes à effet par `run_cmd`, et sa simulation descend donc au
+# grain de la COMMANDE (« [DRY] rm -rf … ») au lieu de s'arrêter au grain du
+# module (« je simulerais 10-laravel-core »). Un module absent de cette liste
+# garde l'annonce-et-saut, qui reste la garantie forte de zéro effet.
+#
+# ⛔ INSCRIRE UN MODULE ICI ENGAGE L'AUDIT DU MODULE ENTIER, pas de ses seules
+# lignes destructrices. Un module inscrit sans audit fait exécuter POUR DE VRAI,
+# sous un drapeau qui promet l'inverse, ce que personne n'a regardé — strictement
+# pire que le dry-run aveugle qu'il remplace. La liste reste donc explicite et
+# courte : c'est elle qui rend l'engagement visible et refusable en revue.
+#
+# 📋 `20-database` et `99-finalize` sont AUDITÉS MAIS NON CONVERTIS (report
+# ouvert dans `_bmad-output/implementation-artifacts/deferred-work.md`, trigger
+# Story 2.4). Tant qu'ils n'y sont pas, leur simulation ne dit rien des
+# migrations ni des caches qu'ils joueraient.
+readonly DRY_RUN_AWARE_MODULES=(
+    "10-laravel-core"
+)
+
+#
+# Le module sait-il simuler ? Comparaison LITTÉRALE de noms, aucun motif.
+#
+module_is_dry_run_aware() {
+    local candidate="$1"
+    local aware
+
+    for aware in "${DRY_RUN_AWARE_MODULES[@]}"; do
+        if [ "$aware" = "$candidate" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
 
 # Variables globales
 SKIP_PREREQUISITES=false
@@ -126,7 +180,10 @@ OPTIONS:
     --only MODULE       Exécuter seulement un module spécifique
     --resume-from MODULE Reprendre l'installation depuis un module
     --force             Ignorer les sentinelles et rejouer tous les modules
-    --dry-run           Simulation sans exécution réelle
+    --dry-run           Simulation: rien n'est installé, aucune sentinelle
+                        écrite. Les modules de DRY_RUN_AWARE_MODULES sont
+                        LANCÉS et annoncent chaque commande à effet en
+                        « [DRY] … » ; les autres sont annoncés puis sautés.
     --list-modules      Lister les modules disponibles
 
 MODULES DISPONIBLES:
@@ -153,6 +210,25 @@ ENVIRONNEMENT:
 FICHIERS:
     Le fichier de log est créé dans /tmp/laravel-install-YYYYMMDD-HHMMSS.log
     Les sentinelles d'idempotence vivent dans <cible>/.install-state/
+
+SIMULATION (--dry-run):
+    Aucune sentinelle n'est écrite ni effacée, aucun horodatage posé, aucun
+    répertoire créé ni re-chmodé, aucune version sondée (php artisan --version
+    booterait l'application). Le rapport final porte le verdict DRY-RUN, jamais
+    EXECUTED. Seul le journal /tmp/laravel-install-*.log est écrit: c'est le
+    canal d'observation de la simulation.
+    Les modules déclarés dry-run aware (voir DRY_RUN_AWARE_MODULES) tournent
+    réellement et routent leurs commandes à effet par run_cmd; les autres sont
+    annoncés puis sautés, et leur contenu n'est PAS décrit.
+
+    ⚠️ LE PLAN EST RÉPARTI SUR LES DEUX FLUX. Les lignes émises par
+    l'orchestrateur partent sur stderr; celles émises par un module *aware*
+    sortent sur stdout, parce que execute_module le lance en "2>&1 | tee".
+    La seule capture COMPLÈTE prend donc les deux:
+        ./install.sh --dry-run > plan.txt 2>&1        # le plan ENTIER
+        ./install.sh --dry-run 2>&1 | tee plan.txt    # idem, à l'écran aussi
+        ./install.sh --dry-run > plan.txt             # INCOMPLET
+        ./install.sh --dry-run 2> plan.txt            # INCOMPLET
 
 IDEMPOTENCE:
     Chaque module franchi pose une sentinelle <module>-done. Une install
@@ -311,7 +387,36 @@ validate_arguments() {
         # Dans un environnement Docker, les permissions sont gérées différemment
         if is_docker_environment; then
             log_debug "Environnement Docker détecté - configuration proactive des permissions"
-            
+
+            # ⛔ EN SIMULATION, LA CIBLE N'EST NI CRÉÉE NI RE-CHMODÉE.
+            # Ce bloc s'exécutait AVANT toute branche `--dry-run` : un
+            # `install.sh --dry-run` posait un `mkdir -p`, un `chown -R` et
+            # jusqu'à un `chmod -R 777` sur la cible — trois effets de bord sous
+            # le drapeau qui promet de n'en avoir aucun. La simulation DIAGNOSTIQUE
+            # désormais, en nommant le chemin, et ne corrige rien.
+            #
+            # ⚠️ `run_cmd` N'EST PAS UTILISÉE ICI, ET C'EST DÉLIBÉRÉ.
+            # `validate_arguments` tourne depuis `parse_arguments`, donc AVANT
+            # `run_installation` — seul site où `INSTALL_DRY_RUN` est dérivé.
+            # Un `run_cmd` posé ici lirait la variable ENCORE ABSENTE et
+            # exécuterait pour de vrai. Le drapeau lu est donc la globale du
+            # processus, `DRY_RUN`, qui est la seule vraie à cet instant.
+            if [ "$DRY_RUN" = true ]; then
+                if [ ! -d "$TARGET_DIR" ]; then
+                    log_warn "🔍 [DRY-RUN] Répertoire cible absent: $TARGET_DIR — non créé."
+                fi
+
+                log_info "[DRY] mkdir -p $TARGET_DIR"
+                log_info "[DRY] chown -R www-data:www-data $TARGET_DIR"
+                log_info "[DRY] chmod -R 755 $TARGET_DIR"
+
+                if [ ! -w "$TARGET_DIR" ]; then
+                    log_warn "🔍 [DRY-RUN] Cible non inscriptible en l'état: $TARGET_DIR — l'installation réelle tenterait de corriger les permissions ; rien n'a été modifié."
+                fi
+
+                return 0
+            fi
+
             # Créer le répertoire s'il n'existe pas
             if [ ! -d "$TARGET_DIR" ]; then
                 log_debug "Création du répertoire cible: $TARGET_DIR"
@@ -365,24 +470,50 @@ execute_module() {
     
     # Vérifier que le module est exécutable
     if [ ! -x "$module_file" ]; then
+        # ⛔ AUCUN `chmod +x` SOUS SIMULATION — LE FICHIER EST VERSIONNÉ.
+        # Ce `chmod` s'exécutait avant toute branche `--dry-run` : une
+        # simulation modifiait le mode d'un fichier suivi par git, donc
+        # `git status --porcelain` ne sortait plus vide. Et le mode d'un module
+        # est une VRAIE condition d'installation : la simulation existe pour la
+        # découvrir avant l'install réelle, pas pour la réparer en douce.
+        if [ "$DRY_RUN" = true ]; then
+            log_error "🔍 [DRY-RUN] Module non exécutable: $module_file (aucun chmod +x appliqué — corrigez le mode avant l'installation réelle)"
+            return 1
+        fi
+
         log_debug "Module non exécutable, correction..."
         chmod +x "$module_file"
     fi
-    
+
     log_step_start "$module_name" "$module_desc"
     local start_time=$(date +%s)
-    
-    # Mode dry-run
-    if [ "$DRY_RUN" = true ]; then
+
+    # ---------------------------------------------------------------
+    # Mode dry-run : annonce-et-saut, SAUF pour un module qui sait simuler
+    # ---------------------------------------------------------------
+    # Un module non *aware* est annoncé puis SAUTÉ : il ne tourne jamais, ce
+    # qui reste la garantie forte de zéro effet. Un module inscrit dans
+    # `DRY_RUN_AWARE_MODULES` est au contraire LANCÉ POUR DE VRAI : il lit
+    # `INSTALL_DRY_RUN` (exporté par `run_installation`) et route ses commandes
+    # à effet par `run_cmd`. C'est ce qui fait descendre la simulation du grain
+    # « module » au grain « commande ».
+    #
+    # ⛔ Le `sleep 1` qui « simulait un temps d'exécution » est retiré : il ne
+    # simulait rien — 11 secondes d'attente pour une mesure fausse.
+    if [ "$DRY_RUN" = true ] && ! module_is_dry_run_aware "$module_name"; then
         log_info "🔍 [DRY-RUN] Simulation du module $module_name"
         log_info "📂 Répertoire cible: $TARGET_DIR"
         log_info "📜 Script: $module_file"
-        sleep 1  # Simuler un temps d'exécution
+        log_info "⏭️ [DRY-RUN] Module NON lancé (pas dans DRY_RUN_AWARE_MODULES)"
         local duration=$(calculate_duration $start_time)
         log_step_end "$module_name" "$duration"
         return 0
     fi
-    
+
+    if [ "$DRY_RUN" = true ]; then
+        log_info "🔍 [DRY-RUN] Module $module_name est DRY-RUN AWARE — lancé pour de vrai, ses commandes à effet sortent en [DRY]"
+    fi
+
     # Exécution réelle du module
     local exit_code=0
     
@@ -408,6 +539,19 @@ run_installation() {
     local skipped_modules=()
     local resume_found=false
 
+    # ⚖️ TROIS CHOSES DIFFÉRENTES SOUS SIMULATION, DONC TROIS COMPTEURS.
+    # `executed_modules` répondait pour les trois, et le rapport final en
+    # déduisait « 11 module(s) joué(s) » — alors qu'aucun n'avait rien joué.
+    #   • `simulated_modules` : module *aware*, RÉELLEMENT lancé, effets routés ;
+    #   • `announced_modules` : module non *aware*, annoncé puis SAUTÉ ;
+    #   • `skipped_modules`   : déjà franchi (sentinelle), commun aux deux modes.
+    local simulated_modules=()
+    local announced_modules=()
+    # 🔴 QUATRIÈME POPULATION, OUBLIÉE PAR LE DÉCOUPAGE : un module écarté par
+    # `--skip-prereq` n'entrait dans AUCUN compteur, et le rapport cessait donc
+    # de rendre compte de toute la liste — un module disparaissait sans trace.
+    local bypassed_modules=()
+
     init_install_state_dir
 
     # ⛔ SEUL ENDROIT OÙ `INSTALL_FORCE` EST DÉRIVÉ, ET IL EST SUR LE CHEMIN
@@ -424,6 +568,16 @@ run_installation() {
     # mode forcé. Dériver ici, à partir de `FORCE`, rend le désaccord
     # impossible plutôt qu'improbable.
     export INSTALL_FORCE="$FORCE"
+
+    # ⛔ MÊME SITE, MÊME RAISON, ET C'EST LE SEUL POUR `INSTALL_DRY_RUN` AUSSI.
+    # `DRY_RUN` est une globale de l'orchestrateur, jamais exportée : sondé le
+    # 2026-08-22, un enfant voit `<absent>`. Un module *aware* tourne en
+    # SOUS-PROCESSUS, et c'est `INSTALL_DRY_RUN` — dérivé ici, une fois, sur le
+    # chemin d'exécution — qui lui dit de router ses commandes par `run_cmd`.
+    # Le dériver ailleurs (dans la branche `--dry-run` de `parse_arguments`,
+    # par exemple) recréerait exactement les DEUX sources de vérité qu'on vient
+    # de supprimer pour `INSTALL_FORCE`.
+    export INSTALL_DRY_RUN="$DRY_RUN"
 
     log_separator "DÉBUT DE L'INSTALLATION"
     log_info "🚀 Installation Laravel - ID: $INSTALLATION_ID"
@@ -471,6 +625,7 @@ run_installation() {
         # Skip des prérequis si demandé
         if [ "$SKIP_PREREQUISITES" = true ] && [ "$module_name" = "00-prerequisites" ]; then
             log_warn "⚠️ Vérification des prérequis ignorée (--skip-prereq)"
+            bypassed_modules+=("$module_name")
             continue
         fi
         
@@ -484,8 +639,14 @@ run_installation() {
         local sentinel
         sentinel="$(sentinel_path_for_module "$module_name")"
 
-        if [ "$FORCE" = true ] && [ "$DRY_RUN" != true ]; then
-            rm -f "$sentinel" 2>/dev/null || true
+        # ⚖️ SOUS `--dry-run --force`, LA SUPPRESSION EST ANNONCÉE, PAS FAITE.
+        # Le plan omettait ces `rm -f` : il décrivait donc une exécution qui
+        # n'était pas celle qu'`install.sh --force` aurait menée. `run_cmd` lit
+        # `INSTALL_DRY_RUN`, déjà exporté au-dessus — même primitive, même
+        # frontière. Le `[ -f ]` évite d'annoncer la suppression d'un fichier
+        # qui n'existe pas (`rm -f` y est déjà un no-op).
+        if [ "$FORCE" = true ] && [ -f "$sentinel" ]; then
+            run_cmd rm -f "$sentinel" || true
         fi
 
         # Relevé AVANT l'appel : `ensure_idempotent` rend 0 aussi bien pour
@@ -497,12 +658,20 @@ run_installation() {
         fi
 
         # ⛔ EN SIMULATION, AUCUNE SENTINELLE N'EST NI ÉCRITE NI EFFACÉE.
-        # `execute_module` rend 0 sans rien faire sous `--dry-run` :
-        # l'envelopper dans `ensure_idempotent` ferait ÉCRIRE la sentinelle
-        # d'un module qui n'a jamais tourné, et l'install réelle suivante le
-        # sauterait. Une simulation qui laisse un effet de bord n'est pas une
-        # simulation — c'est la promesse même du drapeau (Epic 2 : « --dry-run
-        # sans aucun effet de bord, ni fichier, ni conteneur »).
+        # Envelopper `execute_module` dans `ensure_idempotent` ferait ÉCRIRE la
+        # sentinelle d'un module qui n'a rien accompli, et l'install réelle
+        # suivante le sauterait. Une simulation qui laisse un effet de bord
+        # n'est pas une simulation — c'est la promesse même du drapeau (Epic 2 :
+        # « --dry-run sans aucun effet de bord, ni fichier, ni conteneur »).
+        #
+        # ⚖️ L'INVARIANT NE RECULE PAS QUAND LE MODULE EST *AWARE*, ET C'EST LÀ
+        # QU'IL COMPTE LE PLUS. Depuis la story 2.3, `execute_module` LANCE
+        # réellement les modules de `DRY_RUN_AWARE_MODULES` — la phrase d'avant
+        # (« rend 0 sans rien faire ») n'est donc plus vraie et a été retirée
+        # plutôt que laissée à côté d'un code qui la contredit. Un module *aware*
+        # qui va jusqu'au bout de sa simulation n'a rien INSTALLÉ : lui poser sa
+        # sentinelle ferait sauter, à l'install réelle, le seul module dont
+        # l'échec est une perte de données.
         if [ "$DRY_RUN" = true ]; then
             if [ "$already_done" = true ]; then
                 log_info "🔍 [DRY-RUN] $module_name serait SAUTÉ (sentinelle présente)"
@@ -521,12 +690,27 @@ run_installation() {
 
                 if [ "$dry_status" -ne 0 ]; then
                     log_error "Échec du module $module_name (simulation)"
-                    show_error_report "$module_name" "${executed_modules[@]}"
+                    # ⚖️ TOUS LES MODULES FRANCHIS, PAS SEULEMENT LES SIMULÉS.
+                    # Le découpage en trois compteurs avait laissé ce site
+                    # derrière : un seul module étant *aware*, un échec au 11ᵉ
+                    # annonçait « aucun module réussi avant l'échec » alors que
+                    # dix avaient été franchis.
+                    show_error_report "$module_name" \
+                        "${simulated_modules[@]}" "${announced_modules[@]}"
 
                     return "$dry_status"
                 fi
 
-                executed_modules+=("$module_name")
+                # ⛔ NE JAMAIS REVERSER DANS `executed_modules` : c'est ce
+                # tableau que `show_success_report` traduit en « Modules
+                # installés » et en « VERDICT: EXECUTED ». Un module simulé
+                # n'a rien installé, et un module annoncé-puis-sauté n'a même
+                # pas tourné — les confondre était la moitié du mensonge.
+                if module_is_dry_run_aware "$module_name"; then
+                    simulated_modules+=("$module_name")
+                else
+                    announced_modules+=("$module_name")
+                fi
             fi
 
             if [ -n "$ONLY_MODULE" ]; then
@@ -560,8 +744,22 @@ run_installation() {
         fi
     done
 
-    # Rapport de succès
     local duration=$(calculate_duration $start_time)
+
+    # ⛔ UNE SIMULATION NE REND PAS LE RAPPORT D'UNE INSTALLATION.
+    # `show_success_report` imprimait « 🎉 Installation Laravel terminée »,
+    # « 🆕 VERDICT: EXECUTED — 11 module(s) joué(s) », listait les onze modules
+    # sous « Modules installés », puis entrait dans `cd "$TARGET_DIR"` +
+    # `get_laravel_version` — c'est-à-dire `php artisan --version`, qui BOOTE
+    # l'application et écrit dans `storage/logs/` du conteneur. Un rapport
+    # mensonger ET un effet de bord, dans la fonction de clôture d'un drapeau
+    # qui promet ni l'un ni l'autre.
+    if [ "$DRY_RUN" = true ]; then
+        show_simulation_report "$duration"
+        return 0
+    fi
+
+    # Rapport de succès
     show_success_report "$duration" "${executed_modules[@]}"
 
     if [ ${#skipped_modules[@]} -gt 0 ]; then
@@ -647,8 +845,9 @@ show_installation_config() {
     
     if [ "$DRY_RUN" = true ]; then
         log_info "   • Mode simulation: activé"
+        log_info "   • Modules qui savent simuler: ${DRY_RUN_AWARE_MODULES[*]}"
     fi
-    
+
     log_info "🏗️ Modules à exécuter:"
     for module_entry in "${INSTALL_MODULES[@]}"; do
         local module_name="${module_entry%%:*}"
@@ -677,6 +876,81 @@ show_installation_config() {
         
         log_info "   $status $module_name: $module_desc"
     done
+}
+
+#
+# Rapport de clôture d'une SIMULATION.
+#
+# ⚠️ LIT SES TROIS TABLEAUX PAR PORTÉE DYNAMIQUE, et c'est écrit plutôt que
+# subi : `simulated_modules`, `announced_modules` et `skipped_modules` sont des
+# `local` de `run_installation`, donc visibles ici (bash n'a pas de portée
+# lexicale). Les passer en arguments demanderait un protocole de délimiteur
+# pour trois tableaux — plus de code, et une occasion de plus de mentir sur qui
+# est dans quel groupe.
+#
+# ⛔ AUCUN `cd`, AUCUN SONDAGE DE VERSION : `get_laravel_version` lance
+# `php artisan --version`, ce qui boote l'application dans la cible.
+#
+# ⚖️ QUATRE COMPTEURS, PARCE QU'IL Y A QUATRE POPULATIONS. Leur somme doit
+# couvrir toute la liste des modules considérés : un module qui n'entrerait dans
+# aucun disparaîtrait du rapport sans que rien ne le signale.
+#
+# Le verdict est une ligne STABLE et DISTINCTE de celles de l'install réelle
+# (`VERDICT: EXECUTED` / `VERDICT: NO-OP`), pour que la story 2.4 puisse la lire
+# sans compter des lignes de log.
+#
+show_simulation_report() {
+    local duration="$1"
+
+    log_separator "SIMULATION TERMINÉE — AUCUNE INSTALLATION EFFECTUÉE"
+
+    log_success "🔍 VERDICT: DRY-RUN — rien n'a été installé, aucune sentinelle écrite"
+    log_info "📍 Répertoire cible (inchangé): $TARGET_DIR"
+    log_info "🗂️ Racine d'état (inchangée): $INSTALL_STATE_DIR"
+    log_info "🔢 Modules réellement simulés: ${#simulated_modules[@]}"
+    log_info "🔢 Modules annoncés sans exécution: ${#announced_modules[@]}"
+    log_info "🔢 Modules déjà franchis (sentinelle): ${#skipped_modules[@]}"
+    log_info "🔢 Modules écartés par une option (--skip-prereq): ${#bypassed_modules[@]}"
+
+    if [ ${#simulated_modules[@]} -gt 0 ]; then
+        log_info "🔬 Simulés au grain de la commande (voir les lignes [DRY]):"
+        local module
+        for module in "${simulated_modules[@]}"; do
+            log_info "   🔬 $module"
+        done
+    fi
+
+    if [ ${#announced_modules[@]} -gt 0 ]; then
+        log_info "📣 Annoncés puis sautés (hors DRY_RUN_AWARE_MODULES — leur"
+        log_info "   contenu n'est PAS décrit par cette simulation):"
+        local module
+        for module in "${announced_modules[@]}"; do
+            log_info "   📣 $module"
+        done
+    fi
+
+    if [ ${#skipped_modules[@]} -gt 0 ]; then
+        log_info "⏭️ Déjà franchis, ils seraient sautés:"
+        local module
+        for module in "${skipped_modules[@]}"; do
+            log_info "   ⏭️ $module"
+        done
+    fi
+
+    if [ ${#bypassed_modules[@]} -gt 0 ]; then
+        log_info "🚫 Écartés par une option de ligne de commande:"
+        local module
+        for module in "${bypassed_modules[@]}"; do
+            log_info "   🚫 $module"
+        done
+    fi
+
+    log_info "⏱️ Durée de la simulation: $duration"
+    log_info "📄 Plan complet: $LOG_FILE"
+    log_info ""
+    log_info "⚠️ Le plan est réparti sur STDOUT et STDERR (l'orchestrateur"
+    log_info "   journalise sur stderr, les modules *aware* sur stdout via tee)."
+    log_info "   Capture complète: « > plan.txt 2>&1 » ou « 2>&1 | tee plan.txt »."
 }
 
 show_success_report() {
@@ -794,7 +1068,15 @@ main() {
     
     # Lancer l'installation
     if run_installation; then
-        log_success "✅ Installation terminée avec succès"
+        # ⛔ « ✅ Installation terminée avec succès » est FAUX sous simulation,
+        # et cette ligne-ci est la DERNIÈRE que l'opérateur lit. Elle avait
+        # survécu au correctif de `show_success_report`, un cran plus haut.
+        if [ "$DRY_RUN" = true ]; then
+            log_success "🔍 Simulation terminée — aucune installation effectuée"
+        else
+            log_success "✅ Installation terminée avec succès"
+        fi
+
         return 0
     else
         log_fatal "❌ Installation échouée"

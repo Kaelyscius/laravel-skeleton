@@ -73,6 +73,136 @@ final class ShellProbe
     }
 
     /**
+     * Répertoire des scripts d'installation, orchestrateur compris.
+     *
+     * Copié dans un bac à sable par les sondes qui doivent altérer un module
+     * (mode non exécutable, module remplacé par un témoin) : `SCRIPT_DIR` est
+     * `readonly` dans l'orchestrateur et se dérive de l'emplacement du script,
+     * donc la SEULE façon de lui faire voir d'autres modules est de le lancer
+     * depuis une copie. Toucher aux modules versionnés serait, littéralement,
+     * le défaut que cette story corrige.
+     */
+    public static function scriptsDir(): string
+    {
+        return self::repoRoot() . '/scripts';
+    }
+
+    /**
+     * Les modules déclarés *dry-run aware*, lus SUR DISQUE.
+     *
+     * Écrite en dur dans le test, la liste resterait juste après un module
+     * ajouté, retiré ou mal orthographié — donc verte sur une déclaration qui
+     * aurait cessé de désigner un module réel.
+     *
+     * @return list<string>
+     */
+    public static function dryRunAwareModules(): array
+    {
+        $source = file_get_contents(self::installScript());
+
+        if ($source === false) {
+            throw new RuntimeException('Orchestrateur illisible : ' . self::installScript());
+        }
+
+        if (preg_match('/readonly DRY_RUN_AWARE_MODULES=\((.*?)\n\)/s', $source, $block) !== 1) {
+            throw new RuntimeException('Tableau DRY_RUN_AWARE_MODULES introuvable dans l’orchestrateur.');
+        }
+
+        preg_match_all('/"([^"]+)"/', $block[1], $matches);
+
+        return $matches[1];
+    }
+
+    /**
+     * Valeurs d'une variable-liste du `Makefile`, lues SUR DISQUE.
+     *
+     * Ré-écrite en dur dans un test, la liste resterait juste après une cible
+     * ajoutée au Makefile — donc VERTE sur une cible que le garde n'atteint
+     * plus. Exactement le motif déjà refusé pour `INSTALL_MODULES` et
+     * `DRY_RUN_AWARE_MODULES` ; il n'y a pas de raison de traiter deux listes
+     * du même diff de façon opposée.
+     *
+     * Gère les continuations `\` de make.
+     *
+     * @return list<string>
+     */
+    public static function makefileListVariable(string $name): array
+    {
+        $lines = explode("\n", RepoFile::read('Makefile'));
+        $collected = null;
+
+        foreach ($lines as $line) {
+            if ($collected === null) {
+                // Ancré en début de ligne, et l'affectation doit suivre le nom :
+                // sans cet ancrage, une MENTION en commentaire ferait office de
+                // déclaration et le garde lirait une liste vide.
+                if (preg_match('/^' . preg_quote($name, '/') . '\s*[:?+]?=\s*(.*)$/', $line, $match) !== 1) {
+                    continue;
+                }
+
+                $collected = $match[1];
+            } else {
+                $collected .= ' ' . $line;
+            }
+
+            if (! str_ends_with(rtrim($collected), '\\')) {
+                break;
+            }
+
+            $collected = rtrim(rtrim($collected), '\\');
+        }
+
+        if ($collected === null) {
+            throw new RuntimeException("Variable {$name} introuvable dans le Makefile.");
+        }
+
+        $values = preg_split('/\s+/', trim(str_replace("\t", ' ', $collected))) ?: [];
+
+        return array_values(array_filter(
+            $values,
+            static fn (string $value): bool => $value !== '' && $value !== '\\',
+        ));
+    }
+
+    /**
+     * Les chaînes d'installation COMPOSITES, dérivées comme le Makefile les
+     * dérive : par le graphe de dépendances, jamais par une énumération.
+     *
+     * ⛔ POURQUOI PAS `makefileListVariable('COMPOSITE_INSTALL_TARGETS')` :
+     * la variable est désormais RÉCURSIVE et son corps est un programme `awk`.
+     * La lire textuellement ne rendrait rien d'utile — et surtout, un test qui
+     * relit l'énumération ne peut pas prouver qu'une cible NEUVE est attrapée.
+     * On demande donc à `make` lui-même, qui applique la règle réelle.
+     *
+     * @return list<string>
+     */
+    public static function makefileComposites(): array
+    {
+        $command = sprintf(
+            // Sans `-n` : avec, make IMPRIME la recette (« echo … ») au lieu
+            // de l'exécuter, et le mot « echo » se retrouvait dans la liste.
+            'cd %s && make --eval=%s __composites__ 2>/dev/null',
+            escapeshellarg(self::repoRoot()),
+            escapeshellarg('__composites__: ; @echo $(COMPOSITE_INSTALL_TARGETS)'),
+        );
+
+        $output = [];
+        $status = 0;
+        exec($command . ' DRY_RUN=false', $output, $status);
+
+        if ($status !== 0) {
+            throw new RuntimeException('Impossible de dériver COMPOSITE_INSTALL_TARGETS du Makefile.');
+        }
+
+        $valeurs = preg_split('/\s+/', trim(implode(' ', $output))) ?: [];
+
+        return array_values(array_filter(
+            $valeurs,
+            static fn (string $valeur): bool => $valeur !== '',
+        ));
+    }
+
+    /**
      * Racine de l'application Laravel — le cwd de TOUTE sonde.
      *
      * C'est le répertoire d'où la CI lance pest (`working-directory: src`) et,
@@ -248,6 +378,57 @@ final class ShellProbe
     public static function runWithRuntime(string $bash, array $env = [], int $timeout = 30): array
     {
         return self::run(self::prelude() . $bash, $env, $timeout);
+    }
+
+    /**
+     * Exécute un fragment bash en CAPTURANT LES DEUX FLUX SÉPARÉMENT.
+     *
+     * 🔴 EXISTE PARCE QU'AUCUNE AUTRE SONDE NE PEUT LES DISTINGUER. `run()` et
+     * `runFile()` construisent `bash … 2>&1` : toutes leurs assertions lisent un
+     * flux FUSIONNÉ. Une prose affirmant « le plan part sur STDERR » a donc pu
+     * vivre dans CINQ fichiers, dont les deux que l'opérateur lit, alors que la
+     * mesure dit l'inverse — aucun test ne pouvait la contredire.
+     *
+     * @param  array<string, string>  $env
+     * @return array{status: int, stdout: string, stderr: string}
+     */
+    public static function runSeparated(string $bash, array $env = [], int $timeout = 30): array
+    {
+        $script = self::writeTempFile('probe-split-', '.sh', $bash);
+        $out = self::writeTempFile('probe-out-', '.txt', '');
+        $err = self::writeTempFile('probe-err-', '.txt', '');
+
+        try {
+            $assignments = '';
+
+            foreach (array_merge(self::pinnedEnvironment(), $env) as $name => $value) {
+                $assignments .= escapeshellarg($name . '=' . $value) . ' ';
+            }
+
+            $command = sprintf(
+                'cd %s && timeout %d env %s bash %s > %s 2> %s',
+                escapeshellarg(self::srcDir()),
+                $timeout,
+                $assignments,
+                escapeshellarg($script),
+                escapeshellarg($out),
+                escapeshellarg($err),
+            );
+
+            $ignored = [];
+            $status = 0;
+            exec($command, $ignored, $status);
+
+            return [
+                'status' => $status,
+                'stdout' => (string) file_get_contents($out),
+                'stderr' => (string) file_get_contents($err),
+            ];
+        } finally {
+            @unlink($script);
+            @unlink($out);
+            @unlink($err);
+        }
     }
 
     /**

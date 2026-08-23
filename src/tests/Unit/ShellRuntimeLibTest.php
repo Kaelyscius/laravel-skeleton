@@ -396,6 +396,215 @@ it('ensure_idempotent ne prend pas un RÉPERTOIRE pour une sentinelle', function
 });
 
 // =============================================================================
+// run_cmd — la 5e primitive (Story 2.3)
+// =============================================================================
+
+it('run_cmd ANNONCE et n’exécute rien quand INSTALL_DRY_RUN vaut true', function (): void {
+    // Ligne 1 de la matrice. La preuve n'est PAS la ligne de journal : c'est le
+    // fichier qui SURVIT. Un `run_cmd` qui journaliserait `[DRY] rm …` puis
+    // exécuterait quand même rendrait ce test vert sur la seule assertion de
+    // sortie — d'où le témoin sur disque, relu après coup.
+    $result = ShellProbe::runWithRuntime(<<<'BASH'
+        bac="$(mktemp -d)"
+        case "$bac" in
+            /tmp/*) ;;
+            *) echo "BAC_HORS_TMP=[$bac]"; exit 9 ;;
+        esac
+
+        temoin="$bac/temoin"
+        : > "$temoin"
+
+        statut=0
+        run_cmd rm -rf "$temoin" || statut=$?
+
+        echo "STATUT=$statut"
+        [ -f "$temoin" ] && echo "TEMOIN=INTACT" || echo "TEMOIN=DETRUIT"
+
+        rm -rf "$bac"
+        BASH
+        , [
+            'INSTALL_DRY_RUN' => 'true',
+        ]);
+
+    expect($result['output'])->toContain('TEMOIN=INTACT');
+    expect($result['output'])->toContain('STATUT=0');
+    // …et la commande est NOMMÉE, arguments compris : une simulation muette ne
+    // dit rien de ce qu'elle éviterait.
+    expect($result['output'])->toMatch('/\[DRY\] rm -rf \S+\/temoin/');
+});
+
+it('run_cmd exécute et rend le CODE RÉEL hors simulation', function (): void {
+    // Lignes 2 de la matrice, dans les deux sens : le succès rend 0, l'échec
+    // rend le code de la commande — pas 1, pas 0, et surtout aucun `die`.
+    $result = ShellProbe::runWithRuntime(<<<'BASH'
+        bac="$(mktemp -d)"
+        case "$bac" in
+            /tmp/*) ;;
+            *) echo "BAC_HORS_TMP=[$bac]"; exit 9 ;;
+        esac
+
+        temoin="$bac/temoin"
+        : > "$temoin"
+
+        ok=0
+        run_cmd rm -f "$temoin" || ok=$?
+        echo "OK=$ok"
+        [ -f "$temoin" ] && echo "TEMOIN=INTACT" || echo "TEMOIN=DETRUIT"
+
+        sortie7() { return 7; }
+        ko=0
+        run_cmd sortie7 || ko=$?
+        echo "KO=$ko"
+
+        echo "APRES-RUN-CMD"
+
+        rm -rf "$bac"
+        BASH);
+
+    expect($result['status'])->toBe(0);
+    expect($result['output'])->toContain('TEMOIN=DETRUIT');
+    expect($result['output'])->toContain('OK=0');
+    expect($result['output'])->toContain('KO=7');
+    // Aucune mort implicite : l'appelant décide, comme pour `retry`.
+    expect($result['output'])->toContain('APRES-RUN-CMD');
+    expect($result['output'])->not->toContain('[DRY]');
+});
+
+it('run_cmd sans argument MEURT au lieu de rendre 0', function (): void {
+    // Ligne 3 de la matrice. Un `run_cmd` nu qui rendrait 0 signerait un succès
+    // pour une commande que personne n'a écrite — le faux succès qu'`ensure_
+    // idempotent` et `retry` refusent déjà chacun de leur côté.
+    $result = ShellProbe::runWithRuntime(<<<'BASH'
+        run_cmd
+        echo "SUITE-NE-DOIT-PAS-TOURNER"
+        BASH);
+
+    expect($result['status'])->toBe(1);
+    expect($result['output'])->toContain('run_cmd');
+    expect($result['output'])->toContain('ERREUR FATALE');
+    expect($result['output'])->not->toContain('SUITE-NE-DOIT-PAS-TOURNER');
+});
+
+it('run_cmd refuse un premier argument VIDE autant qu’une absence d’argument', function (): void {
+    // 🔴 `run_cmd ""` FRANCHISSAIT LA GARDE `$# -eq 0` (relevé revue 1).
+    // En réel il sortait 127 (« command not found » sur la chaîne vide) ; en
+    // simulation il produisait une ligne `[DRY]` qui ne nommait RIEN — une
+    // simulation qui annonce le vide. Même refus que `require_cmd` pour ses
+    // noms de binaires vides.
+    $vide = ShellProbe::runWithRuntime(<<<'BASH'
+        run_cmd ""
+        echo "SUITE-NE-DOIT-PAS-TOURNER"
+        BASH);
+
+    expect($vide['status'])->toBe(1);
+    expect($vide['output'])->toContain('run_cmd');
+    expect($vide['output'])->toContain('ERREUR FATALE');
+    expect($vide['output'])->not->toContain('SUITE-NE-DOIT-PAS-TOURNER');
+
+    // …et sous simulation aussi : c'est là que le symptôme était le plus muet.
+    $simule = ShellProbe::runWithRuntime(<<<'BASH'
+        run_cmd ""
+        echo "SUITE-NE-DOIT-PAS-TOURNER"
+        BASH
+        , [
+            'INSTALL_DRY_RUN' => 'true',
+        ]);
+
+    expect($simule['status'])->toBe(1);
+    expect($simule['output'])->not->toContain('SUITE-NE-DOIT-PAS-TOURNER');
+});
+
+it('la trace [DRY] PRÉSERVE les frontières d’arguments', function (): void {
+    // 🔴 `log_info "[DRY] $*"` APLATISSAIT TOUT (relevé revue 1). Un chemin
+    // contenant une espace devenait indistinguable de deux arguments — sur la
+    // SEULE trace que la simulation produit, et précisément pour la classe de
+    // chemins piégés qui a coûté trois correctifs à la story 2.2.
+    //
+    // ⚖️ Ce test compare DEUX vecteurs qui s'aplatissent en la MÊME chaîne :
+    // c'est la seule façon de faire rougir un `$*`, qui les rendrait identiques.
+    $result = ShellProbe::runWithRuntime(<<<'BASH'
+        run_cmd rm -rf "/tmp/un dossier/fichier"
+        run_cmd rm -rf "/tmp/un" "dossier/fichier"
+        BASH
+        , [
+            'INSTALL_DRY_RUN' => 'true',
+        ]);
+
+    expect($result['status'])->toBe(0);
+
+    // Un seul argument, dont l'espace est échappée.
+    expect($result['output'])->toContain('[DRY] rm -rf /tmp/un\ dossier/fichier');
+    // Deux arguments, séparés par une espace NON échappée.
+    expect($result['output'])->toContain('[DRY] rm -rf /tmp/un dossier/fichier');
+
+    // Anti-vacuité : les deux lignes sont DIFFÉRENTES. Sous `$*` elles seraient
+    // identiques, et les deux assertions ci-dessus passeraient sur la même.
+    $lignes = array_values(array_filter(
+        explode("\n", $result['output']),
+        static fn (string $ligne): bool => str_contains($ligne, '[DRY] rm -rf'),
+    ));
+
+    expect(count($lignes))
+        ->toBe(2);
+    expect($lignes[0])->not->toBe($lignes[1]);
+});
+
+it('run_cmd ne simule QUE sur la valeur exacte « true »', function (): void {
+    // 🔴 GARDE CONTRE UNE FAMILLE DE MUTATIONS SILENCIEUSES.
+    // `[ -n "$INSTALL_DRY_RUN" ]`, `[ "$INSTALL_DRY_RUN" != false ]` ou un
+    // `[[ … == tru* ]]` passeraient tous les tests ci-dessus. Ils feraient
+    // pourtant BASCULER EN SIMULATION une installation réelle dès qu'une
+    // variable traîne dans l'environnement — une install qui ne s'installe pas
+    // et se déclare réussie.
+    $result = ShellProbe::runWithRuntime(<<<'BASH'
+        bac="$(mktemp -d)"
+        case "$bac" in
+            /tmp/*) ;;
+            *) echo "BAC_HORS_TMP=[$bac]"; exit 9 ;;
+        esac
+
+        essai() {
+            local valeur="$1"
+            local temoin="$bac/temoin-$2"
+            : > "$temoin"
+
+            INSTALL_DRY_RUN="$valeur" run_cmd rm -f "$temoin"
+
+            [ -f "$temoin" ] && echo "[$valeur]=SIMULE" || echo "[$valeur]=EXECUTE"
+        }
+
+        essai "true" vrai
+        essai "false" faux
+        essai "1" un
+        essai "TRUE" majuscules
+        essai "truthy" prefixe
+        essai "" vide
+
+        rm -rf "$bac"
+        BASH);
+
+    expect($result['output'])->toContain('[true]=SIMULE');
+    expect($result['output'])->toContain('[false]=EXECUTE');
+    expect($result['output'])->toContain('[1]=EXECUTE');
+    expect($result['output'])->toContain('[TRUE]=EXECUTE');
+    expect($result['output'])->toContain('[truthy]=EXECUTE');
+    expect($result['output'])->toContain('[]=EXECUTE');
+});
+
+it('run_cmd traverse la frontière de processus, comme les 4 autres primitives', function (): void {
+    // C'est la propriété dont dépend TOUTE la story : les modules tournent en
+    // sous-processus, et c'est `export -f` qui leur porte `run_cmd`. Oubliée
+    // dans l'export, la primitive resterait verte partout ailleurs et
+    // introuvable là où elle sert.
+    $result = ShellProbe::runWithRuntime(<<<'BASH'
+        bash -c 'declare -F run_cmd > /dev/null && echo "FILS_VOIT=run_cmd" || echo "FILS_VOIT=<absent>"'
+        BASH);
+
+    expect($result['output'])->toContain('FILS_VOIT=run_cmd');
+    expect($result['output'])->not->toContain('<absent>');
+});
+
+// =============================================================================
 // Garde d'inclusion
 // =============================================================================
 
@@ -451,6 +660,48 @@ it("aucun script d'installation n'arme le trap ERR", function (): void {
         expect(file_get_contents($script))
             ->not->toMatch('/^\s*arm_err_trap\b/m');
     }
+});
+
+it('arm_err_trap N’ARME PAS pipefail — comportement pinné, pas promis', function (): void {
+    // 🔴 REPORT W20, TRANCHÉ PAR LA MESURE PLUTÔT QUE PAR UN GOÛT.
+    // Le docblock d'`arm_err_trap` promettait « une commande nue qui échoue
+    // meurt » sans dire qu'un PIPELINE en était exclu. Poser `set -o pipefail`
+    // est classé « Ask First » : neuf pipelines `| tee -a "$LOG_FILE"` de
+    // l'installeur dépendent de son absence. Le comportement RÉEL est donc
+    // gelé ici — si quelqu'un arme `pipefail` un jour, ce test rougit et la
+    // discussion a lieu avant la régression, pas après.
+    $result = ShellProbe::runWithRuntime(<<<'BASH'
+        arm_err_trap
+
+        echo "PIPEFAIL=$(set -o | grep '^pipefail' | awk '{print $2}')"
+
+        echoue() { return 3; }
+
+        statut=0
+        echoue | cat || statut=$?
+        echo "PIPELINE_STATUS=$statut"
+
+        echo "APRES-PIPELINE"
+        BASH);
+
+    // Le shell ne l'a pas armé…
+    expect($result['output'])->toContain('PIPEFAIL=off');
+    // …donc le pipeline rend le code de DROITE, et le trap ne se déclenche pas.
+    expect($result['output'])->toContain('PIPELINE_STATUS=0');
+    expect($result['output'])->toContain('APRES-PIPELINE');
+    expect($result['status'])->toBe(0);
+
+    // Contre-épreuve : le trap EST bien armé, il attrape la commande nue.
+    // Sans elle, ce test resterait vert sur un `arm_err_trap` devenu no-op.
+    $nue = ShellProbe::runWithRuntime(<<<'BASH'
+        arm_err_trap
+        echoue() { return 3; }
+        echoue
+        echo "APRES-COMMANDE-NUE"
+        BASH);
+
+    expect($nue['status'])->toBe(3);
+    expect($nue['output'])->not->toContain('APRES-COMMANDE-NUE');
 });
 
 // =============================================================================

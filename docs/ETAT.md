@@ -1,5 +1,15 @@
 # État du projet — 2026-08-22 (branche `main`)
 
+> 🆕 **Story 2.3 implémentée, revues 1 et 2 traitées (19 + 19 constats).**
+> **ratchet 0/0/0.** Mutations rejouées et rouges observés — ⚠️ **avec UNE exception consignée** :
+> la mutation du garde « `.env` jamais écrasé sans sauvegarde » ne rougit **pas dans le conteneur**
+> (le `cp` de BusyBox refuse l'écrasement de lui-même, donc `.env` survit pour une raison
+> étrangère au garde) ; elle rougit sur GNU coreutils, donc en CI. Report ouvert dans
+> `deferred-work.md`. Le compte « toutes rouges » n'est donc vrai que hors cette sonde-là. `--dry-run` descend au grain de la
+> COMMANDE, ne pose plus aucun effet de bord, et `make` expose enfin les deux drapeaux.
+> ⚠️ Pas encore poussée : la CI ne se déclenche que sur `main`/`develop`, le verdict n'existe
+> qu'au merge.
+>
 > ✅ **Story 2.2 `done` — Epic 2 à 2/13.** `main` = **`eb397f4`**, poussé, **5 jobs CI verts**
 > (run 32593920247). **333 tests · ratchet 0/0/0 · `composer audit` 0 · `npm audit` 0.**
 > `ensure_idempotent`, livrée testée par la 2.1 **sans aucun appelant**, a enfin son lecteur de
@@ -50,30 +60,233 @@
 
 ---
 
-## ➡️ PROCHAINE ACTION — Story 2.3 (`2-3-implement-dry-run-and-resume-from-flags`)
+## ✅ Story 2.3 — `--dry-run` et `--resume-from` tiennent enfin leur promesse
 
-**⛔ Deux pièges à lire AVANT d'écrire le moindre AC. Ils ne se déduisent d'aucun document de
-planification, et `epics.md` affirme le contraire du premier.**
+> **349 tests · ratchet 0/0/0 · 19 mutations rejouées, 19 rouges observés.**
+> `./scripts/install.sh --dry-run` va au bout et laisse `git status --porcelain` **vide**.
 
-1. **`--dry-run` et `--resume-from` EXISTENT DÉJÀ** — `scripts/install.sh:169-180` (parsing),
-   `:307-316`, `:366-376`. `epics.md` demande de les « implémenter » ; ils sont là depuis
-   toujours. La valeur de la story n'est pas de les créer mais de les **refondre autour de
-   `run_cmd`** — la primitive que la story 2.1 avait **explicitement retirée** de son périmètre
-   après avoir vérifié qu'elle n'était spécifiée qu'à un seul endroit du plan : l'AC de la 2.3.
+**Ce que la story a réellement changé — les deux drapeaux EXISTAIENT déjà** (`epics.md` demande
+de les « implémenter » ; ils sont là depuis toujours). Ce qui manquait était ailleurs, et mesuré :
 
-2. **🔴 La branche `--dry-run` a déjà produit DEUX régressions pendant la 2.2**, et la 2.3 doit la
-   **reprendre**, pas l'ignorer :
-   - envelopper `execute_module` dans `ensure_idempotent` faisait **écrire les sentinelles en
-     simulation** (la simulation rend 0 sans rien faire, donc la post-condition était satisfaite) :
-     un `--dry-run` sur une racine d'état réelle marquait les 11 modules franchis, et l'install
-     suivante sautait **tout** en déclarant succès ;
-   - la branche séparée qui a corrigé cela **avalait ensuite les échecs de module** et rendait
-     « ✅ Installation terminée avec succès » pour un plan injouable.
-   La simulation vit désormais dans une branche distincte de la boucle (`install.sh:506-537`),
-   qui ne passe **ni** par `ensure_idempotent` **ni** par l'horodatage. Gardée par trois tests.
+1. **La simulation s'arrêtait au grain module.** Elle annonçait « je simulerais `10-laravel-core` »
+   sans jamais dire **ce qu'elle effacerait**. Elle descend maintenant au grain de la **commande** :
+   `[DRY] rm -rf -- <cible>/vendor`, une ligne par entrée condamnée.
+2. **Elle n'était PAS sans effet de bord.** `validate_arguments` faisait `mkdir -p` + `chown -R` +
+   `chmod -R 755` (et jusqu'à `777`) sur la cible, et `execute_module` un `chmod +x` sur un fichier
+   **versionné** — les deux **avant** toute branche `--dry-run`. Un `--dry-run` salissait donc le
+   dépôt. Les deux sont neutralisés et diagnostiqués.
+3. **`run_cmd` n'existait nulle part**, alors que l'AC de l'epic la nomme. Elle est livrée dans
+   `scripts/lib/runtime.sh` (5ᵉ primitive), lit `INSTALL_DRY_RUN`, rend le **code réel**, meurt sans
+   argument, et est ajoutée à l'`export -f`.
+4. **`make` n'exposait aucun des deux drapeaux.** `make install-laravel DRY_RUN=true
+   RESUME_FROM=20-database` relaie désormais `--dry-run --resume-from 20-database`, aux six
+   invocations d'`install.sh` (`install-laravel` + les cinq `--only` d'`install-laravel-prod`).
+
+**Le mécanisme : la simulation est OPT-IN PAR MODULE.** `DRY_RUN_AWARE_MODULES` (`install.sh`) ne
+contient qu'une entrée, `10-laravel-core`. Un module inscrit est **réellement lancé** sous
+`--dry-run` et route ses commandes à effet par `run_cmd` ; tous les autres gardent l'annonce-et-saut,
+qui reste la garantie forte de zéro effet.
+⛔ **Inscrire un module engage l'audit du module ENTIER**, pas de ses seules lignes destructrices :
+ce qui n'est pas routé s'exécute pour de vrai, sous un drapeau qui promet l'inverse. Les 1132 lignes
+de `10-laravel-core.sh` ont été relues ; **67 occurrences de `run_cmd`** y couvrent `rm -rf`,
+`composer create-project`, `composer install`, `cp -a`, `chown`/`chmod`/`mkdir`, `sed -i`,
+`php artisan key:generate|config:clear|cache:clear|view:clear|config:cache` et les deux patchs
+`python3` du `composer.json`.
+
+**📋 `20-database` et `99-finalize` sont REPORTÉS** (`_bmad-output/implementation-artifacts/deferred-work.md`,
+trigger **Story 2.4**). Tant que le report est ouvert, leur simulation ne dit **rien** des migrations
+ni des caches qu'ils joueraient — c'est écrit dans le commentaire de la liste, pas seulement ici.
+
+🔴 **Le commentaire FAUX de `install.sh:41-44` est corrigé.** Il affirmait que « les modules tournent
+en sous-processus, donc l'`export -f` de `runtime.sh` ne les atteint pas ». **Sondé : c'est
+l'inverse** — bash exporte ses fonctions aux enfants via `BASH_FUNC_x%%`, et un `bash -c 'declare -F
+ensure_idempotent'` rend **oui**. Toute la story 2.3 en dépend : c'est parce que l'export traverse
+qu'un module lancé en sous-processus peut router ses commandes par `run_cmd`. La vraie raison de
+l'enveloppement au niveau orchestrateur est le **grain** — seul l'orchestrateur connaît la liste,
+l'ordre, `--only`, `--resume-from` et `--force`.
+
+⚖️ **`pipefail` : Ask First tranché en « pinner, pas armer ».** Le docblock d'`arm_err_trap`
+promettait « une commande nue qui échoue meurt » sans dire qu'un **pipeline en était exclu** (report
+W20). Neuf pipelines `| tee -a "$LOG_FILE"` dépendent de l'absence de `pipefail`. Le docblock est
+corrigé et le comportement **réel** est gelé par un test — armer `pipefail` un jour fera rougir la
+suite avant la régression.
+
+⚠️ **Deux constats relevés et NON corrigés, écrits plutôt que tus :**
+- `install_laravel_via_composer` teste `if ! cmd 2>&1 | tee -a "$LOG_FILE"` — le statut est celui de
+  `tee`, donc la **branche de repli `laravel new` est morte**. La réparer changerait le comportement
+  d'installation réelle, hors périmètre gelé de la 2.3. Le commentaire le dit sur place.
+- `copy_environment_configuration` appelle `find_root_env` **sans argument** (`common.sh:405` attend
+  une racine de projet) ; la détection d'`APP_ENV` depuis le `.env` racine ne peut donc pas aboutir.
+
+**🔬 Campagne de mutation — 19 mutations exécutées, 19 rouges OBSERVÉS** (jamais déduits) :
+`run_cmd` sans branche de simulation · code réel avalé · `die` retiré · `-n` au lieu de `= true` ·
+absente de l'`export -f` · `pipefail` armé · `export INSTALL_DRY_RUN` retiré · tous les modules
+*aware* · aucun module *aware* · garde de `validate_arguments` neutralisée · `chmod +x` rétabli en
+simulation · coquille dans `DRY_RUN_AWARE_MODULES` · sentinelle écrite en simulation · `started-at`
+écrit en simulation · `rm -rf` non routé · post-condition de vacuité jouée · `run_cmd_quiet`
+ignorant la simulation · garde `$(error)` des chaînes composites désarmée · pass-through `make`
+retiré.
+
+🔴 **Un test a été trouvé MUET par sa propre mutation, et corrigé.** « le module *aware* ne pose pas
+sa sentinelle » restait **VERT** quand on lui faisait écrire la sentinelle : la racine d'état
+n'existait pas dans le bac à sable, l'écriture échouait, et le compteur retombait à 0 **pour une
+raison étrangère au sujet**. Un compteur qui vaut 0 parce que rien ne POUVAIT s'écrire ne mesure
+rien. La sonde crée désormais la racine — et la mutation rougit.
+
+---
+
+## 🔁 Story 2.3 — revue 2 (dernière) : la correction du constat sur les FLUX a menti à son tour
+
+> **371 tests · ratchet 0/0/0 · 17 mutations neuves (16 rouges + 1 témoin neutre voulu vert).**
+> Total story : **56 mutations rejouées**.
+
+🔴 **LE MOTIF DE TÊTE DU PROJET S'EST REPRODUIT DANS LA CORRECTION D'UN CONSTAT SUR LE MOTIF.**
+La passe 1 demandait de dire sur quel flux part le plan `--dry-run`. La correction a écrit, en
+**cinq endroits** — dont `CLAUDE.md` et l'aide de `--help`, les deux que l'opérateur lit — que
+« les lignes `[DRY]` partent sur **STDERR**, `> plan.txt` rend un fichier vide ».
+**Mesuré : 16 lignes sur STDOUT, 2 sur STDERR.** Un opérateur suivant la doc perdait le plan.
+Cause : `execute_module` lance le module *aware* en `2>&1 | tee -a "$LOG_FILE"`, ce qui replie son
+stderr dans le stdout de l'orchestrateur. **Aucune sonde ne pouvait le contredire** :
+`ShellProbe::run()` construit `bash … 2>&1`, donc toutes les assertions lisaient un flux fusionné.
+Parade : `ShellProbe::runSeparated()` (`1> a 2> b`), qui compte sur chaque flux — et la prose dit
+désormais la seule chose vraie : **capture complète = `2>&1`**.
+
+⚖️ **QUATRE CONSTATS DE LA PASSE 1 N'ÉTAIENT PAS CONSOMMÉS**, et le relecteur l'a prouvé en
+rejouant les mutations :
+- **six des sept sites `tee` ressuscités n'avaient aucune sonde** — réécrire `composer install` à
+  travers `tee` laissait les 20 tests VERTS, le garde textuel comptant la ligne comme routée parce
+  qu'elle contient `run_cmd`. Deux sondes d'**exécution** ajoutées (`composer install`, `cp -a`),
+  avec composer/cp/installeur stubés ;
+- **neuf des onze `log_applied` n'étaient assertées par rien** — deux chaînes choisies à la main ne
+  gardent pas onze sites. Remplacé par un **invariant global** sur la sortie simulée ;
+- **la liste composite ne détectait pas une chaîne NEUVE** : ajouter `install-dev-turbo: build
+  up-dev install-laravel npm-install` était accepté sous `DRY_RUN=true`. La composite-ness est
+  maintenant **dérivée du graphe**, et la dérivation a trouvé une cible que l'énumération avait
+  **manquée** : `setup-quick` ;
+- **le scan `run_cmd` était contournable par un commentaire** — il porte désormais sur du CODE.
+
+🔴 **ONZE RÉGRESSIONS INTRODUITES PAR LES CORRECTIFS EUX-MÊMES.** La plus large :
+`DRY_RUN`/`RESUME_FROM` sont des noms **génériques**, et leur validation évaluée au parse global
+faisait sortir en 2 **toutes** les cibles — `DRY_RUN=1 make help`, `RESUME_FROM=x make status`,
+`make test`. Portée sur `MAKECMDGOALS` ; et rendue **littérale**, `$(filter)` traitant `%` comme un
+joker (`DRY_RUN=%` passait, donc installation réelle en silence). Les dix autres : rapport d'échec
+amputé, `.env` absent devenu fatal, succès journalisé après échec, `cp -a` jugé sur son code alors
+que `-p` échoue légitimement sur le propriétaire, repli `laravel new` à chemin figé et majeure non
+épinglée, `rm -f` de sentinelles absents du plan, `--skip-prereq` hors de tout compteur, ligne
+`[DRY]` dupliquée dans le journal, et quatre branches qui **prédisaient** sur un `.env` que la
+simulation n'a pas copié.
+
+⚠️ **UN GARDE QUI NE PEUT PAS ROUGIR DANS LA BOUCLE LOCALE, ET C'EST ÉCRIT.** La mutation du garde
+« `.env` jamais écrasé sans sauvegarde » reste **verte dans le conteneur** : le `cp` de **BusyBox**
+refuse l'écrasement de lui-même, donc `.env` survit pour une raison **étrangère au garde**. Elle
+rougit sur GNU coreutils, donc en CI. Le garde tient là où il compte, mais `make test` ne peut pas
+le prouver — report ouvert dans `deferred-work.md`, et la phrase qui annonçait « toutes rouges » a
+été corrigée plutôt que laissée.
+
+---
+
+## 🔁 Story 2.3 — revue 1 : la conception a tenu, les BORDS ont cédé
+
+> **19 constats, tous traités. 20 mutations neuves, 19 rouges observés dans la boucle locale.**
+> ⚠️ La 20ᵉ — le garde « `.env` jamais écrasé sans sauvegarde » — **ne rougit pas dans le
+> conteneur** : le `cp` de BusyBox refuse l'écrasement de lui-même, donc `.env` survit pour une
+> raison étrangère au garde. Elle rougit sur GNU coreutils (CI). Report ouvert dans
+> `deferred-work.md` — rendre la sonde indépendante de l'implémentation de `cp`.
+> `run_cmd` + modules *aware* opt-in a traversé les trois couches de revue **intacte** — la
+> conception n'a pas été rouverte.
+
+🔴 **UNE SEULE CAUSE RACINE POUR LES DEUX CONSTATS STRUCTURANTS : les AC mesuraient une
+PROPAGATION DE DRAPEAU, pas un EFFET.** `make -n` n'exécute rien. Tous les gardes étaient verts
+pendant que :
+
+1. **`make install-laravel DRY_RUN=true` n'atteignait que l'étape 1/5.** Les étapes 2 à 5
+   s'exécutaient ensuite POUR DE VRAI sur l'application : `chown -R www-data:www-data
+   /var/www/html`, deux `find -exec chmod 775/664`, `chmod +x artisan`, `chmod -R 775 storage`,
+   puis **`fix-permissions-host` en sudo** côté hôte. La porte d'entrée `make` de la story
+   réintroduisait exactement la classe d'effet de bord qu'elle venait de retirer de
+   `validate_arguments`. Le raisonnement écrit au-dessus du `$(error)` des chaînes composites
+   s'appliquait mot pour mot à cette cible — et personne ne l'avait appliqué.
+2. **Le rapport final de la simulation DÉCLARAIT une installation faite** : `🎉 Installation
+   Laravel terminée`, `🆕 VERDICT: EXECUTED — 11 module(s) joué(s)`, les onze modules listés sous
+   « Modules installés », puis un `cd "$TARGET_DIR"` + `php artisan --version` qui **boote
+   l'application** et écrit dans `storage/logs/`. `main()` de `10-laravel-core` avait été rendue
+   honnête ; la clôture de l'orchestrateur, non.
+
+⚖️ **La règle nouvelle, non négociable : un AC de cette story se mesure sur un EFFET.** Les sondes
+`make` lancent désormais make POUR DE VRAI, avec un `docker` et un `$(MAKE)` remplacés par des
+témoins, et mesurent la cible au `stat` — modes ET propriétaire, parce qu'un `chmod` ne touche que
+le ctime et qu'aucune empreinte nom+octets+mtime ne le voit.
+
+🔴 **SEPT BRANCHES D'ÉCHEC ÉTAIENT MORTES DANS `10-laravel-core.sh`.** `if ! cmd 2>&1 | tee -a
+"$LOG_FILE"` teste le code de **`tee`**, jamais celui de la commande. Le piège était décrit noir sur
+blanc dans le docblock que cette story venait d'écrire pour `run_cmd`, et il vivait dans le fichier
+d'à côté — repli `laravel new`, échec de `composer install`, échec de la copie `cp -a` vers la
+cible, et **`key:generate`, dont l'appelant traite pourtant l'échec comme FATAL** : une application
+partait avec un `APP_KEY` vide en croyant l'avoir généré. `run_cmd_logged` rend `${PIPESTATUS[0]}`.
+
+🔴 **DEUX RÉGRESSIONS INTRODUITES PAR LE ROUTAGE LUI-MÊME**, sur le chemin RÉEL : (1) la sauvegarde
+du `.env` était devenue facultative (`run_cmd cp … || log_warn` là où un `cp` nu sous `set -e`
+arrêtait tout) et la copie suivante écrasait le `.env` de l'opérateur **sans filet** ; (2) l'absence
+de `routes/web.php` était devenue un avertissement — donc une application réelle sans route
+`/health`, **healthcheck Docker mort**, pour une ligne dans un journal de `/tmp`.
+
+🔴 **ET LE MOTIF DE TÊTE DU PROJET S'EST REPRODUIT DANS LA STORY QUI LE COMBAT** : six
+`log_success` / `log_debug` de `10-laravel-core` annonçaient « ✅ fait » sous simulation. `main()`
+avait été soigneusement corrigée ; les fonctions qu'elle appelle, pas. Variante inédite relevée au
+passage : la simulation **SUR-déclarait** `cache:clear`, qu'en réel une sonde non jouée peut refuser
+— sur-déclarer est un mensonge de la même famille que sous-déclarer.
+
+🔴 **TROIS GARDES DE TEST NE GARDAIENT RIEN** (34ᵉ, 35ᵉ et 36ᵉ instances du motif) :
+- `substr_count($source, 'run_cmd') > 20` sur un fichier qui en compte **67**, commentaires compris.
+  Remplacé par un invariant d'**absence** : aucune ligne non commentée n'invoque une commande à
+  effet sans `run_cmd`, liste d'exceptions explicite et justifiée. Retirer **un seul** `run_cmd`
+  rougit.
+- La fixture de simulation n'était **pas** une application : ni `artisan`, ni `routes/web.php`, ni
+  `phpunit.xml`. Les trois `run_cmd sed -i … phpunit.xml` et `run_cmd append_healthcheck_route`
+  n'étaient **jamais atteints** — on pouvait leur retirer `run_cmd` sans rien faire rougir.
+- Le grep des cinq invocations `--only` n'observait que la **première** ligne : retirer le drapeau
+  de la ligne `20-database` — celle des **migrations** — laissait le test vert.
+
+🩺 **DEUX SONDES NEUVES TROUVÉES MUETTES PAR LEUR PROPRE MUTATION, ET CORRIGÉES.**
+- `APP_ENV` est **hérité de PHP** (`phpunit.xml` pose `testing`) : le test du `.env` cherchait
+  `.env.testing`, sortait par « aucun fichier .env trouvé », et restait vert sur ses deux premières
+  assertions sans jamais atteindre la sauvegarde qu'il prétend garder. `ShellProbe` n'épingle que
+  les **cinq** variables lues par `logging.sh`/`runtime.sh` — celle-ci est lue par le module.
+- La fixture Laravel-shaped portait un `APP_KEY`, ce qui faisait sortir `generate_application_key`
+  par sa branche « clé existante conservée ».
+
+⚖️ **Un défaut de TESTABILITÉ corrigé dans le code, sur mesure** : `copy_environment_configuration`
+lit désormais `${INSTALL_PROJECT_ROOT:-/var/www/project}`. Écrite en dur, la garde de sauvegarde
+n'était atteignable que si `/var/www/project/.env.local` existait — donc jamais sur un runner CI, où
+les `.env` ne sont pas versionnés. Même argument que `INSTALL_STATE_DIR` à la story 2.2.
+
+**Makefile, quatre trous fermés** : `DRY_RUN` est `$(strip)`ée et **validée** — `DRY_RUN=1`, `yes`,
+`TRUE` retombaient silencieusement dans la branche « pas de simulation » et lançaient une
+**installation réelle** ; `RESUME_FROM` est validée contre `INSTALL_MODULES` **extrait de
+`scripts/install.sh`** (ce qui ferme aussi le quoting dans le `docker exec`) ; `RESUME_FROM` est
+refusé sur `install-laravel-prod` (`--only X --resume-from Y`, précédence non spécifiée) ;
+`COMPOSITE_INSTALL_TARGETS` est **lu depuis le Makefile** par le test — c'était la seule des trois
+listes du même diff à être réécrite en dur.
+
+📣 **Découvrabilité** : `CLAUDE.md` §Laravel Development et les commentaires `##` d'aide
+(`make help`) nomment enfin `DRY_RUN=` et `RESUME_FROM=`. Et le piège à dire tout haut : **le plan
+est réparti sur les DEUX flux** — l'orchestrateur journalise sur stderr, mais `execute_module`
+lance le module *aware* en `2>&1 | tee`, ce qui replie sa sortie dans le stdout. Capture complète :
+`--dry-run > plan.txt 2>&1` ou `2>&1 | tee plan.txt`.
+
+📋 **Deux reports NEUFS** (`deferred-work.md`) : promouvoir `dry_run_active` / `run_cmd_quiet` /
+`run_cmd_logged` / `log_applied` vers `runtime.sh` — **trigger : le 2ᵉ module *aware***, pas avant
+(promouvoir une primitive à un seul appelant, c'est le piège W23) ; et trancher l'appel
+`find_root_env` **sans argument** de `copy_environment_configuration`, dont le voisin
+`find_root_env_file()` local et sans appelant est à **une lettre** — trigger : Story 2.4.
+
+---
+
+## ➡️ PROCHAINE ACTION — Story 2.4
 
 **Niveau de cérémonie : R — Renforcé** (`03-boucle-qualite.md` §2 nomme « l'installeur »).
-Véhicule de test : `ShellProbe` + suite Unit — **Bats n'arrive qu'en story 2.4**.
+Véhicule de test actuel : `ShellProbe` + suite Unit — **Bats n'arrive qu'en story 2.4**, et c'est
+elle qui débloque quatre reports (`W17`, `W22`, et les conversions de `20-database` / `99-finalize`).
 
 **Rappel d'environnement** : la CI ne se déclenche que sur `main`/`develop`. Une branche de story
 ne produit **aucun run** ; le verdict n'existe qu'au merge.

@@ -63,6 +63,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Laravel Development
 - `make install-dev-full` - **Installation complète recommandée** (build + up + Laravel + npm + SSL)
 - `make install-laravel` - Install Laravel with dependencies (containers déjà démarrés)
+- `make install-laravel DRY_RUN=true` - **Simulation** : rien n'est installé, aucune sentinelle
+  écrite, aucun `chown`/`chmod` appliqué. Les étapes 2/5 à 5/5 de la recette (permissions
+  container, `fix-permissions-host` en sudo, MCP) sont **sautées** — elles mutent l'arbre, elles
+  ne le simulent pas. Le module `10-laravel-core` est le seul *dry-run aware* : il tourne
+  réellement et annonce chaque commande à effet en `[DRY] …`. Les autres sont annoncés puis
+  sautés, et leur contenu n'est **pas** décrit (voir `DRY_RUN_AWARE_MODULES` dans
+  `scripts/install.sh`).
+  ⚠️ **Le plan est réparti sur STDOUT et STDERR** — mesuré : l'orchestrateur journalise sur
+  stderr, mais `execute_module` lance le module *aware* en `2>&1 | tee`, ce qui replie SA sortie
+  dans le stdout. La seule capture complète prend donc les **deux** :
+  `make install-laravel DRY_RUN=true > plan.txt 2>&1` (ou `2>&1 | tee plan.txt`). Ni
+  `> plan.txt` ni `2> plan.txt` seuls ne suffisent. Le plan est aussi dans
+  `/tmp/laravel-install-*.log`.
+  ⛔ `DRY_RUN=true` est **refusé** sur les chaînes composites (`install`, `install-dev`,
+  `install-dev-full`, `install-prod`, les variantes `-fast`, `install-incremental`) : elles
+  bâtissent des images et démarrent des conteneurs avant d'atteindre `install.sh`.
+  Toute valeur autre que `true`/`false` est refusée bruyamment (`DRY_RUN=1` lancerait sinon une
+  installation réelle en silence).
+- `make install-laravel RESUME_FROM=<module>` - Reprendre à partir d'un module. La valeur est
+  validée contre `INSTALL_MODULES` lu dans `scripts/install.sh`. ⚠️ **`--resume-from` ne FORCE
+  rien** : il saute ce qui précède, l'état sur disque décide toujours en aval — seul `--force`
+  rejoue un module déjà franchi. Refusé sur `install-laravel-prod` (qui enchaîne cinq `--only`).
 - `make artisan cmd="migrate"` - Run artisan commands
 - `make composer cmd="install"` - Run composer commands
 - `make migrate` - Run database migrations
