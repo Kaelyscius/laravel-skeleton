@@ -798,6 +798,17 @@ it('le plan est réparti sur STDOUT et STDERR, et seule une capture 2>&1 est com
         BASH
         , [
             'INSTALL_SH' => ShellProbe::installScript(),
+            // 🔴 TROISIÈME OCCURRENCE DU MOTIF, DANS LE GARDE ÉCRIT POUR LA DEUXIÈME.
+            // Sans cet épinglage, ce test constatait un comportement de CONTENEUR
+            // et l'affirmait universel : les lignes `[DRY]` de stderr viennent
+            // toutes de `validate_arguments`, dont la branche ne s'exécute que si
+            // `is_docker_environment` (`common.sh` : `/.dockerenv` OU cette
+            // variable). `make test` tourne DANS le conteneur → 3 lignes ; la CI
+            // tourne sur un runner NU → 0, et le test rougissait sur `main`
+            // (run 32627114533) après avoir été vert en local.
+            // Épinglée plutôt que subie : c'est aussi le chemin de PRODUCTION,
+            // l'installeur s'exécutant dans le conteneur php.
+            'DOCKER_CONTAINER' => '1',
         ], 120);
 
     // `preg_match_all` rend `int|false` : le cast est explicite plutôt que
