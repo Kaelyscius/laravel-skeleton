@@ -303,7 +303,7 @@ jobs:
           DB_USERNAME=laravel_test
           DB_PASSWORD=laravel_test
           REDIS_HOST=redis
-          CACHE_DRIVER=redis
+          CACHE_STORE=redis
           SESSION_DRIVER=redis
           TELESCOPE_ENABLED=false
           PULSE_ENABLED=false

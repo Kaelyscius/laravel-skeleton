@@ -1,4 +1,31 @@
-# État du projet — 2026-08-22 (branche `main`)
+# État du projet — 2026-08-23 (branche `main`)
+
+> 🆕 **Story 2.4 implémentée, revues 1 et 2 traitées (≈60 + 31 constats).**
+> **423 tests Pest · 40 tests Bats · ratchet 0/0/0 · 87 mutations rejouées (60 + 27), toutes rouges
+> observées sauf les deux inatteignables-par-construction, dites comme telles.**
+>
+> 🔴 **LA REVUE 2 A TROUVÉ QUE LE CORRECTIF DU « TEST QUI ÉVITAIT LE VRAI MODE DE PANNE »
+> ÉVITAIT LE VRAI MODE DE PANNE.** Le fixture `…​.invalid` est mesuré à **0,0149 s** — NXDOMAIN
+> immédiat, RFC 2606 — et non aux 3,13 s d'un conteneur arrêté ; l'assertion temporelle passait
+> avec ou sans portillon (38 ms contre 506 ms), et seul le LIBELLÉ du résumé faisait rougir. Le
+> test asserte désormais le **nombre de tentatives d'ouverture de PDO** (0 avec portillon), comme
+> `DatabaseHealthCheckTest` : déterministe, indépendant de l'horloge et du libellé.
+>
+> 🔴 **ET LA CAMPAGNE DE MUTATION ELLE-MÊME AVAIT DEUX FAUX VERTS**, tous deux corrigés :
+> un test à `->hourly()` était vrai **59 minutes sur 60** (la mutation est passée pendant la
+> minute 0), et deux mutations visaient des fichiers dont les gardes vivent dans une suite que le
+> script n'exécutait pas. Un test qu'on croit vert reste le défaut de tête de ce projet.
+>
+> 🎁 **La cause des « ~7,5 s inexpliquées » est trouvée : Telescope.** Bascule des drapeaux, redis
+> arrêté : `TELESCOPE=on` **13,77 s** · `TELESCOPE=off` **6,39 s**. Il rejoue vers les dépendances
+> que la route vient de déclarer injoignables. `health` est dans `telescope.ignore_paths` ; effet
+> mesuré en HTTP : **13,74 s → 9,59 s**. ⚠️ Il reste **~3,2 s non localisées**, et c'est dit.
+>
+> ⚖️ **Décision d'Alex (revue 2) : `nightly-freshness` est HORS des `needs` de `CI Summary`** tant
+> que le premier nightly n'existe pas — un rouge attendu en permanence masquerait une régression
+> réelle. Il lit désormais aussi la **conclusion** du dernier run : « il tourne » n'est pas « il
+> passe ». La bascule en bloquant est une étape écrite, section « La bascule à faire JUSTE APRÈS le
+> premier nightly ».
 
 > 🆕 **Story 2.3 implémentée, revues 1 et 2 traitées (19 + 19 constats).**
 > **ratchet 0/0/0.** Mutations rejouées et rouges observés — ⚠️ **avec UNE exception consignée** :
@@ -57,6 +84,504 @@
 > `eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519`, ou `gh auth setup-git`.
 > ✅ **Réglé le 2026-08-22** : `gh auth setup-git` + remote basculé en HTTPS. `git fetch`/`push`
 > fonctionnent sans agent ni passphrase.
+
+---
+
+## ✅ Story 2.4 — `/health` sait rougir, et l'installation se joue enfin pour de vrai
+
+> **408 tests Pest (371 + 37) · 31 tests Bats · ratchet 0/0/0 · 60 mutations rejouées sur la story
+> — 58 rouges OBSERVÉES, 2 vertes.** ⚠️ Des deux vertes, **une est depuis passée au rouge** grâce à
+> `DatabaseHealthCheckTest` ajouté en revue 1 (« `RESET` inconditionnel », verte au premier jet
+> faute de test) ; **l'autre est inatteignable par construction** et c'est écrit dans le code.
+> `make test-bats` : 31 tests, une seconde. `make test-bats-e2e` : l'installation réelle.
+
+**Ce que la story a changé, dans l'ordre où il fallait le faire.**
+
+1. **`/health` n'était pas une sonde, c'était une constante.** Mesuré avant d'écrire une ligne :
+   `curl https://localhost/health` → `200`, **93 octets**, aucune sonde exécutée. Il répondait donc
+   `ok` la base à terre. Il exécute désormais les sondes enregistrées : `200` si tout est sain,
+   **`503` sinon**, JSON à trois clés `database` / `cache` / `queue`.
+2. **Deux sondes neuves** sur le modèle de `DatabaseHealthCheck` : `CacheHealthCheck` (écriture /
+   relecture / purge d'une clé éphémère) et `QueueHealthCheck` (**joignabilité du backend**).
+3. **Le `QueueCheck` de Spatie est refusé, et le refus est écrit sur place** : il atteste qu'un job
+   a tourné récemment, sémantique **fausse au sortir d'une install neuve**. Le nightly aurait rougi
+   pour une raison étrangère à l'installeur.
+4. **`tests/bats/`** : le E2E d'installation, et surtout `tests/bats/unit/`, qui éprouve en une
+   seconde tout ce qui DÉCIDE d'un verdict.
+5. **`.github/workflows/nightly.yml`**, planifié 03:17 UTC, déclenchable à la main, bloquant.
+
+---
+
+### 🔴 REVUE 1 — deux défauts que l'implémentation avait ÉCRITS sans les voir
+
+#### (A) La ligne « sonde lente » du bloc GELÉ n'était pas tenue
+
+La matrice exige « réponse **bornée** dans le temps ». Le budget de 5 000 ms n'était évalué
+qu'**ENTRE** les sondes : la première tournait sans borne et consommait tout le délai à elle seule.
+
+| Mesure — conteneur postgres RÉELLEMENT arrêté | Avant portillon | Après portillon |
+|---|---|---|
+| `curl https://localhost/health` | **58,6 s** (et **504 d'Apache à 60 s** sur la 1ʳᵉ passe) | **3,20 – 4,24 s** (10 éch. / 11) |
+| sonde `database` (`duration_ms`) | 31,2 s | 3,10 – 3,96 s |
+| corps rendu | souvent aucun (504) | `503` complet, à chaque fois |
+
+**Aggravant, et c'est le vrai constat de la revue** : *tous* les tests de dégradation empruntaient
+le chemin RAPIDE (`127.0.0.1:1`, `ECONNREFUSED`, ~0 s), et le test Bats « SAIT rougir » réécrivait
+`DB_HOST` au lieu d'arrêter le conteneur — **avec, en commentaire, l'aveu que l'arrêt avait été
+écarté à cause de la marge**. Le seul test capable d'observer le vrai mode de panne était celui
+qu'on avait écrit pour l'éviter.
+
+**Parade : un PORTILLON PAR SONDE** (`App\HealthChecks\Support\BackendEndpoint`) — une connexion
+TCP bornée avant l'aller-retour applicatif. Cause mesurée du désastre : `gethostbyname('postgres')`
+coûte **3,13 s** quand le conteneur est arrêté, et le framework REJOUE la connexion (~10 tentatives
+par sonde). Le portillon supprime le facteur ×10.
+
+⚠️ **Ce qui reste non borné, et c'est écrit partout où le chiffre apparaît** : le coût UNITAIRE
+d'une résolution en échec — mesuré à **~3,1 s** par tentative sur cette pile. Aucune API PHP ne
+l'expose — `PDO::ATTR_TIMEOUT` a été **essayé, mesuré (3,13 s que le timeout vaille 2, 5 ou rien),
+et retiré avec son commentaire**. Report ouvert dans `deferred-work.md`.
+
+Les tests qui ferment l'AC :
+- Pest, chemin lent (`.invalid`, RFC 2606) : `503` + résumé du portillon + **borne temporelle** ;
+- Bats E2E : **conteneur postgres réellement arrêté**, corps `503` lu par analyse JSON, temps total
+  asserté sous **45 s** (passerelle mesurée : 60 s), puis retour à `200`.
+
+#### (B) La sonde cache attestait la MAUVAISE dépendance
+
+```
+Redis arrêté, AVANT :  503  ·  database ok · cache ok    · queue error
+Redis arrêté, APRÈS :  503  ·  database ok · cache ERROR · queue ERROR
+```
+
+Mesuré le 2026-08-23, conteneur redis **réellement arrêté** : `503` en **13,8 s**, dont 3,11 s pour
+le portillon cache et 3,13 s pour le portillon queue. ⚠️ **Les ~7,5 s restantes sont HORS des
+sondes et ne sont pas expliquées** — elles ne sont pas dans les `duration_ms`. Elles sont écrites
+telles quelles plutôt que rationalisées, et rattachées au report « coût unitaire de résolution ».
+
+`config('cache.default')` valait **`database`** : les `.env` déclaraient `CACHE_DRIVER` alors que
+Laravel 11+ lit **`CACHE_STORE`** (`config/cache.php:17`). La « sonde cache » était une seconde
+sonde base — **et le nightly assertait `"cache":{"status":"ok"` dessus**.
+
+Corrigé dans les six endroits qui écrivaient ou lisaient la clé morte : `.env.example`,
+`scripts/setup/generate-configs.sh`, `scripts/lib/laravel.sh`, `ci.yml` (×2), `docker.yml`.
+`src/tests/Unit/CacheStoreKeyTest.php` gèle la CONCORDANCE — pas une valeur : ce que les modèles
+déclarent doit être ce que la configuration lit.
+
+🎁 **Et cela a annulé une dette qu'on s'apprêtait à consigner.** `/up` mettait **27 s** à rendre son
+`200` base coupée, ce qu'on avait attribué à un « surcoût pré-existant hors mandat ». Ce n'était pas
+`/up` : cache ET sessions retombaient sur `database`, donc **toute** requête traversait la base
+morte. Après correction, mesuré trois fois : **0,073 / 0,073 / 0,075 s**. La dette n'existait pas.
+
+---
+
+### Les autres constats de revue 1, par famille
+
+**Gardes qui ne gardaient rien**
+- 🔴 `grep -qF '"status":"ok"'` dans `install.bats` était satisfait par la **sous-chaîne de
+  `checks.database.status`** : l'assertion du verdict GLOBAL ne pouvait pas rougir seule. Remplacée
+  par `e2e_json_field`, qui **analyse** le document (python3, présent partout ; `jq` ne l'est pas
+  ici — mesuré). Un test compare explicitement les deux comportements.
+- 🔴 L'en-tête de `lib/e2e.bash` affirmait que tout ce qui décide d'un verdict y vit **et** y est
+  couvert. **Faux** : `e2e_resolve_compose` et `e2e_assert_ports_free` — qui décident si le nightly
+  démarre et à qui l'échec est imputé — n'avaient aucun test. Ils en ont, par des **coutures**
+  (`e2e_has_compose_v1`, `e2e_port_is_busy`) que le test remplace.
+- 🔴 `e2e_assert_ports_free` **fermait le descripteur 3**, celui que Bats réserve à `>&3` : la sonde
+  ouvrait le fd dans un sous-shell mais `exec 3<&-` s'exécutait dans le PARENT.
+- 🔴 `append_healthcheck_route` (`10-laravel-core.sh`) émettait **toujours** la route littérale
+  always-200, et le seul test qui l'exécute comptait des occurrences de `'/health'` sans jamais
+  asserter ce que la route FAIT. La route émise fait désormais un `SELECT 1` et rend `503` — le
+  repli reste minimal (il ne peut pas référencer Spatie, installé au module 35, alors qu'il tourne
+  au module 10) mais il **peut rougir**. Le test asserte le corps émis, l'absence de fuite, et que
+  le PHP produit est analysable.
+- 🔴 Le repli de `35-configure-spatie-packages.sh` **publiait `$e->getMessage()`** — la fuite DSN
+  exacte que `DatabaseHealthCheck` scrube et qu'un test de cette story prétend empêcher. Scrubé.
+- 🔴 Le repli littéral à 5 000 ms était justifié par une **prémisse fausse** (« 35-configure peut
+  republier `config/health.php` » — il ne publie que `if [ ! -f … ]`, et le fichier est versionné).
+  Motif corrigé, et un test pose désormais des valeurs hostiles (`null`, `0`, `-1`, `''`,
+  `'beaucoup'`) pour éprouver le repli.
+- ⚠️ **Le chemin sain est VACU en environnement de test, et un test le DIT maintenant** :
+  `phpunit.xml` force `QUEUE_CONNECTION=sync` (`SyncQueue::size()` rend un `0` codé en dur) et
+  `CACHE_STORE=array`. « Trois sondes à ok » ne prouve donc rien sur un vrai Redis. La couverture
+  des vrais backends appartient au E2E et à la vérification manuelle.
+
+**Robustesse de `/health`**
+- Budget `0` ou négatif : `is_numeric()` les acceptait, l'échéance était **déjà dépassée**, et
+  `/health` rendait `503` à perpétuité sans nommer de panne. Plancher + test.
+- `warning` et `skipped` étaient écrasés en `error`, ce qui rendait `health.treat_skipped_as_failure`
+  **inerte**. Chaque statut est publié tel quel ; la clé est lue, et testée dans les deux sens.
+- `shouldRun()` (conditions `->if()` / `->unless()`) était ignoré : les sondes conditionnées
+  tournaient quand même.
+- `Str::snake` peut faire **collisionner** deux noms (`MonCheck` / `mon_check`) : la seconde
+  effaçait la première et `/health` rendait `200` en ayant perdu une sonde. Refus bruyant.
+- Une sonde qui explose ne laissait **aucune trace** : `catch (Throwable)` jetait l'exception sans
+  un mot. Journalisée (classe + nom de sonde, jamais le message), et testée.
+- `DatabaseHealthCheck` n'avait **aucun test propre** — la 12ᵉ mutation du premier jet le disait.
+  Il en a quatre, dont le rejeu du `RESET` observé par **comptage des tentatives d'ouverture de
+  PDO** (1 avec le garde, 2 sans) plutôt que par une durée bruyante.
+- ⛔ **Authentification / limitation de débit : REPORTÉES, avec la raison écrite dans le code.**
+  `throttle:` passe par le `RateLimiter`, donc par le **magasin de cache** : le poser ferait rendre
+  **500** à `/health` quand le cache est à terre — la classe de défaut que cette story supprime,
+  réintroduite par sa propre protection. Report ouvert, trigger Epic 3.
+
+**Nightly et outillage**
+- `window_limit_seconds` était **interpolé directement dans un `run:`** (injection), et non validé —
+  une valeur non numérique produisait un « integer expression expected » étiqueté INSTALLEUR. Passé
+  par `env:`, validé, et étiqueté **ENTRÉE**.
+- `E2E_MUTATE_MODULE` était **concaténé dans un chemin** sans liste blanche. Confronté à la liste
+  RÉELLE lue dans `scripts/install.sh` — même source que le garde `RESUME_FROM` du Makefile.
+- Le pinning de Bats était **contourné dès que `bats` était dans le `PATH`** : la version est
+  désormais comparée à un plancher (1.5.0 — sous 1.4.0, `BATS_TEST_TMPDIR` est vide et `LOCKFILE`
+  devient `/lock.yml`). Et `rm -rf $(BATS_HOME)` refuse un chemin absolu, vide ou avec `..`.
+- Le step CI bloquant **clonait `bats-core` depuis github à chaque exécution** : cache + trois
+  tentatives + message étiqueté INFRASTRUCTURE.
+- L'étiquetage infra ne lisait qu'`install.log` alors que le workflow grepe les deux : une panne DNS
+  visible seulement dans `install-container.log` — le cas le plus fréquent, `composer` et `npm`
+  tournant dans le conteneur — était imputée à l'INSTALLEUR.
+- 🔴 **Rien ne prévenait d'un nightly rouge, et rien ne le maintenait en vie.** GitHub désactive les
+  workflows `schedule` après 60 jours sans activité : le garde-fou se serait arrêté **sans un mot**.
+  Deux parades : une issue ouverte/commentée à chaque nuit rouge, et un job CI **bloquant**
+  `nightly-freshness` qui rougit si le workflow est désactivé, s'il n'a jamais tourné, ou si son
+  dernier run date de plus de 3 jours.
+- Échecs de `docker exec` **avalés par `|| true`** → journal vide et grep muet, sans dire pourquoi.
+- `teardown_file` appelait un **`sudo` interactif** après 20-40 min de run : il bloquait sans sudo
+  sans mot de passe. `sudo -n`, et un nettoyage partiel ne rougit pas.
+- **Cascade d'échecs** : un `skip` conditionné laisse désormais UN rouge nommant UNE cause.
+- **Ports** : 80/443 seulement étaient vérifiés ; `install-dev-full` publie aussi 8080, 8025, 1025,
+  8081, 9999. Et « address already in use » n'était pas une signature infra.
+- **Un seul `curl`, sans reprise** : Apache ou php-fpm encore en chauffe → rouge instable imputé à
+  l'installeur. `e2e_wait_for_http` attend un état et finit par rendre le code réellement observé.
+- **Fenêtre nulle acceptée** : `started_at == finished_at` passait « < 15 min ». Une installation
+  entièrement court-circuitée par les sentinelles de la 2.2 aurait été félicitée. Plancher **et**
+  plafond, par `e2e_window_verdict`.
+- `e2e_iso_to_epoch` était **GNU-only silencieusement** (BSD veut `date -j -f`) : le diagnostic
+  disait « horodatage inconvertible » — faux, c'est l'outil. Le lecteur de lockfile **perdait la
+  dernière ligne** sans saut final, et confondait champ indenté et champ absent.
+- 🔴 **La fixture de lockfile était écrite à la main** — la forme exacte du défaut de tête de la
+  story 2.2. Elle est désormais **PRODUITE** par le vrai `scripts/install-lockfile.sh` contre des
+  sondes stubées, et un test anti-vacuité vérifie qu'elle l'a bien été.
+- 🔴 **L'E2E ne rejouait jamais l'idempotence** — le sujet même de la story 2.2. Il relance
+  l'installeur et vérifie exit 0, sauts annoncés, et `/health` toujours vert.
+- Le nettoyage filtrait `--filter name=e2e-install`, qui matche par **sous-chaîne** : il passe par
+  `label=com.docker.compose.project`.
+
+**Phrases fausses à côté de code juste**
+- Trois documents donnaient **trois latences pire-cas différentes** (31 s / 58,6 s / « vers 58 s »),
+  et le docblock de la route — celui que lira le mainteneur qui touche au budget — sous-estimait de
+  28 s. Les trois portent maintenant les mêmes chiffres, tous re-mesurés après le portillon.
+- `asAmnesiacCache()` affirmait que `NullStore::put()` rend `true` ; il rend **`false`** (vérifié
+  dans `vendor/`). Le commentaire dit désormais pourquoi le cas reste intéressant : la sonde
+  n'inspecte pas le retour de `put()`, elle **relit et compare**.
+- 🔴 Le compte de tests ne se réconciliait pas, et la revue avait raison. Il est désormais
+  vérifiable ligne à ligne : **371 Pest avant la story** (le compte à l'issue de la revue 2 de la
+  2.3, mesuré ici — pas les « 349 » d'une passation antérieure) **+ 52 neufs = 423**. Le détail :
+  22 `HealthEndpointTest` · 13 `BackendEndpointTest` · 4 `DatabaseHealthCheckTest` ·
+  4 `CacheStoreKeyTest` · 5 `WorkflowInputSafetyTest` · 2 `TrackedFilesGuardTest` ·
+  1 `InstallSpatieHealthTemplateTest` · 1 assertion neuve dans `InstallDryRunTest`. À quoi
+  s'ajoutent **40 tests Bats**, que Pest ne compte pas et qui tournent par `make test-bats`, et
+  **6 tests Bats E2E** non joués sur ce poste.
+
+---
+
+### 🔬 Campagne de mutation — 60 mutations sur la story, 38 pour la seule revue 1
+
+**Revue 1, côté PHP — 17 mutations, 16 rouges observées** (boucle locale, **conteneur php**) :
+portillon retiré des trois sondes · portillon qui laisse toujours passer · portillon qui refuse
+toujours · résolution d'endpoint base neutralisée · résolution d'endpoint cache neutralisée ·
+`warning` traité comme fatal · `treat_skipped_as_failure` ignoré · collision de clés silencieuse ·
+`shouldRun()` ignoré · plancher de budget retiré · sonde explosive non journalisée · `RESET`
+inconditionnel · `CACHE_DRIVER` rétabli dans `.env.example` · socket unix pris pour un hôte TCP.
+
+⚠️ **La 17ᵉ est VERTE, et c'est écrit plutôt que caché** : « poser le drapeau sans lire le retour de
+`statement()` » ne fait rougir aucun test. **La branche est inatteignable dans cette pile** — le
+framework impose `PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION` (`Connector::$options`), donc un
+`execute()` en échec LÈVE au lieu de rendre `false`. C'est dit dans le code ET dans le test, plutôt
+que compté comme un garde.
+
+**Revue 1, côté Bats — 21 mutations, 21 rouges observées** (boucle locale, **hôte nu**, `make
+test-bats`) : lecture de lockfile par sous-chaîne · validation d'horodatage retirée · fenêtre
+négative ramenée à zéro · champ absent rendant une chaîne vide · lockfile absent ignoré · marqueur
+d'infrastructure non écrit · tout journal étiqueté infra · aucun journal étiqueté · recherche
+mot-à-mot · fenêtre en dur · **un seul journal lu** · signature « address already in use » retirée ·
+**dernière ligne sans saut final perdue** · champ indenté indiscernable d'un champ absent ·
+diagnostic `date` non-GNU générique · plancher de fenêtre retiré · plafond retiré · **lecture JSON
+par sous-chaîne** · ordre de préférence compose inversé · aucun port jamais occupé · liste de ports
+réduite à 80/443.
+
+⚖️ **L'ENVIRONNEMENT DE CHAQUE MESURE EST NOMMÉ**, parce que la story 2.3 a livré un garde vert en
+conteneur et rouge en CI : les mutations PHP sont rejouées **dans le conteneur php**
+(`vendor/bin/pest`), les mutations Bats **sur l'hôte nu** (`make test-bats`, bats 1.14.0). Aucune
+des deux boucles ne dépend de la CI pour rougir.
+
+---
+
+### 🔴 REVUE 2 — le correctif du « test qui évitait le vrai mode de panne » l'évitait aussi
+
+C'est le motif du projet appliqué à sa propre correction. Le test « chemin LENT » de la revue 1
+assertait une DURÉE (`< 15 s`) et une SOUS-CHAÎNE de résumé (« portillon »). Mesuré en revue 2 :
+
+| fixture | coût `fsockopen(…, 2.0)` | ce que c'est |
+|---|---|---|
+| `health-probe.nowhere.invalid` | **0,0149 s** | NXDOMAIN immédiat (RFC 2606) — le chemin **RAPIDE** |
+| `postgres-arrete-fictif` | **2,5247 s** | nom NON qualifié, liste de recherche du résolveur |
+| `postgres` (conteneur arrêté) | **3,13 s** | **le vrai mode de panne** |
+| `127.0.0.1:1` | **0,0001 s** | `ECONNREFUSED` |
+
+Avec le portillon **38 ms**, sans **506 ms** : l'assertion temporelle passait dans les deux cas avec
+30× de marge. **Seul le libellé faisait rougir** — renommer le résumé emportait la couverture. Et le
+docblock affirmait l'inverse (« 3,13 s »), dans la correction du constat qui portait précisément
+là-dessus.
+
+⚖️ **L'observable est désormais le NOMBRE DE TENTATIVES D'OUVERTURE DE PDO** (0 avec portillon),
+comme `DatabaseHealthCheckTest` le faisait déjà : déterministe, indépendant de l'horloge et du
+libellé, et c'est **la grandeur que le portillon borne**. Les trois assertions « le résumé contient
+*portillon* » (base, cache, file) ont été converties de la même façon.
+
+---
+
+### 🩺 UN SECOND DÉFAUT DE MÉTHODE, TROUVÉ EN REJOUANT LA VÉRIFICATION FINALE
+
+🔴 **L'opcache de php-fpm servait une version PÉRIMÉE du portillon, et j'ai failli publier ses
+chiffres.** À la dernière passe de vérification, conteneur postgres réellement arrêté :
+
+```
+via HTTP        503 en 16,1 · 15,5 · 15,2 · 15,2 · 15,3 s   résumé « Failed »
+en CLI          isReachable() = false en 3,1 s              résumé du portillon
+```
+
+Le même code, deux réponses. `opcache.revalidate_freq=2` n'avait pas repris les éditions de la
+revue 2 dans les workers FPM : les requêtes HTTP exécutaient l'ancienne classe, donc **sans
+portillon**, donc la tempête de reconnexions. Après `docker restart laravel-app_php` :
+
+```
+via HTTP        503 en 4,05 · 3,19 · 3,21 s                 résumé « Backend injoignable — portillon »
+```
+
+⚖️ **La règle qui en sort, et elle vaut pour toute mesure HTTP de ce dépôt** : après avoir édité du
+PHP, une mesure prise par `curl` ne dit rien tant que php-fpm n'a pas été redémarré. Le CLI, lui,
+recharge à chaque appel — c'est pourquoi les deux ne concordaient pas. Cela vaut aussi pour les
+chiffres pris **pendant** la revue 2 sur le chemin redis : ils sont re-mesurés ci-dessous, après
+redémarrage.
+
+---
+
+### 🩺 La MÉTHODE avait un défaut, et il est consigné
+
+La revue signalait 9 tests rouges indépendamment de toute mutation. **Reproduit — et la cause
+n'était pas celle annoncée.** Mesuré ce jour :
+
+```
+docker exec -u 1000:1000 … vendor/bin/pest   → 423 verts   ← la commande de mes campagnes
+make test                                     → 423 verts
+docker exec … vendor/bin/pest  (donc ROOT)   → 6 échecs sur les 2 fichiers sondés
+```
+
+`git check-ignore` rend **128 pour les deux utilisateurs** (`/var/www/html` n'est pas un dépôt) : ce
+n'est pas le différenciateur. Le différenciateur est l'**UID**. En root, (a) les fixtures qui
+éprouvent un REFUS D'ÉCRITURE réussissent — root écrit partout, donc le garde ne peut pas rougir ;
+(b) `git` refuse « detected dubious ownership in repository at '/var/www/project' », le dépôt étant
+possédé par l'UID 1000.
+
+✅ **Mes trois campagnes PHP ont tourné avec `-u 1000:1000`**, c'est-à-dire dans l'environnement à
+423 verts. Elles sont valides. La commande exacte est écrite ci-dessous, et c'est la seule à
+employer :
+
+```bash
+# mutations PHP — DANS le conteneur, en UID 1000, jamais en root
+docker exec -u 1000:1000 laravel-app_php sh -c 'cd /var/www/html && vendor/bin/pest <fichiers>'
+# mutations Bats — sur l'HÔTE NU
+make test-bats
+```
+
+⚠️ **Et deux FAUX VERTS de mes propres campagnes ont été trouvés et corrigés :**
+- le test cron employait `->hourly()` (« 0 * * * * ») : la mutation « rétablir `shouldRun()` » est
+  passée **VERTE pendant la minute 0** de l'heure où la campagne a tourné. L'expression est
+  désormais **calculée** pour ne jamais être due ;
+- deux mutations (`10-laravel-core`, `35-configure-spatie`) visaient des fichiers dont les gardes
+  vivent dans une suite que le script n'exécutait pas. Rejouées avec la bonne suite : **rouges**.
+
+---
+
+### Les 31 constats de revue 2, par famille
+
+**Gardes qui ne gardaient rien**
+- `e2e_wait_for_http` décidait **trois** verdicts du E2E sans aucun test : la forcer à `return 0`
+  rendait inconditionnelle la garde anti-vacuité « la pile revient à 200 ». Quatre tests, contre un
+  **vrai** `python3 -m http.server` — dont un service démarré en retard, qui prouve la reprise.
+  Ils ont trouvé un défaut au passage : `curl … || echo "000"` **recollait** son repli à la sortie
+  de curl, qui imprime déjà `000`, donc `$code` valait « 000\n000 ».
+- Le corps réel de `e2e_port_is_busy` n'était **jamais exécuté** (les deux tests stubaient la
+  fonction) : réintroduire le bug fd-3 de la passe 1 donnait 31/31 ok. Un test lie maintenant un
+  port éphémère RÉEL, exerce le corps, et **écrit sur `>&3`** — l'écriture échoue si le défaut
+  revient. Le stubbing par couture avait déplacé la surface non testée d'un cran.
+- `e2e_published_ports` était faux **dans les deux sens** : il omettait **5432** (publié par
+  `docker-compose.dev.yml` sur un service sans profil, donc toujours démarré) et incluait **8082**
+  (`redis-commander`, profil `dev-extra`, jamais démarré). Le test recopiait le littéral. La liste
+  est maintenant **dérivée de `docker compose config`** — même correctif qu'en 2.3 pour
+  `COMPOSITE_INSTALL_TARGETS` — et le test l'exerce sur un fichier compose fabriqué, qu'aucune
+  liste écrite à la main ne peut satisfaire.
+- Le scrub DSN du module 35 n'était observable par **aucun** test : le module 10 a un harnais, le 35
+  n'en avait pas. Il en a un (`InstallSpatieHealthTemplateTest`), et la mutation est rouge.
+- Retirer `"tests"` de `GUARDED` (`assert-tracked-files.sh`) était **invisible**. Gardé.
+
+**Défauts introduits par les correctifs de la revue 1**
+- `BackendEndpoint` se désactivait **en silence** sur un `host` en TABLEAU (lecture/écriture,
+  multi-hôtes), sur `DATABASE_URL`/`REDIS_URL`, et sur `memcached`/`beanstalkd` — exactement les
+  déploiements où il compte. Les quatre sont couverts. Et le faux négatif restant (hôte à plusieurs
+  enregistrements A, `fsockopen` n'essaie qu'une adresse) a une **porte de sortie nommée** :
+  `HEALTH_PROBE_GATE=false`, testée dans les deux sens.
+- `shouldRun()` évaluait aussi l'**expression cron** de Spatie : une sonde `->hourly()` aurait fait
+  rendre **503** 59 minutes sur 60. Seules les conditions `->if()`/`->unless()` sont honorées.
+- La route de repli du module 10 attrape `\Throwable`, pas `PDOException` : entre le module 10 et le
+  20 la connexion n'est **pas encore configurée**, et `DB` y lève autre chose qu'une erreur de
+  connexion — un **500** au lieu d'un `503`.
+- Le job d'alerte du nightly était **mort à son premier appel** : `--jq '.[0].number'` imprime le
+  littéral « null » sur un ensemble vide, `[ -n "null" ]` est vrai, `gh issue comment null` échoue
+  sous `bash -e`. L'issue n'était **jamais** créée. `// empty`, plus la création du label `nightly`
+  (sans lui, le repli créait une issue orpheline : une neuve chaque nuit).
+- `window_limit_seconds` atteignait encore un `run:` par **interpolation directe**, dans un step
+  `if: always()` — donc rendu même après l'échec de la validation. Corrigé sur deux sites, pas sur
+  trois. `WorkflowInputSafetyTest` balaye désormais **tous** les workflows.
+- `E2E_PROJECT` était écrit deux fois en littéral : porté au niveau workflow.
+- `e2e_json_field` imprimait `True`/`False` (Python) là où bats compare à `true`/`false`.
+- `BoundsBackendReachability` justifiait une décision par « `/health` est seulement limité en
+  débit » — alors que la limitation de débit a été **reportée** par cette même story.
+- Les deux gabarits d'environnement semblaient se contredire : chacun **dit maintenant quel
+  environnement il gouverne** (racine = pile Docker ; `src/` = squelette nu). Et **deux fichiers
+  suivis prescrivaient encore la clé morte** — `docs/architecture/4-architecture-donnes.md`, qui
+  fait autorité, et `prompts/testing/01-add-dusk-e2e-testing.md`. `CacheStoreKeyTest` **balaye le
+  dépôt** au lieu d'énumérer six chemins, et distingue « prescrire » de « mentionner ».
+
+**À consigner, et consigné**
+- Les assertions sur le gabarit de route du module 10 épinglent une **formulation**, pas un
+  comportement : la route émise n'est jamais exécutée. C'est écrit dans le test.
+- La liste blanche `E2E_MUTATE_MODULE` ne vit que dans le chemin de 20-40 min ; **ce qui bloque
+  réellement une traversée, c'est le contrôle de jeu de caractères du workflow**. Écrit sur place.
+
+---
+
+### 🔬 Campagne de mutation — revue 2 : 27 mutations, 27 rouges OBSERVÉES
+
+**17 côté PHP**, rejouées **dans le conteneur php en UID 1000** (`vendor/bin/pest`, la commande
+écrite plus haut) : portillon retiré de la sonde base · portillon toujours passant · porte de sortie
+inopérante · hôte en LISTE ignoré · `DATABASE_URL` ignorée · `memcached` non résolu · `beanstalkd`
+non résolu · cron de Spatie appliqué à la requête HTTP · conditions `->if()`/`->unless()` ignorées ·
+Telescope réenregistrant `/health` · alerte `.[0].number` nu · label `nightly` jamais créé · repli
+d'issue **sans** label rétabli · `window_limit` interpolé dans un corps de `run:` · `"tests"` retiré
+de `GUARDED` · module 35 refuyant le DSN · repli du module 10 n'attrapant que `PDOException`.
+
+**10 côté Bats**, rejouées **sur l'hôte nu** : `wait_for_http` rendant toujours un succès · ne
+rejouant jamais · avalant le code réel · avec le repli qui recolle `000` · `port_is_busy` refermant
+le fd 3 du parent · déclarant tout port occupé · liste de ports incluant `dev-extra` · repli
+silencieux sur liste vide · scalaires JSON à la mode Python.
+
+🔴 **Trois de ces mutations ont d'abord été vues VERTES, et chacune a corrigé un test :**
+- « cron appliqué » : le test employait `->hourly()`, donc vrai **59 minutes sur 60** — la campagne
+  est tombée sur la minute 0. Expression désormais **calculée** pour n'être jamais due ;
+- « repli du module 10 » et « module 35 » : les gardes vivaient dans une suite que le script
+  n'exécutait pas. Suite corrigée, mutations rejouées, rouges ;
+- « repli silencieux sur liste vide » : le test voisin passait un répertoire SANS compose, donc la
+  fonction sortait **avant** d'atteindre la branche. Un test où compose répond parfaitement mais ne
+  publie aucun port a été ajouté.
+
+⚠️ **Et une quatrième a révélé un défaut dans MES PROPRES TESTS** : la mutation « `port_is_busy`
+referme le fd 3 » faisait **rester bats suspendu indéfiniment** — mes tests HTTP lançaient
+`(cd … && python3 -m http.server) &`, donc `$!` était le pid du SOUS-SHELL et le serveur survivait
+au `kill`, tenant le descripteur que Bats lit. Corrigé par `--directory` + `exec` + descripteurs
+détachés ; la suite filtrée passe désormais en quelques secondes au lieu de rester bloquée.
+
+---
+
+### 🔁 La bascule à faire JUSTE APRÈS le premier nightly
+
+> ⛔ **Deux gestes, dans cet ordre, et le second est une décision d'Alex prise en revue 2.**
+
+**1. Lancer le nightly une fois, et consigner le run.**
+Actions → *Nightly E2E Install* → *Run workflow*, sans mutation. Puis une seconde fois avec
+`mutate_module = 20-database`, qui **DOIT** être rouge. Reporter les deux numéros de run ici.
+
+**2. Rebasculer `nightly-freshness` en BLOQUANT.** Il est aujourd'hui **hors** des `needs` de
+`CI Summary`, et c'est délibéré : tant qu'il rougit par construction (le nightly n'a jamais tourné),
+le laisser dans le verdict global **masquerait une régression réelle** d'`integrity`, `quality`,
+`tests` ou `browser` — on apprendrait à lire « CI rouge » comme « ah oui, le nightly ». C'est le
+mécanisme du garde-fou qu'on désarme, appliqué au garde-fou anti-désarmement.
+
+Concrètement, dans `.github/workflows/ci.yml`, job `summary` :
+
+```yaml
+    needs: [integrity, quality, tests, browser, nightly-freshness]      # ← rajouter
+...
+        if: needs.integrity.result != 'success' || … || needs.nightly-freshness.result != 'success'
+```
+
+…et retirer les quatre lignes d'avertissement du résumé qui annoncent la non-blocance.
+
+⚖️ **Ce que `nightly-freshness` vérifie déjà**, et qui ne changera pas à la bascule : le workflow est
+`active` (GitHub désactive les `schedule` après 60 jours d'inactivité), il a tourné il y a moins de
+3 jours, **et son dernier run a CONCLU `success`**. Ce dernier point vient de la revue 2 : sans lui,
+un nightly qui échoue toutes les nuits laissait le garde **vert** — le garde-fou écrit pour empêcher
+qu'un garde-fou s'éteigne en silence était aveugle à son échec.
+
+---
+
+### ⚠️ Ce que la story 2.4 n'a PAS pu observer — et le test qui l'empêche d'être oublié
+
+**Le nightly n'a JAMAIS tourné.** Ni vert, ni rouge. Trois raisons structurelles : `workflow_dispatch`
+n'est déclenchable que lorsque le workflow existe sur la branche par défaut ; la CI de ce dépôt ne
+se déclenche que sur `main`/`develop` ; et le E2E exige les ports publiés **libres**, donc démonter
+la pile de développement d'Alex.
+
+🔴 **CE REPORT EST DEVENU UN TEST QUI ROUGIT.** Le job CI **bloquant** `nightly-freshness` échoue
+tant que le workflow n'a jamais tourné, s'il est désactivé, ou si son dernier run date de plus de
+3 jours. **La CI sera donc rouge sur ce job jusqu'au premier lancement du nightly** — c'est l'état
+réel, et c'est voulu : le projet préfère un rouge qui nomme la dette à une phrase dans un registre.
+
+**Les deux AC qui restent ouverts, et la manière EXACTE de les fermer :**
+
+- *« mutation de l'installeur exécutée, nightly observé rouge, numéro de run consigné »* →
+  Actions → **Nightly E2E Install** → *Run workflow* → `mutate_module = 20-database`. Le module est
+  muté **dans le clone** (jamais dans le dépôt), après confrontation à la liste blanche des modules
+  réels ; le rapport nomme le module fautif via `Échec du module <nom>`. Un run ainsi lancé **DOIT**
+  être rouge.
+- *« fenêtre `started_at`→`finished_at` < 15 min sur une install nominale »* → premier run planifié,
+  ou *Run workflow* sans mutation. La durée est publiée dans le résumé du job.
+
+✅ **Ce QUI a été observé, sur cette pile, ce jour — php-fpm redémarré, opcache frais :**
+
+| scénario | code | temps | sondes |
+|---|---|---|---|
+| application saine | `200` | 0,110 s | database ok · cache ok · queue ok |
+| **conteneur postgres réellement arrêté** | **`503`** | 4,05 / 3,19 / 3,21 s | **database error** · cache ok · queue ok |
+| `/up`, même état | `200` | 0,074 s | *(ne dit rien de la base — c'est son contrat)* |
+| **conteneur redis réellement arrêté** | **`503`** | 10,45 / 9,64 / 9,61 s | database ok · **cache error** · **queue error** |
+| remontée complète | `200` | 0,112 s | les trois à `ok` |
+
+Plus : **87 mutations sur la story** (60 + 27 en revue 2), **423 tests Pest**, **40 tests Bats**,
+ratchet **0/0/0**.
+
+⚠️ Le chemin redis reste à ~9,6 s pour 6,2 s de portillons : les **~3,4 s restantes ne sont pas
+localisées**, et l'exclusion Telescope les avait déjà réduites. Report tenu à jour.
+
+---
+
+### 📁 Fichiers
+
+**Neufs** — `src/app/HealthChecks/CacheHealthCheck.php`, `QueueHealthCheck.php`,
+`Support/BackendEndpoint.php`, `Support/BoundsBackendReachability.php` ·
+`src/tests/Feature/HealthEndpointTest.php`, `DatabaseHealthCheckTest.php`,
+`BackendEndpointTest.php` · `src/tests/Unit/CacheStoreKeyTest.php` ·
+`src/tests/Support/HealthProbe.php`, `UnreachableBackends.php` ·
+`tests/bats/lib/e2e.bash`, `tests/bats/unit/e2e-lib.bats`, `tests/bats/install.bats` ·
+`.github/workflows/nightly.yml`.
+
+**Modifiés** — `src/routes/web.php` · `src/app/Providers/AppServiceProvider.php` ·
+`src/app/HealthChecks/DatabaseHealthCheck.php` · `src/config/health.php` ·
+`src/tests/Unit/InstallDryRunTest.php` · `scripts/install/10-laravel-core.sh` ·
+`scripts/install/35-configure-spatie-packages.sh` · `scripts/setup/generate-configs.sh` ·
+`scripts/lib/laravel.sh` · `scripts/assert-tracked-files.sh` · `Makefile` · `.env.example` ·
+`.gitignore` · `.github/workflows/ci.yml` · `.github/workflows/docker.yml`.
+
+**Non touchés, et c'est délibéré** — `docker/apache/conf/sites-enabled/laravel.conf:111` (Ask
+First), `scripts/lib/common.sh` (report W17), `bootstrap/app.php` (`/up` reste ce qu'il est).
 
 ---
 
@@ -1067,7 +1592,7 @@ mécanisme, traité en symptôme. Il est désormais redondant — inoffensif, à
 | 🔴 **PR #27 : une décision écrite trois fois, et l'objet qu'elle gouverne ne la porte pas** | Dependabot propose `node 24.19.0-alpine3.23 → 26.7.0-alpine3.23` (`origin/dependabot/docker/docker/node/node-26.7.0-alpine3.23`), **ouverte depuis le 2026-08-10**. Le bump est **refusé jusqu'au 2026-10-28** — v24 est Active LTS jusqu'au 2026-10-20, v26 n'est LTS qu'au 2026-10-28 — et c'est écrit dans `docker/node/Dockerfile:3`, `docs/ETAT.md:287` et le pense-bête plus bas. **Rien ne relie ces trois traces à la PR.** Vue de GitHub : Dependabot, bump d'image, CI verte — quelqu'un la merge de bonne foi et le projet passe sur une version **Current** pendant deux mois. Trouvée seulement le 2026-08-22, au premier `git fetch` réussi après la réparation de l'authentification : tant que `fetch` échouait, la PR était **invisible en local**. ⚖️ Options : commenter la PR avec la date de levée (recommandé, elle devient auto-documentée) ; la fermer (Dependabot la recrée) ; `@dependabot ignore this major version` (trop fort — on *veut* Node 26, après le 2026-10-28). ⚠️ **La règle du projet voudrait mieux qu'une ligne ici** : « un report avec déclencheur doit être un test qui rougit quand le déclencheur survient, pas une phrase dans un registre ». Le test idoine existerait : rougir si `date >= 2026-10-28` **et** que `docker/node/Dockerfile` est encore en v24. Non écrit — c'est un choix, pas un oubli. |
 | **Branche mergée qui subsiste sur le distant** | `origin/story/2-1-runtime-shell-primitives` existe encore alors que la story 2.1 est mergée (`a076a91`) et `done`. Sans gravité, mais une branche mergée qui traîne se relit comme du travail en cours. `git push origin --delete story/2-1-runtime-shell-primitives`. Idem pour `story/2-2-idempotent-install-sentinels`, qui n'a **jamais été poussée** (mergée en local) et ne vit que sur ce poste. |
 | **Rector plante** | `Container::databasePath()`. Pas une régression de version : `src/rector.php:47` lie `phpstan.neon`, qui inclut l'extension Larastan, laquelle exige une app Laravel bootée. Rector est **informatif** en CI, donc non bloquant. |
-| **Sémantique `/health`** | Trois définitions coexistent : route Laravel tenant-gated, `<Location /health>` Apache mod_status, et docs/installeur qui promettent du JSON Laravel. Le critère go/no-go S7 en dépend. → Epic 3. |
+| ✅ **Sémantique `/health` — DEUX définitions, chacune avec son domaine énoncé (Story 2.4)** | 🔴 **La ligne précédente contenait une affirmation FAUSSE, et elle a vécu depuis la Story 1.4** : elle disait que `<Location /health>` (Apache `mod_status`) masquait la route Laravel. **Mesuré le 2026-08-23 sur la pile réelle : c'est le JSON de Laravel qui revient** (`curl -skS https://localhost/health` → `200`, `application/json`). Le bloc `laravel.conf:111` est **inopérant sur le vhost HTTPS** ; le retirer dépasse le mandat de la 2.4 (Ask First), mais l'affirmation inverse ne doit plus être répétée. État réel : `/up` = « le framework boote » (mesuré après la revue 1 : **200 en 0,073 s, conteneur postgres réellement arrêté** — la première mesure donnait 27 s, causées par `CACHE_DRIVER`/`CACHE_STORE`, pas par `/up`) ; `/health` = « ses dépendances répondent » (`database`/`cache`/`queue`, **`503` en 3,2 s** dans le même état). La 3ᵉ définition — celle des docs/installeur qui promettaient du JSON sans sonde — n'existe plus. **Ce qui reste pour Epic 3** : décider lequel des deux devient le healthcheck des CONTENEURS (`docker-compose.yml:23` interroge encore `/up`, `:57` exécute `healthcheck.php`). |
 | **ADR-0004 non câblé** | `config/pulse.php` attend `PULSE_DB_CONNECTION`, jamais défini, et aucune connexion `pulse` n'existe dans `config/database.php`. Le conteneur `postgres-pulse` tourne pour rien. → Story 3.2. |
 | **PHPStan : 9 erreurs** | Toutes dans `config/*` (scaffolding vendor). Plafonnées par le ratchet, pas résorbées. |
 | **`vite@latest webpack@latest`** | Cible mouvante dans une image figée — même fragilité que le `npm@latest` déjà corrigé. `docker/node/Dockerfile:57,73` (+ `pnpm@latest`). **= Lot E du plan supply chain, délibérément non fait le 2026-08-09** : ce n'est pas une montée, c'est supprimer une cible mouvante qui a déjà cassé le build une fois. → Epic 2 (quality gates / installeur). |

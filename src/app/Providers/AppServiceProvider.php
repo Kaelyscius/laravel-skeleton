@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\HealthChecks\CacheHealthCheck;
 use App\HealthChecks\DatabaseHealthCheck;
+use App\HealthChecks\QueueHealthCheck;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Spatie\Health\Facades\Health;
@@ -93,8 +95,25 @@ final class AppServiceProvider extends ServiceProvider
          * vu rouge via `extra.laravel.dont-discover`.
          */
 
+        /*
+         * ─────────────────────────────────────────────────────────────────────
+         * LES TROIS SONDES DE `/health` (Story 2.4)
+         *
+         * Jusqu'ici UNE seule sonde était enregistrée, et AUCUNE route ne
+         * l'exposait : `/health` rendait un JSON littéral de 93 octets qui
+         * disait `ok` la base à terre. Un garde-fou incapable de rougir.
+         *
+         * ⛔ LES NOMS SONT POSÉS EXPLICITEMENT, ET C'EST STRUCTUREL.
+         * `Check::getName()` dérive du nom de classe : `DatabaseHealthCheck`
+         * donnerait `DatabaseHealth`, donc la clé JSON `database_health`. La
+         * route publie `Str::snake($check->getName())` ; ces trois littéraux
+         * sont donc le CONTRAT de la réponse, et `HealthEndpointTest` les gèle.
+         * Renommer une classe ne doit pas renommer une clé publique.
+         */
         Health::checks([
-            DatabaseHealthCheck::new(),
+            DatabaseHealthCheck::new()->name('database'),
+            CacheHealthCheck::new()->name('cache'),
+            QueueHealthCheck::new()->name('queue'),
         ]);
     }
 }

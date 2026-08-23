@@ -157,7 +157,7 @@ DB_USERNAME=laravel
 DB_PASSWORD=secret
 
 # Cache & Queue
-CACHE_DRIVER=array
+CACHE_STORE=array
 QUEUE_CONNECTION=sync
 SESSION_DRIVER=array
 ```

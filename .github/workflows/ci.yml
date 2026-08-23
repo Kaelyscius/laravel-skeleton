@@ -48,6 +48,12 @@ on:
       # run ne démarre — exactement le défaut que cette story corrige pour
       # `scripts/install.sh`, reconduit un cran plus loin.
       - 'Makefile'
+      # Les primitives de verdict du E2E d'installation (story 2.4) vivent en
+      # shell et sont éprouvées par `tests/bats/unit`. Sans cette entrée, on
+      # pouvait casser la lecture du lockfile ou l'étiquetage d'une panne
+      # d'infrastructure sans qu'aucun run ne démarre — le nightly, lui, ne
+      # tourne qu'une fois par nuit et ne le dirait que le lendemain.
+      - 'tests/bats/**'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main, develop]
@@ -84,6 +90,12 @@ on:
       # run ne démarre — exactement le défaut que cette story corrige pour
       # `scripts/install.sh`, reconduit un cran plus loin.
       - 'Makefile'
+      # Les primitives de verdict du E2E d'installation (story 2.4) vivent en
+      # shell et sont éprouvées par `tests/bats/unit`. Sans cette entrée, on
+      # pouvait casser la lecture du lockfile ou l'étiquetage d'une panne
+      # d'infrastructure sans qu'aucun run ne démarre — le nightly, lui, ne
+      # tourne qu'une fois par nuit et ne le dirait que le lendemain.
+      - 'tests/bats/**'
       - '.github/workflows/ci.yml'
   workflow_dispatch:
 
@@ -197,6 +209,27 @@ jobs:
       # LE gate de dette : bloquant, et c'est lui qui compte.
       - name: 🔒 Quality ratchet (la dette ne remonte jamais)
         run: ./scripts/quality-ratchet.sh
+
+      # ⛔ LE CLONE DE BATS EST MIS EN CACHE (revue 1). Sans cela, une porte
+      # BLOQUANTE dépendait d'un `git clone` vers github.com à chaque exécution :
+      # le mode de défaillance même que `e2e_infra_fail` existe pour éviter,
+      # réintroduit dans le gate. La clé porte la version épinglée, donc une
+      # montée invalide le cache d'elle-même. Le `run_bats` du Makefile réessaie
+      # trois fois et nomme l'échec INFRASTRUCTURE si le cache est froid ET le
+      # réseau indisponible.
+      - name: 💾 Cache bats-core (épinglé)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools/bats-core
+          key: ${{ runner.os }}-bats-v1.14.0-eb7f42f8d608ac693d7a4b67474f6714ea68cfc5
+
+      # Les primitives de verdict du nightly E2E (story 2.4). Elles décident
+      # si une fenêtre d'installation est valide et si un échec est imputable
+      # à l'infrastructure : les laisser dormir jusqu'au prochain run nocturne
+      # reviendrait à ne les éprouver qu'une fois par nuit, sur une PR qu'on
+      # aurait déjà mergée. Bloquant, sans base de données, ~1 seconde.
+      - name: 🦇 Tests shell Bats (primitives du E2E)
+        run: make test-bats
 
       # --- Informatifs (architecture §9.2) ---------------------------------
       # Rector est cassé par une incompatibilité de configuration connue :
@@ -322,7 +355,7 @@ jobs:
             '# Redis pour cache et sessions' \
             'REDIS_HOST=127.0.0.1' \
             'REDIS_PORT=6379' \
-            'CACHE_DRIVER=redis' \
+            'CACHE_STORE=redis' \
             'SESSION_DRIVER=redis' \
             'QUEUE_CONNECTION=redis' \
             '' \
@@ -489,7 +522,7 @@ jobs:
             'DB_DATABASE=laravel_test' \
             'DB_USERNAME=laravel_test' \
             'DB_PASSWORD=laravel_test' \
-            'CACHE_DRIVER=array' \
+            'CACHE_STORE=array' \
             'SESSION_DRIVER=array' \
             'QUEUE_CONNECTION=sync' \
             'MAIL_MAILER=array' \
@@ -530,6 +563,107 @@ jobs:
           retention-days: 7
 
   # ===========================================================================
+  # JOB 4 — LE NIGHTLY TOURNE-T-IL ENCORE ? (Story 2.4, revue 1)
+  # ===========================================================================
+  # 🔴 UN GARDE-FOU QUI CESSE DE TOURNER EST UN GARDE-FOU SILENCIEUX — c'est
+  # littéralement le défaut que toute cette story existe pour retirer, et le
+  # nightly y était exposé de DEUX façons :
+  #
+  #   1. GitHub DÉSACTIVE les workflows `schedule` après 60 jours sans activité
+  #      dans le dépôt. Le nightly s'arrête alors sans un mot : aucun run rouge,
+  #      aucune notification, juste plus rien.
+  #   2. Un nightly cassé et jamais relancé se lit exactement comme un nightly
+  #      vert : absence de rouge.
+  #
+  # Ce job transforme ces deux silences en ROUGE, sur une porte que quelqu'un
+  # regarde à chaque push.
+  #
+  # ⚠️ IL EST ROUGE TANT QUE LE NIGHTLY N'A JAMAIS TOURNÉ — c'est l'état réel au
+  # moment où cette story est écrite (le workflow n'existe pas encore sur la
+  # branche par défaut, donc `workflow_dispatch` n'est pas proposé).
+  #
+  # ⛔ ET C'EST EXACTEMENT POURQUOI IL EST HORS DES `needs` DE `CI Summary`
+  # (décision d'Alex, revue 2). Un rouge ATTENDU en permanence dans le verdict
+  # global MASQUE une régression réelle d'`integrity`, `quality`, `tests` ou
+  # `browser` : on apprend à lire « CI rouge » comme « ah oui, le nightly ».
+  # C'est le mécanisme même du garde-fou qu'on désarme, appliqué au garde-fou
+  # anti-désarmement. Il est donc rapporté à part et annoté.
+  # 🔁 **BASCULE À FAIRE JUSTE APRÈS LE PREMIER RUN OBSERVÉ** : le remettre dans
+  # `needs:` et dans la condition d'échec du résumé. La marche à suivre est
+  # écrite dans `docs/ETAT.md`, section « La bascule à faire juste après le
+  # premier nightly ».
+  nightly-freshness:
+    name: Nightly freshness (le garde-fou tourne-t-il ?)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: 🌙 Le nightly a-t-il tourné récemment ?
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MAX_AGE_DAYS: 3
+        run: |
+          set -euo pipefail
+
+          # ⛔ Une panne d'API n'est PAS un nightly périmé : on le dit, et on
+          # échoue quand même — mais avec la bonne cause.
+          if ! state="$(gh api "repos/$REPO/actions/workflows/nightly.yml" --jq '.state' 2>/dev/null)"; then
+            echo "::error title=Nightly freshness::Workflow « nightly.yml » introuvable via l'API — il n'existe pas encore sur la branche par défaut, ou l'API a échoué."
+            echo "Le nightly ne peut donc pas avoir tourné. Poussez ce workflow, puis lancez-le une fois (Run workflow)." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if [ "$state" != "active" ]; then
+            echo "::error title=Nightly freshness::Le workflow nightly est « $state » — GitHub désactive les schedules après 60 jours sans activité. Réactivez-le dans l'onglet Actions."
+            exit 1
+          fi
+
+          # ⛔ `// empty` ET NON `// null` : sans lui, `--jq` imprime le LITTÉRAL
+          # « null » sur un ensemble vide, et tout test `[ -z … ]` devient faux.
+          last="$(gh api "repos/$REPO/actions/workflows/nightly.yml/runs?per_page=1" --jq '.workflow_runs[0].created_at // empty')"
+          verdict="$(gh api "repos/$REPO/actions/workflows/nightly.yml/runs?per_page=1" --jq '.workflow_runs[0].conclusion // empty')"
+
+          if [ -z "$last" ]; then
+            echo "::error title=Nightly freshness::Le nightly n'a JAMAIS tourné. Actions → Nightly E2E Install → Run workflow."
+            exit 1
+          fi
+
+          age_days=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 86400 ))
+
+          {
+            echo "## 🌙 Fraîcheur du nightly"
+            echo ""
+            echo "Dernier run : \`$last\` (il y a ${age_days} jour(s), conclusion \`${verdict:-en cours}\`) · plafond : ${MAX_AGE_DAYS} jours."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$age_days" -gt "$MAX_AGE_DAYS" ]; then
+            echo "::error title=Nightly freshness::Dernier run du nightly il y a ${age_days} jours (plafond ${MAX_AGE_DAYS}). Le garde-fou ne tourne plus."
+            exit 1
+          fi
+
+          # 🔴 LA CONCLUSION COMPTE AUTANT QUE LA DATE (revue 2). Sans elle, un
+          # nightly qui ÉCHOUE toutes les nuits laissait ce garde VERT : le
+          # garde-fou écrit pour empêcher qu'un garde-fou s'éteigne en silence
+          # était aveugle à son échec. « Il tourne » n'est pas « il passe ».
+          case "$verdict" in
+            success) ;;
+            ""|in_progress|queued|waiting|requested|pending)
+              echo "::warning title=Nightly freshness::Dernier run encore en cours (conclusion « ${verdict:-vide} ») — verdict non concluant, fraîcheur OK."
+              ;;
+            *)
+              echo "::error title=Nightly freshness::Le dernier nightly a conclu « $verdict ». Le garde-fou tourne mais il ÉCHOUE."
+              exit 1
+              ;;
+          esac
+
+          echo "✅ Nightly frais (${age_days} j) et vert."
+
+  # ===========================================================================
   # RÉSUMÉ
   # ===========================================================================
   summary:
@@ -549,6 +683,11 @@ jobs:
           echo "| Quality (ECS · PHPStan · Ratchet) | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Pest × PostgreSQL 18) | ${{ needs.tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests navigateur (Chromium) | ${{ needs.browser.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **\`Nightly freshness\` est rapporté à part et n'est PAS bloquant** tant que le" >> $GITHUB_STEP_SUMMARY
+          echo "premier nightly n'a pas tourné : le laisser dans ce résumé masquerait une régression" >> $GITHUB_STEP_SUMMARY
+          echo "réelle derrière un rouge attendu. Bascule en bloquant : voir \`docs/ETAT.md\`," >> $GITHUB_STEP_SUMMARY
+          echo "section « La bascule à faire juste après le premier nightly »." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Rector et PHP Insights sont **informatifs** (architecture §9.2) :" >> $GITHUB_STEP_SUMMARY
           echo "leur échec n'arrête pas le pipeline mais reste visible dans le job Quality." >> $GITHUB_STEP_SUMMARY

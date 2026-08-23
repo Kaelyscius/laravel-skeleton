@@ -157,11 +157,73 @@ return [
      */
     'secret_token' => env('HEALTH_SECRET_TOKEN'),
 
-/**
- * By default, conditionally skipped health checks are treated as failures.
- * You can override this behavior by uncommenting the configuration below.
- *
- * @see https://spatie.be/docs/laravel-health/v1/basic-usage/conditionally-running-or-modifying-checks
- */
+    /**
+     * By default, conditionally skipped health checks are treated as failures.
+     * You can override this behavior by uncommenting the configuration below.
+     * @see https://spatie.be/docs/laravel-health/v1/basic-usage/conditionally-running-or-modifying-checks
+     * ⚠️ Story 2.4, revue 1 : cette clé était INERTE. La route `/health`
+     * écrasait tout statut non-`ok` en `error`, donc `skipped` restait fatal
+     * quoi qu'on écrive ici. Elle est désormais LUE par la route, et
+     * `HealthEndpointTest` éprouve les deux valeurs.
+     */
     // 'treat_skipped_as_failure' => false,
+
+    /*
+     |--------------------------------------------------------------------------
+     | CLÉ DU PROJET — pas une clé de Spatie (Story 2.4)
+     |--------------------------------------------------------------------------
+     |
+     | Budget CUMULÉ, en millisecondes, accordé aux sondes de la route
+     | `/health` (`routes/web.php`). Au-delà, les sondes restantes ne sont pas
+     | lancées et sont rapportées en ÉCHEC EXPLICITE — jamais omises, jamais
+     | supposées saines.
+     |
+     | ⚠️ LA JUSTIFICATION PRÉCÉDENTE ÉTAIT FAUSSE (revue 1) : elle invoquait une
+     | republication de ce fichier par
+     | `scripts/install/35-configure-spatie-packages.sh`, qui ne publie en
+     | réalité QUE si le fichier est ABSENT (`if [ ! -f config/health.php ]`) —
+     | et il est versionné, donc le scénario ne peut pas survenir sur un clone.
+     | Le vrai motif du défaut codé en dur est plus simple : une clé absente,
+     | vide, non numérique, nulle ou NÉGATIVE donnerait une échéance déjà
+     | dépassée, donc un `/health` qui ne sonde plus rien et rend `503` à
+     | perpétuité sans nommer la moindre panne. `HealthEndpointTest` retire la
+     | clé et pose des valeurs hostiles pour l'éprouver.
+     |
+     | Mesuré le 2026-08-23 (conteneur postgres réellement arrêté) : sans
+     | budget, la réponse arrivait à 89 s et Apache rendait 504 à 60 s.
+     */
+    'probe_budget_ms' => env('HEALTH_PROBE_BUDGET_MS', 5000),
+
+    /*
+     |--------------------------------------------------------------------------
+     | CLÉ DU PROJET — pas une clé de Spatie (Story 2.4, revue 1)
+     |--------------------------------------------------------------------------
+     |
+     | Délai maximal, en secondes, accordé au PORTILLON de joignabilité de
+     | chaque sonde (`App\HealthChecks\Support\BackendEndpoint`). Le portillon
+     | ouvre UNE connexion TCP avant l'aller-retour applicatif : c'est ce qui
+     | fait passer une base injoignable de ~10 tentatives à une seule.
+     |
+     | ⚠️ Le code porte son propre défaut (2.0 s) : `0` signifie « pas de
+     | limite » pour `fsockopen()`, donc une valeur nulle ou négative rendrait
+     | le portillon inopérant — la panne même qu'il existe pour éviter.
+     */
+    'probe_connect_timeout_seconds' => env('HEALTH_PROBE_CONNECT_TIMEOUT', 2.0),
+
+    /*
+     |--------------------------------------------------------------------------
+     | CLÉ DU PROJET — pas une clé de Spatie (Story 2.4, revue 2)
+     |--------------------------------------------------------------------------
+     |
+     | Porte de sortie du portillon de joignabilité. `false` le désarme
+     | entièrement : les sondes reprennent le chemin du pilote, avec les ~10
+     | tentatives que le framework enchaîne — donc ~31 s par sonde sur un hôte
+     | qui ne résout plus (mesuré le 2026-08-23).
+     |
+     | ⚠️ N'EXISTE QUE POUR UN CAS, ET IL EST NOMMÉ : un hôte à plusieurs
+     | enregistrements A. `fsockopen()` n'essaie qu'une adresse, donc le
+     | portillon peut refuser alors qu'une autre répondrait — un `503` nommant
+     | un backend joignable. Ce n'est pas un interrupteur de confort.
+     */
+    'probe_gate_enabled' => env('HEALTH_PROBE_GATE', true),
 ];

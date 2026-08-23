@@ -973,6 +973,111 @@ test-browser-down: ## Arrêter le runner navigateur
 	@$(DOCKER) compose --profile test down test-browser
 
 # =============================================================================
+# TESTS SHELL — BATS (Story 2.4)
+# =============================================================================
+#
+# ⛔ POURQUOI BATS EN PLUS DE `ShellProbe` (src/tests/Support/ShellProbe.php).
+# `ShellProbe` lance du bash DEPUIS Pest, donc depuis le conteneur php : elle
+# éprouve des FONCTIONS shell, jamais une installation. Or ce que la story 2.4
+# doit prouver — `make install-dev-full` sur un clone neuf — exige Docker,
+# compose et l'hôte, c'est-à-dire tout ce que le conteneur php n'a pas
+# (ni CLI docker, ni socket : mesuré en story 2.2). Bats COMPLÈTE ShellProbe,
+# il ne la remplace pas.
+#
+# ⚖️ DEUX CIBLES, ET LA SÉPARATION EST DÉLIBÉRÉE :
+#   • `test-bats`     — les primitives de verdict (tests/bats/unit), 1 seconde,
+#                       sans Docker : c'est là que les MUTATIONS se rejouent ;
+#   • `test-bats-e2e` — l'installation réelle (tests/bats/install.bats), 20 à
+#                       40 minutes, avec Docker. C'est ce que joue le nightly.
+# Un `make test-bats` qui lancerait le E2E serait un `make test-bats` que
+# personne ne lance, donc un garde-fou que personne ne rejoue.
+
+# Épinglage : le TAG sert au clone, le COMMIT le VÉRIFIE. Un tag est un pointeur
+# mutable chez un tiers — même raisonnement que l'épinglage par SHA des actions
+# GitHub (.github/workflows/ci.yml).
+BATS_VERSION ?= v1.14.0
+BATS_COMMIT  ?= eb7f42f8d608ac693d7a4b67474f6714ea68cfc5
+# ⛔ VERSION MINIMALE EXIGÉE D'UN bats DÉJÀ INSTALLÉ. `BATS_TEST_TMPDIR` n'existe
+# que depuis 1.4.0 : sous un bats ancien il vaut la CHAÎNE VIDE, `$$BATS_TEST_TMPDIR/lock.yml`
+# devient `/lock.yml`, et la suite échoue (ou pire, écrit à la racine) pour une
+# raison qui n'a rien à voir avec ce qu'elle mesure. Relevé en revue 1.
+BATS_MIN_VERSION ?= 1.5.0
+BATS_HOME    ?= .tools/bats-core
+BATS_BIN      = $(BATS_HOME)/bin/bats
+
+# Résout un bats utilisable, puis exécute $(1).
+#
+# ⚖️ TROIS CORRECTIFS DE REVUE 1 VIVENT DANS CETTE RECETTE :
+#   • le bats DU SYSTÈME n'est plus accepté sur sa seule présence — sa version
+#     est comparée à $(BATS_MIN_VERSION) ; trop ancien, on retombe sur le clone
+#     épinglé plutôt que d'exécuter la suite sur un outil qui ment ;
+#   • le clone est RÉESSAYÉ (3 fois) et son échec est nommé INFRASTRUCTURE :
+#     c'est une porte BLOQUANTE en CI, et un hoquet réseau chez un tiers ne doit
+#     pas se lire comme un défaut du dépôt ;
+#   • le `rm -rf` est GARDÉ : `BATS_HOME` est surchargeable, et un
+#     `make test-bats BATS_HOME=/` effaçait la machine. Le chemin doit être
+#     relatif, non vide, et sans `..`.
+define run_bats
+	@set -e; \
+	BATS_EXE=""; \
+	if command -v bats > /dev/null 2>&1; then \
+		found="$$(bats --version 2>/dev/null | awk '{print $$2}')"; \
+		oldest="$$(printf '%s\n%s\n' "$(BATS_MIN_VERSION)" "$$found" | sort -V | head -n 1)"; \
+		if [ -n "$$found" ] && [ "$$oldest" = "$(BATS_MIN_VERSION)" ]; then \
+			BATS_EXE="$$(command -v bats)"; \
+		else \
+			echo "$(YELLOW)⚠️  bats du système en $$found — la suite exige >= $(BATS_MIN_VERSION). Repli sur le clone épinglé.$(NC)"; \
+		fi; \
+	fi; \
+	if [ -z "$$BATS_EXE" ]; then \
+		if [ ! -x "$(BATS_BIN)" ]; then \
+			case "$(BATS_HOME)" in \
+				""|/*|*..*) echo "$(RED)⛔ BATS_HOME=« $(BATS_HOME) » refusé : un chemin RELATIF au dépôt, sans « .. », est exigé (cette recette y fait un rm -rf).$(NC)"; exit 1 ;; \
+			esac; \
+			echo "$(YELLOW)📥 bats absent — installation épinglée $(BATS_VERSION) dans $(BATS_HOME)$(NC)"; \
+			rm -rf -- "$(BATS_HOME)"; \
+			mkdir -p "$$(dirname "$(BATS_HOME)")"; \
+			cloned=1; \
+			for attempt in 1 2 3; do \
+				if git -c advice.detachedHead=false clone --quiet --depth 1 --branch $(BATS_VERSION) \
+					https://github.com/bats-core/bats-core.git "$(BATS_HOME)"; then \
+					cloned=0; break; \
+				fi; \
+				echo "$(YELLOW)   tentative $$attempt/3 échouée, nouvel essai…$(NC)"; \
+				rm -rf -- "$(BATS_HOME)"; \
+				sleep 5; \
+			done; \
+			if [ "$$cloned" -ne 0 ]; then \
+				echo "$(RED)INFRASTRUCTURE_FAILURE: clone de bats-core impossible après 3 tentatives (réseau ou github.com).$(NC)"; \
+				echo "$(RED)   Ce n'est PAS un défaut du dépôt. Relancez, ou installez bats >= $(BATS_MIN_VERSION) sur la machine.$(NC)"; \
+				exit 1; \
+			fi; \
+			actual="$$(git -C "$(BATS_HOME)" rev-parse HEAD)"; \
+			if [ "$$actual" != "$(BATS_COMMIT)" ]; then \
+				rm -rf -- "$(BATS_HOME)"; \
+				echo "$(RED)⛔ bats $(BATS_VERSION) résout sur $$actual, attendu $(BATS_COMMIT).$(NC)"; \
+				echo "$(RED)   Le tag a bougé chez le fournisseur : rien n'est installé, rien n'est exécuté.$(NC)"; \
+				exit 1; \
+			fi; \
+		fi; \
+		BATS_EXE="$(BATS_BIN)"; \
+	fi; \
+	echo "$(CYAN)🦇 $$($$BATS_EXE --version) — $(1)$(NC)"; \
+	"$$BATS_EXE" $(1)
+endef
+
+.PHONY: test-bats
+test-bats: ## Tests shell Bats rapides (primitives du E2E, sans Docker)
+	$(call run_bats,tests/bats/unit)
+
+.PHONY: test-bats-e2e
+test-bats-e2e: ## ⏱️ Installation E2E réelle sur un clone neuf (20-40 min, exige les ports 80/443 libres)
+	@echo "$(YELLOW)⚠️  Ce test CLONE le dépôt, BÂTIT les images et INSTALLE pour de vrai.$(NC)"
+	@echo "$(YELLOW)   Il exige les ports 80 et 443 LIBRES : lancez « make down » d'abord.$(NC)"
+	@echo "$(CYAN)   E2E_KEEP=true conserve la pile et le répertoire de travail.$(NC)"
+	$(call run_bats,tests/bats/install.bats)
+
+# =============================================================================
 # CODE QUALITY
 # =============================================================================
 

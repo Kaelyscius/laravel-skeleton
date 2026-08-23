@@ -104,15 +104,36 @@ configure_laravel_health() {
         log_info "📝 Création d'exemples de health checks..."
         mkdir -p app/HealthChecks
 
+        # 🔴 CE REPLI FUYAIT LE DSN, ET C'EST EXACTEMENT CE QUE LA VRAIE SONDE
+        # SCRUBE (relevé en revue 1, story 2.4).
+        # `$e->getMessage()` d'une `PDOException` embarque routinièrement
+        # l'hôte, le port, le nom de la base et l'utilisateur — « FATAL:
+        # password authentication failed for user 'laravel' at host 'postgres' ».
+        # Ce message partait dans `Result::failed()`, donc dans le corps de
+        # `/health` et dans les notifications de Spatie. Le dépôt versionne une
+        # `DatabaseHealthCheck` qui journalise CLASSE + SQLSTATE et rien d'autre ;
+        # son repli disait le contraire à un octet près.
+        # ⚠️ Ce fichier n'est écrit QUE si `app/HealthChecks/DatabaseHealthCheck.php`
+        # est absent — donc jamais sur un clone du dépôt, où il est versionné.
+        # C'est précisément pourquoi personne ne l'avait relu.
         cat > app/HealthChecks/DatabaseHealthCheck.php << 'EOF'
 <?php
 
 namespace App\HealthChecks;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use PDOException;
 use Spatie\Health\Checks\Check;
 use Spatie\Health\Checks\Result;
+use Throwable;
 
+/**
+ * Repli minimal, écrit par l'installeur uniquement si le dépôt n'en fournit pas.
+ *
+ * 🔒 Le message de l'exception n'est JAMAIS publié : il porte le DSN.
+ * Seuls la classe et le SQLSTATE partent au journal.
+ */
 class DatabaseHealthCheck extends Check
 {
     public function run(): Result
@@ -121,9 +142,13 @@ class DatabaseHealthCheck extends Check
             DB::connection()->getPdo();
 
             return Result::make()->ok();
-        } catch (\Exception $e) {
-            return Result::make()
-                ->failed('Database connection failed: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            Log::error('DatabaseHealthCheck failed', [
+                'type' => $e::class,
+                'sqlstate' => $e instanceof PDOException ? ($e->errorInfo[0] ?? null) : null,
+            ]);
+
+            return Result::make()->failed('Database unreachable');
         }
     }
 }
