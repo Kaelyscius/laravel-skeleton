@@ -16,6 +16,17 @@ POSTGRES_CONTAINER = $$(docker ps -qf "name=$(COMPOSE_PROJECT_NAME)_postgres")
 
 # Containers par nom
 PHP_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_php
+
+# Patience du redémarrage post-installation (voir `post-install-restart-php`).
+# Surchargeables en ligne de commande — c'est par là que les tests réduisent
+# l'attente à zéro plutôt que de dupliquer la boucle dans une fixture.
+PHP_RESTART_ATTEMPTS ?= 90
+PHP_RESTART_DELAY ?= 2
+
+# Témoin écrit par l'entrypoint À CHAQUE passage complet dans sa branche
+# « bootable ». Il vit DANS le conteneur — surtout pas sous `./src`, qui est
+# bind-monté et dont le contenu survivrait au redémarrage qu'on veut mesurer.
+PHP_BOOTABLE_MARKER ?= /tmp/laravel-entrypoint-bootable
 APACHE_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_apache
 NODE_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_node
 POSTGRES_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_postgres
@@ -199,6 +210,17 @@ PURPLE = \033[0;35m
 CYAN = \033[0;36m
 NC = \033[0m
 
+# ⛔ CE MAKEFILE N'EST PAS PARALLÉLISABLE, ET C'EST DÉCLARÉ PLUTÔT QUE SUPPOSÉ.
+# Les chaînes d'installation reposent sur l'ORDRE de leurs prérequis — `setup-ssl`
+# avant tout `up*` (apache sort en 1 sans certificats), `install-laravel` avant
+# `post-install-restart-php` (redémarrer avant l'install rejouerait un état sans
+# `vendor/`), `npm-install` avant `install-lockfile`. Deux gardes assertent cet
+# ordre ; or `make -j` ne garantit RIEN sur l'ordre des prérequis, si bien que
+# les gardes resteraient verts pendant que l'installation partirait en désordre.
+# `.NOTPARALLEL` rend la contrainte exécutable au lieu de la laisser à la
+# discipline de l'opérateur. Gardé par `InstallSentinelsTest`.
+.NOTPARALLEL:
+
 # Helper Functions
 define check_container
 	@if ! docker ps --format "{{.Names}}" | grep -q "$(1)"; then \
@@ -268,25 +290,77 @@ help: ## Afficher l'aide principale
 # INSTALLATION & BUILD
 # =============================================================================
 
+# =============================================================================
+# ⛔ `setup-ssl` PASSE AVANT TOUT `up-*` — ET CE N'EST PAS COSMÉTIQUE.
+# =============================================================================
+# `docker/apache/scripts/docker-entrypoint.sh:23-33` sort en **1** quand
+# `laravel.local.crt` / `.key` manquent. `setup-ssl` était le DERNIER prérequis
+# de ces chaînes : sur un clone neuf, apache démarrait donc systématiquement
+# sans certificats, échouait, et `restart: unless-stopped` le rebouclait pendant
+# toute l'installation. Le script est purement HÔTE (openssl + écriture dans
+# `docker/apache/conf/ssl/`) : il n'a besoin d'aucun conteneur, rien ne
+# justifiait qu'il vienne après eux.
+# ⚠️ `npm-install` → `install-lockfile` reste dans cet ordre, et les chaînes
+# prod restent sans `install-lockfile` (gardé par InstallSentinelsTest).
+#
+# =============================================================================
+# ⛔ `post-install-restart-php` PASSE JUSTE APRÈS L'INSTALL LARAVEL — ET SANS LUI
+#    UNE INSTALL DE CLONE NEUF EST INCOMPLÈTE *EN RESTANT VERTE*.
+# =============================================================================
+# Sur un clone neuf, `vendor/` est absent au démarrage : l'entrypoint php part
+# en état « sans-vendor », démarre php-fpm et — c'est tout son objet — ne joue
+# AUCUNE commande artisan. `install-laravel` peuple ensuite `vendor/`… mais rien
+# ne repasse par l'entrypoint, donc sa branche « bootable » n'est jamais
+# atteinte de toute l'installation.
+#
+# 🔴 LA CONSÉQUENCE DÉPASSE LES CACHES. `php artisan storage:link` n'existe qu'à
+# UN SEUL endroit du dépôt — `docker/php/scripts/docker-entrypoint.sh`, branche
+# « bootable ». Aucun module d'installation ne le joue. Une install de clone
+# neuf ne créait donc JAMAIS le lien `public/storage`, et comme `/health` ne le
+# regarde pas, le nightly pouvait conclure VERT sur une application incomplète :
+# exactement la classe de défaut que cet epic existe pour interdire.
+#
+# ⚖️ ON REDÉMARRE PLUTÔT QUE DE DUPLIQUER. Rejouer `storage:link` + les clears
+# depuis un module d'installation créerait un second endroit où cette logique
+# vit, donc deux vérités capables de diverger. Le message que l'entrypoint
+# imprime déjà en « sans-vendor » PROMET un rejeu au prochain démarrage : on
+# rend la promesse vraie. Et le redémarrage est idempotent — `storage:link` est
+# gardé par `[ ! -L … ]`, `horizon:publish` par la présence du paquet — donc
+# rejouer une chaîne d'installation ne régresse pas l'idempotence de la 2.2.
+# ⚠️ La fatalité du chemin non-dev est INCHANGÉE : si `proxies:check` refuse au
+# redémarrage, le conteneur meurt et cette cible échoue en le disant.
+#
+# 🔴 ET LA LISTE DES CHAÎNES CONCERNÉES N'EST PLUS ÉCRITE À LA MAIN. Le premier
+# jet en câblait CINQ ; `make` en dérive NEUF. Deux manquaient, et pas des
+# théoriques : `setup-quick` (juste au-dessus) et la branche `else` de
+# `install-incremental` lancent toutes deux l'installeur contre un conteneur
+# parti en « sans-vendor », sans jamais le redémarrer — donc `public/storage`
+# jamais créé, donc l'installation incomplète-mais-verte que cette story existe
+# pour rendre impossible. Le garde est désormais piloté par
+# `ShellProbe::makefileComposites()`, exactement comme le commentaire de
+# `COMPOSITE_INSTALL_TARGETS` le prescrit : « une énumération ne peut pas garder
+# ce qu'elle ne connaît pas ».
+# =============================================================================
+
 # Installation développement (avec Node et tous les outils)
 .PHONY: install
 install: install-dev ## Alias pour install-dev (par défaut en développement)
 
 .PHONY: install-dev
-install-dev: build up-dev install-laravel npm-install install-lockfile setup-ssl ## Installation complète DÉVELOPPEMENT (avec Node, Mailpit, Adminer, etc.)
+install-dev: build setup-ssl up-dev install-laravel post-install-restart-php npm-install install-lockfile ## Installation complète DÉVELOPPEMENT (avec Node, Mailpit, Adminer, etc.)
 	@echo "$(GREEN)🎉 Installation DÉVELOPPEMENT terminée !$(NC)"
 	@echo "$(CYAN)📦 Services actifs: PHP, Apache, PostgreSQL, Redis, Node, Mailpit, Adminer$(NC)"
 	@$(MAKE) _show_urls
 
 .PHONY: install-dev-full
-install-dev-full: build up-dev-full install-laravel npm-install install-lockfile setup-ssl ## Installation DÉVELOPPEMENT COMPLÈTE (+ Dozzle, IT-Tools, Watchtower)
+install-dev-full: build setup-ssl up-dev-full install-laravel post-install-restart-php npm-install install-lockfile ## Installation DÉVELOPPEMENT COMPLÈTE (+ Dozzle, IT-Tools, Watchtower)
 	@echo "$(GREEN)🎉 Installation DÉVELOPPEMENT COMPLÈTE terminée !$(NC)"
 	@echo "$(CYAN)📦 Services actifs: Tous les services + monitoring$(NC)"
 	@$(MAKE) _show_urls
 
 # Installation production (sans Node ni outils dev)
 .PHONY: install-prod
-install-prod: build up install-laravel-prod setup-ssl ## Installation PRODUCTION (services essentiels uniquement)
+install-prod: build setup-ssl up install-laravel-prod post-install-restart-php ## Installation PRODUCTION (services essentiels uniquement)
 	@echo "$(GREEN)🎉 Installation PRODUCTION terminée !$(NC)"
 	@echo "$(CYAN)📦 Services actifs: PHP, Apache, PostgreSQL, Redis$(NC)"
 	@echo "$(YELLOW)⚠️  Node, Mailpit, Adminer NON démarrés (profil dev désactivé)$(NC)"
@@ -297,12 +371,12 @@ install-prod: build up install-laravel-prod setup-ssl ## Installation PRODUCTION
 install-fast: install-dev-fast ## Alias pour install-dev-fast
 
 .PHONY: install-dev-fast
-install-dev-fast: build-fast up-dev install-laravel npm-install-fast install-lockfile setup-ssl ## Installation DEV optimisée avec cache (recommandé)
+install-dev-fast: build-fast setup-ssl up-dev install-laravel post-install-restart-php npm-install-fast install-lockfile ## Installation DEV optimisée avec cache (recommandé)
 	@echo "$(GREEN)🎉 Installation DÉVELOPPEMENT rapide terminée !$(NC)"
 	@$(MAKE) _show_urls
 
 .PHONY: install-prod-fast
-install-prod-fast: build-fast up install-laravel-prod setup-ssl ## Installation PROD optimisée avec cache
+install-prod-fast: build-fast setup-ssl up install-laravel-prod post-install-restart-php ## Installation PROD optimisée avec cache
 	@echo "$(GREEN)🎉 Installation PRODUCTION rapide terminée !$(NC)"
 	@$(MAKE) _show_urls
 
@@ -314,6 +388,7 @@ install-incremental: ## Mise à jour incrémentale (si déjà installé)
 	else \
 		echo "$(YELLOW)→ Vendor not found, running full install...$(NC)"; \
 		$(MAKE) install-laravel; \
+		$(MAKE) post-install-restart-php; \
 	fi
 	@if [ -f "src/node_modules/.package-lock.json" ]; then \
 		echo "$(CYAN)✓ node_modules exists, updating...$(NC)"; \
@@ -325,7 +400,7 @@ install-incremental: ## Mise à jour incrémentale (si déjà installé)
 	@echo "$(GREEN)✓ Incremental update complete$(NC)"
 
 .PHONY: setup-quick
-setup-quick: up install-laravel ## Installation rapide sans SSL
+setup-quick: up install-laravel post-install-restart-php ## Installation rapide sans SSL
 	@echo "$(GREEN)⚡ Installation rapide terminée !$(NC)"
 
 .PHONY: build
@@ -550,6 +625,69 @@ stop-profile: ## Arrêter un profile spécifique (usage: make stop-profile PROFI
 # =============================================================================
 # LARAVEL MANAGEMENT
 # =============================================================================
+
+.PHONY: post-install-restart-php
+post-install-restart-php: ## Redémarrer php après l'install pour rejouer clears + storage:link
+	@echo "$(CYAN)🔄 Redémarrage du conteneur PHP — l'entrypoint doit rejouer sa branche « bootable »...$(NC)"
+	@$(DOCKER) exec $(PHP_CONTAINER_NAME) rm -f $(PHP_BOOTABLE_MARKER) > /dev/null 2>&1 || { \
+		echo "$(RED)❌ Impossible d'EFFACER le témoin dans $(PHP_CONTAINER_NAME) avant le redémarrage.$(NC)"; \
+		echo "$(YELLOW)   Le conteneur ne répond pas à « docker exec » — il est absent, arrêté, ou déjà$(NC)"; \
+		echo "$(YELLOW)   en boucle de redémarrage. Sans effacement, tout vestige passerait pour un$(NC)"; \
+		echo "$(YELLOW)   témoin neuf : on REFUSE de mesurer plutôt que de mesurer faux.$(NC)"; \
+		echo "$(YELLOW)   Diagnostic : make logs service=php$(NC)"; \
+		exit 1; \
+	}
+	@$(DOCKER) restart $(PHP_CONTAINER_NAME) > /dev/null || { \
+		echo "$(RED)❌ Redémarrage impossible : $(PHP_CONTAINER_NAME) est introuvable ou refuse de repartir.$(NC)"; \
+		echo "$(YELLOW)   L'installation ne peut pas être déclarée complète. Diagnostic : make logs service=php$(NC)"; \
+		exit 1; \
+	}
+	@echo "$(YELLOW)   Attente d'un témoin FRAIS, pas d'un délai ni d'un vestige...$(NC)"
+	@attempt=1; \
+	while [ "$$attempt" -le "$(PHP_RESTART_ATTEMPTS)" ]; do \
+		obtenu="$$($(DOCKER) exec $(PHP_CONTAINER_NAME) cat $(PHP_BOOTABLE_MARKER) 2>/dev/null || true)"; \
+		if [ -n "$$obtenu" ]; then \
+			echo "$(GREEN)✓ L'entrypoint a rejoué sa branche « bootable » jusqu'au bout (témoin renouvelé)$(NC)"; \
+			exit 0; \
+		fi; \
+		sleep $(PHP_RESTART_DELAY); \
+		attempt=$$((attempt + 1)); \
+	done; \
+	echo "$(RED)❌ Le témoin de démarrage n'a PAS été réécrit après le redémarrage.$(NC)"; \
+	echo "$(YELLOW)   L'entrypoint n'a pas atteint la fin de sa branche « bootable » : l'installation est INCOMPLÈTE.$(NC)"; \
+	echo "$(YELLOW)   Causes possibles : dépendances non installées, application non bootable, ou$(NC)"; \
+	echo "$(YELLOW)   « proxies:check » qui refuse de démarrer hors local. Diagnostic : make logs service=php$(NC)"; \
+	exit 1
+# ⛔ CE QU'ON ATTEND EST UNE POST-CONDITION, PAS UNE DURÉE — ET C'EST LA
+#    DEUXIÈME RÉDACTION.
+#
+# 🔴 LA PREMIÈRE MENTAIT SUR TOUTE RÉEXÉCUTION. Elle attendait l'apparition de
+# `public/storage`. Or `./src` est bind-monté (`docker-compose.yml`) et ce lien
+# est créé sur l'HÔTE : il survit au conteneur. Dès la deuxième exécution — la
+# machine d'un développeur, et le test d'idempotence du E2E — le tout premier
+# sondage réussissait et la cible imprimait « ✓ Entrypoint rejoué » sans avoir
+# rien mesuré. Elle ne disait vrai que sur un clone neuf, c'est-à-dire une fois.
+#
+# ⚖️ LE TÉMOIN EST DONC FRAIS PAR CONSTRUCTION — ET C'EST LA TROISIÈME
+# RÉDACTION, parce que la deuxième laissait encore passer le vestige DANS LE
+# CAS QUI COMPTE (2ᵉ revue). Elle RELEVAIT la valeur d'avant puis comparait :
+# si ce relevé échouait, la valeur attendue devenait VIDE et n'importe quel
+# vestige non vide satisfaisait « différent de attendu » dès le premier
+# sondage. Or ce relevé échoue précisément quand le conteneur BOUCLE EN
+# REDÉMARRAGE — la panne même que cette cible existe pour attraper. La
+# post-condition n'était donc vraie que lorsque tout allait déjà bien.
+#
+# ⛔ ON EFFACE PLUTÔT QUE DE COMPARER. Le témoin est SUPPRIMÉ avant le
+# redémarrage, et l'échec de cette suppression est FATAL : ne pas pouvoir
+# établir la pré-condition, c'est ne pas pouvoir vérifier la post-condition —
+# on refuse de mesurer au lieu de mesurer faux. Après quoi « le fichier existe
+# et n'est pas vide » ne peut plus vouloir dire qu'une chose : l'entrypoint
+# vient de le réécrire.
+# ⚠️ Et il est écrit par l'entrypoint en DERNIÈRE LIGNE AVANT `exec` — pas en
+# fin de branche : `mkdir -p` du répertoire supervisor, fatal sous `set -e`,
+# vit entre les deux.
+# ⚠️ Et l'échec est FATAL. Un `|| true` ici rendrait la chaîne verte sur
+# exactement l'état qu'elle est chargée de rendre impossible.
 
 .PHONY: install-laravel
 install-laravel: ## Installer Laravel complet [DRY_RUN=true] [RESUME_FROM=<module>] (packages + permissions + MCP)

@@ -1026,6 +1026,262 @@ function harnaisComposer(string $corps): string
         BASH;
 }
 
+/*
+|------------------------------------------------------------------------------
+| Les dépendances Composer — clôture 2.4, constat d'audit
+|------------------------------------------------------------------------------
+|
+| 🔴 LE 2ᵉ BLOCAGE DE LA STORY POUVAIT ÊTRE SUPPRIMÉ SANS QU'UN SEUL TEST
+| ROUGISSE, ET C'EST DÉMONTRÉ. L'appel à `ensure_composer_dependencies` remplacé
+| par un no-op dans `main()` laissait 449/449 Pest et 49/49 Bats VERTS — une
+| mutation qui restaure EXACTEMENT l'échec de clone neuf que cette story existe
+| pour corriger.
+|
+| ⛔ POURQUOI LE SEUL GARDE EXISTANT NE GARDAIT RIEN : c'était le ratchet de
+| sites `run_cmd`, qui compte des lignes de TEXTE. La fonction existait toujours,
+| morte, donc le compte restait juste. Et tous les passages par ce module dans ce
+| fichier sont en `--dry-run`, où la fonction sort à son garde `dry_run_active`
+| avant d'atteindre la moindre branche réelle.
+|
+| ⚖️ LE REMÈDE EST CELUI QUE CE FICHIER APPLIQUE DÉJÀ AILLEURS : `harnaisComposer`
+| source le module et PILOTE ses fonctions avec des stubs. On mesure l'ORDRE des
+| appels dans `main()`, puis chacune des branches réelles.
+|
+*/
+
+it('main() installe les dépendances APRÈS le patch du skeleton et AVANT toute commande artisan', function (): void {
+    /*
+     * ⛔ L'ORDRE DES TROIS LIGNES EST LE SUJET, et il est MESURÉ : les étapes de
+     * `main()` sont remplacées par des témoins qui journalisent leur passage.
+     *   • APRÈS `patch_fresh_laravel_skeleton` : installer avant réinstallerait
+     *     phpunit/pint/sail que le patch vient d'exclure du `composer.json` ;
+     *   • AVANT `configure_laravel_environment` : c'est lui qui appelle
+     *     `key:generate`, la PREMIÈRE commande artisan du module — celle qui
+     *     exige déjà `vendor/`.
+     */
+    $result = ShellProbe::run(harnaisComposer(<<<'BASH'
+        ordre="$bac/ordre"
+        : > "$ordre"
+
+        create_laravel_project()        { echo "create_laravel_project"        >> "$ordre"; }
+        patch_fresh_laravel_skeleton()  { echo "patch_fresh_laravel_skeleton"  >> "$ordre"; }
+        ensure_composer_dependencies()  { echo "ensure_composer_dependencies"  >> "$ordre"; return 0; }
+        configure_laravel_environment() { echo "configure_laravel_environment" >> "$ordre"; }
+        create_healthcheck_route()      { echo "create_healthcheck_route"      >> "$ordre"; }
+        get_laravel_version()           { echo "13.0.0"; }
+        get_php_version()               { echo "8.5.0"; }
+
+        statut=0
+        ( main "$bac/cible" ) > /dev/null 2>&1 || statut=$?
+        echo "MAIN_STATUS=$statut"
+        echo "ORDRE=[$(tr '\n' ',' < "$ordre")]"
+        BASH), [
+        'MODULE_SH' => ShellProbe::installModuleScript('10-laravel-core'),
+    ], 120);
+
+    expect($result['output'])->toContain('MAIN_STATUS=0');
+
+    preg_match('/^ORDRE=\[(.*)\]$/m', $result['output'], $trouve);
+
+    expect($trouve)
+        ->not->toBe([], "main() n’a produit aucun ordre :\n" . $result['output']);
+
+    $ordre = array_values(array_filter(explode(',', $trouve[1] ?? '')));
+
+    $rang = static function (array $ordre, string $etape): int {
+        $index = array_search($etape, $ordre, true);
+
+        expect($index)
+            ->not->toBeFalse("main() n’appelle plus « {$etape} ».");
+
+        return (int) $index;
+    };
+
+    // 🔴 CETTE ASSERTION EST CELLE QUE LA MUTATION DÉMONTRÉE FAIT ROUGIR.
+    $deps = $rang($ordre, 'ensure_composer_dependencies');
+
+    expect($rang($ordre, 'patch_fresh_laravel_skeleton'))
+        ->toBeLessThan($deps, 'Les dépendances sont installées AVANT le patch du composer.json.');
+    expect($deps)
+        ->toBeLessThan(
+            $rang($ordre, 'configure_laravel_environment'),
+            'Les dépendances sont installées APRÈS la première commande artisan (key:generate).',
+        );
+});
+
+it('main() ABANDONNE quand les dépendances ne s’installent pas', function (): void {
+    // ⛔ ANTI-VACUITÉ DU TEST PRÉCÉDENT : un `ensure_composer_dependencies`
+    // appelé mais dont l'échec serait ignoré laisserait `key:generate` tourner
+    // sans `vendor/` — le défaut d'origine, un cran plus loin.
+    $result = ShellProbe::run(harnaisComposer(<<<'BASH'
+        ordre="$bac/ordre"
+        : > "$ordre"
+
+        create_laravel_project()        { :; }
+        patch_fresh_laravel_skeleton()  { :; }
+        ensure_composer_dependencies()  { return 1; }
+        configure_laravel_environment() { echo "configure_laravel_environment" >> "$ordre"; }
+        create_healthcheck_route()      { echo "create_healthcheck_route"      >> "$ordre"; }
+        get_laravel_version()           { echo "13.0.0"; }
+        get_php_version()               { echo "8.5.0"; }
+
+        # ⛔ SOUS-SHELL : `log_fatal` TUE le shell courant. Sans lui, la sonde
+        # mourait avec son sujet et n'imprimait rien — un test rouge pour la
+        # bonne raison, mais illisible.
+        statut=0
+        ( main "$bac/cible" ) > "$bac/sortie" 2>&1 || statut=$?
+        echo "MAIN_STATUS=$statut"
+        echo "SUITE=[$(tr '\n' ',' < "$ordre")]"
+        grep -q "dépendances Composer" "$bac/sortie" && echo "NOMME=oui" || echo "NOMME=non"
+        BASH), [
+        'MODULE_SH' => ShellProbe::installModuleScript('10-laravel-core'),
+    ], 120);
+
+    expect($result['output'])->not->toContain('MAIN_STATUS=0');
+    expect($result['output'])->toContain('SUITE=[]');
+    expect($result['output'])->toContain('NOMME=oui');
+});
+
+/**
+ * Harnais d'exécution RÉELLE d'`ensure_composer_dependencies`.
+ *
+ * `composer` et `php` sont stubés et PILOTÉS : le premier peut créer ou non
+ * l'autoloader et rendre le code qu'on veut, le second décide si l'application
+ * boote. C'est la seule façon d'atteindre les branches réelles — les passages
+ * par ce module dans ce fichier sont tous en `--dry-run`, où la fonction sort
+ * à son premier garde.
+ */
+function harnaisDependances(string $corps): string
+{
+    return harnaisComposer(<<<BASH
+        CIBLE="\$bac/cible"; export CIBLE
+        mkdir -p "\$CIBLE"
+        printf '{"require":{"laravel/framework":"^13.0"}}\\n' > "\$CIBLE/composer.json"
+
+        cat > "\$bac/bin/composer" <<'STUB'
+        #!/bin/sh
+        printf 'COMPOSER %s\\n' "\$*" >> "\$JOURNAL"
+        if [ "\$1" = "install" ]; then
+            if [ "\${COMPOSER_CREE_VENDOR:-oui}" = "oui" ]; then
+                mkdir -p "\$CIBLE/vendor"
+                printf '<?php\\n' > "\$CIBLE/vendor/autoload.php"
+            fi
+            exit "\${COMPOSER_INSTALL_STATUS:-0}"
+        fi
+        exit 0
+        STUB
+        chmod +x "\$bac/bin/composer"
+
+        cat > "\$bac/bin/php" <<'STUB'
+        #!/bin/sh
+        printf 'PHP %s\\n' "\$*" >> "\$JOURNAL"
+        exit "\${PHP_BOOT_STATUS:-0}"
+        STUB
+        chmod +x "\$bac/bin/php"
+
+        {$corps}
+        BASH);
+}
+
+it('EXÉCUTÉE : des dépendances déjà présentes ET bootables ne sont pas réinstallées', function (): void {
+    $result = ShellProbe::run(harnaisDependances(<<<'BASH'
+        mkdir -p "$CIBLE/vendor"
+        printf '<?php\n' > "$CIBLE/vendor/autoload.php"
+
+        statut=0
+        ( ensure_composer_dependencies "$CIBLE" ) > "$bac/sortie" 2>&1 || statut=$?
+        echo "STATUT=$statut"
+        grep -c "^COMPOSER install" "$JOURNAL" | sed 's/^/INSTALLS=/'
+        BASH), [
+        'MODULE_SH' => ShellProbe::installModuleScript('10-laravel-core'),
+    ], 120);
+
+    expect($result['output'])->toContain('STATUT=0');
+    // ⛔ LE COURT-CIRCUIT EST MESURÉ PAR L'ABSENCE D'APPEL, pas par un message.
+    expect($result['output'])->toContain('INSTALLS=0');
+});
+
+it('EXÉCUTÉE : un `composer install` en échec est propagé, pas avalé', function (): void {
+    $result = ShellProbe::run(harnaisDependances(<<<'BASH'
+        export COMPOSER_INSTALL_STATUS=4
+        export COMPOSER_CREE_VENDOR=non
+
+        statut=0
+        ( ensure_composer_dependencies "$CIBLE" ) > "$bac/sortie" 2>&1 || statut=$?
+        echo "STATUT=$statut"
+        grep -q "composer install" "$bac/sortie" && echo "NOMME=oui" || echo "NOMME=non"
+        BASH), [
+        'MODULE_SH' => ShellProbe::installModuleScript('10-laravel-core'),
+    ], 120);
+
+    expect($result['output'])->not->toContain('STATUT=0');
+    expect($result['output'])->toContain('NOMME=oui');
+});
+
+it('EXÉCUTÉE : un `composer install` qui rend 0 SANS autoloader est un ÉCHEC', function (): void {
+    // 🔴 POST-CONDITION N°1. `composer install` peut rendre 0 en laissant un
+    // `vendor/` inexploitable — scripts post-install avalés, plateforme
+    // incompatible. Annoncer « dépendances installées » là-dessus reconduirait
+    // le défaut d'origine un cran plus loin.
+    $result = ShellProbe::run(harnaisDependances(<<<'BASH'
+        export COMPOSER_INSTALL_STATUS=0
+        export COMPOSER_CREE_VENDOR=non
+
+        statut=0
+        ( ensure_composer_dependencies "$CIBLE" ) > "$bac/sortie" 2>&1 || statut=$?
+        echo "STATUT=$statut"
+        grep -q "vendor/autoload.php est absent" "$bac/sortie" && echo "NOMME=oui" || echo "NOMME=non"
+        BASH), [
+        'MODULE_SH' => ShellProbe::installModuleScript('10-laravel-core'),
+    ], 120);
+
+    expect($result['output'])->not->toContain('STATUT=0');
+    expect($result['output'])->toContain('NOMME=oui');
+});
+
+it('EXÉCUTÉE : un autoloader présent mais une application qui ne BOOTE PAS est un ÉCHEC', function (): void {
+    // 🔴 POST-CONDITION N°2, et c'est celle qui distingue « des fichiers sont
+    // là » de « l'application marche ». C'est aussi l'état exact que
+    // l'entrypoint refuse sous le nom `non-bootable`.
+    $result = ShellProbe::run(harnaisDependances(<<<'BASH'
+        export COMPOSER_INSTALL_STATUS=0
+        export COMPOSER_CREE_VENDOR=oui
+        export PHP_BOOT_STATUS=255
+
+        statut=0
+        ( ensure_composer_dependencies "$CIBLE" ) > "$bac/sortie" 2>&1 || statut=$?
+        echo "STATUT=$statut"
+        grep -q "ne boote pas" "$bac/sortie" && echo "NOMME=oui" || echo "NOMME=non"
+        BASH), [
+        'MODULE_SH' => ShellProbe::installModuleScript('10-laravel-core'),
+    ], 120);
+
+    expect($result['output'])->not->toContain('STATUT=0');
+    expect($result['output'])->toContain('NOMME=oui');
+});
+
+it('EXÉCUTÉE : le chemin NOMINAL installe et valide — anti-vacuité des quatre précédents', function (): void {
+    // ⛔ Sans celui-ci, une fonction qui échouerait TOUJOURS satisferait les
+    // trois tests d'échec ci-dessus.
+    $result = ShellProbe::run(harnaisDependances(<<<'BASH'
+        export COMPOSER_INSTALL_STATUS=0
+        export COMPOSER_CREE_VENDOR=oui
+        export PHP_BOOT_STATUS=0
+
+        statut=0
+        ( ensure_composer_dependencies "$CIBLE" ) > "$bac/sortie" 2>&1 || statut=$?
+        echo "STATUT=$statut"
+        grep -c "^COMPOSER install" "$JOURNAL" | sed 's/^/INSTALLS=/'
+        [ -f "$CIBLE/vendor/autoload.php" ] && echo "AUTOLOADER=oui" || echo "AUTOLOADER=non"
+        BASH), [
+        'MODULE_SH' => ShellProbe::installModuleScript('10-laravel-core'),
+    ], 120);
+
+    expect($result['output'])->toContain('STATUT=0');
+    expect($result['output'])->toContain('INSTALLS=1');
+    expect($result['output'])->toContain('AUTOLOADER=oui');
+});
+
 it('un échec de composer install est un ÉCHEC, pas un succès avalé par tee', function (): void {
     // Constat 15 : six des sept sites `tee` ressuscités n'avaient aucune sonde
     // d'exécution. Celui-ci (`composer install`) et celui de `cp -a` sont les
@@ -2177,11 +2433,15 @@ it('aucune commande à effet de 10-laravel-core n’échappe à run_cmd', functi
 
     // ⚖️ CECI EST UN RATCHET EXACT, PAS UN PLANCHER AVEC DE LA MARGE.
     // Le nombre est PILE la valeur courante : retirer un seul `run_cmd` le fait
-    // tomber à 52 et rougir. Ne le « détendez » pas en croyant garder du jeu —
+    // tomber à 54 et rougir. Ne le « détendez » pas en croyant garder du jeu —
     // il n'y en a pas, c'est le but. Un site ajouté ? Montez-le d'autant, dans
     // le même commit que l'ajout.
+    //
+    // 53 → 55 le 2026-08-24 : `ensure_composer_dependencies` route DEUX sites
+    // (`run_cmd composer install` sous simulation, `run_cmd_logged composer
+    // install` en réel).
     expect($routees)
-        ->toBe(53);
+        ->toBe(55);
 
     // ⚖️ LA LISTE DES EXCEPTIONS EST EXPLICITE, COURTE, ET CHACUNE SE JUSTIFIE.
     // C'est elle qui rend l'audit relisible en revue plutôt que promis.
@@ -2189,6 +2449,12 @@ it('aucune commande à effet de 10-laravel-core n’échappe à run_cmd', functi
         ->toBe([
             // Branche RÉELLE uniquement : la simulation sort avant (garde dry-run).
             'chmod -R 777 "$target_dir" 2>/dev/null || true',
+            // Corps d'`application_boots` : une sonde de LECTURE, isolée en
+            // fonction pour n'exister qu'une fois. `run_cmd` l'annoncerait comme
+            // une commande à effet — elle n'en est pas une — et sous simulation
+            // elle n'est jamais appelée (elle BOOTE l'application, donc écrit
+            // journaux et caches dans la cible).
+            'php artisan --version > /dev/null 2>&1',
             // Valeurs de retour de fonction, écrites sur stdout — pas des effets.
             'echo "$state_name"',
             'printf \'%s\n\' "$name"',

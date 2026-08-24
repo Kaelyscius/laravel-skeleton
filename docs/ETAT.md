@@ -1,4 +1,137 @@
-# État du projet — 2026-08-23 (branche `main`)
+# État du projet — 2026-08-24 (branche `main`)
+
+> 🔴 **CLÔTURE DE LA STORY 2.4 — LE NIGHTLY AVAIT RAISON : LE SQUELETTE N'ÉTAIT PAS
+> INSTALLABLE DEPUIS UN CLONE PROPRE.** Deux runs rouges (`32654512271`, `32688766596`),
+> étiquetés INSTALLEUR. Cause **mesurée** dans le conteneur `laravel-app_php` :
+> `docker/php/scripts/docker-entrypoint.sh` décidait « Laravel est installé » sur
+> `[ -f artisan ]`, or **`src/artisan` est versionné et `src/vendor` ne l'est pas**. La branche
+> « installé » était donc prise sans autoloader, `php artisan config:clear` sortait en **255**,
+> `set -e` tuait l'entrypoint, `restart: unless-stopped` bouclait — et `make install-laravel`,
+> qui s'exécute DANS ce conteneur, n'avait jamais d'hôte où tourner. Poule et œuf : le correctif
+> ne pouvait être **que** dans l'entrypoint.
+>
+> ✅ **SIX blocages levés** — trois n'étaient encore que des PRÉDICTIONS de lecture, et les deux
+> derniers ont été trouvés par AUDIT, après coup :
+> 1. **entrypoint php** — sonde à **CINQ états** (`absent` / `sans-vendor` / `non-bootable` /
+>    `non-bootable-timeout` / `bootable`), dont un compte que `PhpEntrypointStateTest` DÉRIVE du
+>    code : la sonde, le `case` en aval et l'en-tête doivent énumérer les mêmes, sinon il rougit. ⛔ La sonde n'a **pas** été inversée vers `[ -f vendor/autoload.php ]` :
+>    un `vendor/` partiel l'aurait satisfaite et la branche production aurait figé
+>    `config:cache`/`route:cache` depuis un état cassé (rationale D7). La bootabilité est
+>    **mesurée** (`php artisan --version`), pas devinée. `proxies:check` reste fatal hors
+>    `local`/`testing` — un clone neuf en `staging`/`preprod`/APP_ENV vide **refuse de démarrer**
+>    et nomme la variable.
+> 2. **module 10** — `ensure_composer_dependencies` : sur un clone neuf `is_laravel_installed` est
+>    **vrai** (les quatre `LARAVEL_CORE_FILES` sont versionnés), donc aucune des trois portes
+>    d'installation de dépendances n'était atteinte et `key:generate` — la première commande
+>    artisan — exigeait déjà `vendor/`. L'installation des dépendances est désormais
+>    **inconditionnelle, après le patch du `composer.json` et avant toute commande artisan**, avec
+>    une post-condition mesurée (autoloader présent **et** application bootable).
+> 3. **Makefile** — `setup-ssl` passe **avant** tout `up*` dans les chaînes d'installation :
+>    l'entrypoint apache sort en `1` sans certificats, et `setup-ssl` en était le **dernier**
+>    prérequis. Le script est purement hôte, rien ne justifiait qu'il vienne après les conteneurs.
+> 4. **l'instrument lui-même** — le job `alert` du nightly n'a **jamais** ouvert d'issue : il n'a
+>    aucun `actions/checkout`, donc `gh` sortait sur « fatal: not a git repository » (reproduit sur
+>    l'hôte WSL2 dans un répertoire non-git ; `GH_REPO=<owner>/<repo>` la fait sortir en 0). Ajout
+>    de `GH_REPO`, **filtrage d'issue côté client** au lieu de `--search` (index GitHub asynchrone →
+>    une issue neuve chaque nuit), et le job devient **déclenchable hors `schedule`** — sans quoi
+>    son correctif n'était pas validable. Et le diagnostic du test Bats, jeté par
+>    `tail … 2> /dev/null >&2` (redirections appliquées de gauche à droite), est **réparé et
+>    extrait en fonction éprouvée**, avec un **repli** `docker logs` — repli, jamais substitution —
+>    qui **NOMME sa source** pour qu'une panne réseau ne soit pas réétiquetée INSTALLEUR.
+>
+> 5. **Et le retrait de la restriction au cron est désormais VERROUILLÉ** (constat d'audit).
+>    Rien ne l'empêchait d'être remis : aucun test ne rougissait, et on serait retombé dans un
+>    correctif d'alerte invalidable autrement qu'en perdant une nuit — le garde-fou silencieux
+>    appliqué au correctif qui venait d'être fait. Le garde neuf pose la question **d'intention**
+>    (« si je lance ce workflow à la main et que l'installation échoue, l'alerte part-elle ? ») en
+>    **évaluant** la condition `if:` dans un contexte simulé, plutôt qu'en recopiant son texte ; sa
+>    moitié anti-vacuité vérifie qu'une installation RÉUSSIE ne déclenche rien.
+>
+> 🔴 **6. UN SIXIÈME BLOCAGE, TROUVÉ PAR AUDIT APRÈS COUP — ET IL PASSAIT POUR UN SUCCÈS.**
+> La ligne de matrice « après `install-laravel`, les caches/clears sont joués » n'était **pas**
+> satisfaite : php démarre en `sans-vendor`, saute la branche `bootable`, `install-laravel` peuple
+> `vendor/`… et **rien ne redémarrait le conteneur**. Or `php artisan storage:link` n'existe qu'à
+> **un seul endroit du dépôt** — cette branche `bootable`. Aucun module d'installation ne le joue.
+> Une install de clone neuf ne créait donc **jamais** `public/storage`, et comme `/health` ne le
+> regarde pas, **le nightly pouvait conclure VERT sur une application incomplète** : la classe de
+> défaut exacte que cet epic existe pour interdire.
+> ✅ Correctif : `make post-install-restart-php`, inséré après l'installateur Laravel et **avant**
+> `npm-install` dans les cinq chaînes. On redémarre plutôt que de dupliquer `storage:link` dans un
+> module — la promesse déjà imprimée par l'entrypoint devient vraie, et la logique reste à un seul
+> endroit. La cible attend une **post-condition** (le lien), pas un délai ; elle rejoue son
+> sondage ; elle **échoue** si le lien n'apparaît pas.
+>
+> 🔴 **PASSE DE REVUE DU 2026-08-24 — TROIS GARDE-FOUS NE GARDAIENT RIEN, ET C'ÉTAIT MESURÉ.**
+> Le relecteur n'a pas argumenté : il a MUTÉ. (1) L'appel à `ensure_composer_dependencies` remplacé
+> par un no-op → **449/449 verts**, alors que la mutation restaure l'échec de clone neuf ; le seul
+> garde était un ratchet qui compte du TEXTE. (2) `local -a _probe=(a b)` dans `detect_laravel_state`
+> → **11/11 verts** sous `bash`, alors que le script meurt en « syntax error » sous le `sh` de
+> l'image (BusyBox) : **le garde mesurait le mauvais interpréteur**, motif de la 2.3 reproduit dans
+> le garde censé le clore. (3) `env.ISSUE_TITLE` → `"$ISSUE_TITLE"` dans le filtre jq → **9/9 verts**,
+> et une issue neuve chaque nuit.
+> ✅ Les trois sont corrigés, et **les trois mutations ont été rejouées : elles rougissent**.
+>
+> 🎁 **Et le bon interpréteur a trouvé un défaut du jour même** : `timeout` rend **124** sous GNU
+> coreutils mais **143** sous BusyBox. L'état de dépassement de la sonde de boot, écrit quelques
+> heures plus tôt, était donc **inatteignable en production**. C'est la troisième fois de l'epic que
+> GNU-vs-BusyBox décide d'un verdict — et la première où c'est un test qui le dit, pas une revue.
+>
+> 🔴 **2ᵉ PASSE DE REVUE — LA POST-CONDITION DU REDÉMARRAGE N'ÉTAIT VRAIE QUE QUAND TOUT ALLAIT
+> DÉJÀ BIEN.** La cible relevait le témoin d'avant pour le comparer ; quand ce relevé échouait,
+> l'attendu devenait vide et n'importe quel vestige passait pour neuf — or il échoue **précisément
+> quand le conteneur boucle**, la panne qu'elle existe pour attraper. ✅ On **efface** le témoin
+> avant de redémarrer, et l'échec de l'effacement est fatal : on refuse de mesurer plutôt que de
+> mesurer faux. Le témoin est aussi passé de la fin de BRANCHE à la **dernière ligne avant `exec`**
+> — `mkdir -p` du répertoire supervisor, fatal, vivait entre les deux.
+>
+> 🔴 **ET LE BRAS `143` N'ÉTAIT ÉPROUVÉ NULLE PART OÙ LA CI MESURE.** La sonde déclenchait un vrai
+> dépassement, donc lisait le `timeout` de la machine : 124 sur le runner, 143 sous BusyBox. Le code
+> de la PRODUCTION n'était couvert que par la boucle locale. **L'interpréteur était épinglé, le
+> binaire ne l'était pas** — il l'est maintenant, par un stub, et les deux bras sont exercés partout.
+>
+> 🎁 **Une mutation est restée VERTE, et c'était sa trouvaille** : « le témoin repart en fin de
+> branche ». Rien n'assertait que le témoin soit **écrit**. Deux sondes ajoutées, mutation rejouée
+> dans les deux sens, rouge.
+>
+> ⚠️ **DEUX AC RESTENT OUVERTES, ET AUCUNE N'A ÉTÉ FERMÉE SUR UNE LECTURE DE CODE.**
+> Le verdict de cette story est **un run réel**, et aucun n'a pu être lancé : le travail n'est pas
+> poussé, `workflow_dispatch` n'exécute que la version présente sur la branche par défaut. Restent
+> donc à observer, **dans cet ordre**, après merge :
+> `gh workflow run nightly.yml` → **vert observé**, fenêtre du lockfile < 15 min, numéro consigné ;
+> puis `gh workflow run nightly.yml -f mutate_module=20-database` → **rouge observé**, module nommé,
+> numéro consigné ; puis `gh issue list --label nightly` → l'issue existe **sur le dépôt**
+> (le label `nightly` n'existe toujours pas : vérifié le 2026-08-24 via l'API). La bascule de
+> `nightly-freshness` en bloquant (geste 2, plus bas) **n'a pas été faite** : la faire avant un
+> premier vert installerait dans le verdict global le rouge permanent que cette section décrit.
+>
+> 🧪 **Campagne de mutation — 65 rouges observés, 9 témoins neutres verts.**
+> **Environnements nommés** (règle désormais ÉCRITE dans `docs/process/03-boucle-qualite.md`
+> §Étape 5, elle ne vivait que dans ce journal et dans `ADR-0013`) :
+> les 25 mutations Pest ont été appliquées sur l'arbre hôte et **exécutées dans le conteneur
+> `laravel-app_php`** ; les 8 mutations Bats ont été **exécutées sur l'hôte nu (WSL2, bash 5.2,
+> GNU coreutils, GNU Make 4.4.1)**, où `make test-bats` tourne. Les cinq témoins neutres — un
+> libellé de log du module 10, un commentaire de `e2e.bash`, la couleur du label `nightly`, le
+> libellé du redémarrage, et une **reformulation équivalente** de la condition `if:` de l'alerte —
+> sont restés **verts**. Ce dernier est le plus parlant : il prouve que le garde de l'alerte porte
+> sur l'INTENTION et non sur le texte, puisqu'il survit à une réécriture de la condition.
+>
+> 🔴 **ET LA CAMPAGNE A EU UNE TROUVAILLE — SUR ELLE-MÊME.** La mutation « la post-condition n'est
+> plus vérifiée » a d'abord été écrite en insérant `@exit 0` avant la boucle d'attente, et elle est
+> restée **VERTE**. Ce n'était pas un garde muet : **chaque ligne de recette `make` est un shell
+> distinct**, donc `@exit 0` terminait sa propre ligne et make enchaînait sur la suivante — la
+> mutation ne mutait rien. Réécrite en retirant le **bloc entier** de vérification, elle rougit.
+> Corollaire à retenir : dans un `Makefile`, une mutation doit porter sur une LIGNE DE RECETTE
+> entière, jamais sur une instruction glissée avant elle.
+>
+> 🔴 **ET UNE SECONDE TROUVAILLE, SUR UN GARDE CETTE FOIS.** La mutation « l'évaluateur de
+> conditions rend `true` par défaut au lieu de refuser un identifiant inconnu » est restée
+> **VERTE** : le test « il refuse ce qu'il ne sait pas lire » n'exerçait que des expressions
+> MAL FORMÉES, qui mouraient toutes dans le découpage en jetons — jamais dans la résolution
+> d'identifiant qu'il prétendait garder. Un cas bien formé nommant un contexte absent
+> (`github.actor == '…'`) a été ajouté ; la mutation rougit. Le motif est constant dans ce
+> projet : **un garde ne vaut que par le chemin que son test emprunte réellement.**
+>
+> 📊 **482 tests Pest · 49 tests Bats · ratchet 0/0/0.**
 
 > 🆕 **Story 2.4 implémentée, revues 1 et 2 traitées (≈60 + 31 constats).**
 > **423 tests Pest · 40 tests Bats · ratchet 0/0/0 · 87 mutations rejouées (60 + 27), toutes rouges
@@ -530,10 +663,15 @@ n'est déclenchable que lorsque le workflow existe sur la branche par défaut ; 
 se déclenche que sur `main`/`develop` ; et le E2E exige les ports publiés **libres**, donc démonter
 la pile de développement d'Alex.
 
-🔴 **CE REPORT EST DEVENU UN TEST QUI ROUGIT.** Le job CI **bloquant** `nightly-freshness` échoue
+🔴 **CE REPORT EST DEVENU UN TEST QUI ROUGIT.** Le job CI `nightly-freshness` échoue
 tant que le workflow n'a jamais tourné, s'il est désactivé, ou si son dernier run date de plus de
 3 jours. **La CI sera donc rouge sur ce job jusqu'au premier lancement du nightly** — c'est l'état
 réel, et c'est voulu : le projet préfère un rouge qui nomme la dette à une phrase dans un registre.
+
+⚠️ **CORRIGÉ LE 2026-08-24 : ce paragraphe écrivait « le job CI **bloquant** ».** Il ne l'est pas —
+il est délibérément HORS des `needs` de `CI Summary` (décision d'Alex, revue 2, expliquée juste
+au-dessus). Une phrase fausse à côté d'un code juste, dans le document qui décrit précisément la
+bascule qui le rendrait vrai : le motif de tête de ce projet, reproduit dans son propre journal.
 
 **Les deux AC qui restent ouverts, et la manière EXACTE de les fermer :**
 

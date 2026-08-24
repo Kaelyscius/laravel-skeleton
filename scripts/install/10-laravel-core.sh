@@ -329,6 +329,109 @@ configure_laravel_environment() {
 # =============================================================================
 
 #
+# L'application BOOTE-T-ELLE ? Sonde unique, appelée depuis le cwd de la cible.
+#
+# Isolée en fonction pour n'écrire `php artisan` qu'UNE fois : chaque site nu
+# devient sinon un « suspect » du garde `aucune commande à effet n'échappe à
+# run_cmd`, et une sonde de LECTURE n'a rien à faire dans `run_cmd`.
+#
+application_boots() {
+    php artisan --version > /dev/null 2>&1
+}
+
+#
+# Installer les dépendances Composer — INCONDITIONNELLEMENT, et AVANT la
+# première commande artisan du module.
+#
+# 🔴 CE QUI MANQUAIT, ET CE QUE LE NIGHTLY A ROUGI DEUX FOIS. Sur un clone neuf
+# de CE dépôt, `is_laravel_installed` (ci-dessous) rend VRAI : les quatre
+# `LARAVEL_CORE_FILES` — `artisan`, `composer.json`, `bootstrap/app.php`,
+# `config/app.php` — sont tous VERSIONNÉS. `create_laravel_project` sort donc
+# immédiatement sur « ✅ Projet Laravel existant détecté », et aucune des trois
+# portes qui installent des dépendances n'est atteinte :
+# ni `composer create-project`, ni le repli `laravel new`, ni le
+# `composer install` d'`install_laravel_via_composer`. La toute première
+# commande artisan du module — `key:generate --force` — exige pourtant
+# `vendor/`, que rien n'a peuplé.
+#
+# ⚖️ C'EST UN PAS SÉPARÉ, PAS UN ASSOUPLISSEMENT D'`is_laravel_installed`.
+# Cette fonction répond à « le SQUELETTE Laravel est-il là ? » et elle y répond
+# juste ; « les DÉPENDANCES sont-elles là ? » est une autre question, et la
+# confondre avec la première est exactement le défaut qu'on corrige.
+#
+ensure_composer_dependencies() {
+    local laravel_dir="$1"
+
+    log_info "📦 Vérification des dépendances Composer..."
+
+    if [ ! -d "$laravel_dir" ]; then
+        # Même règle que les autres étapes : sous simulation, un répertoire que
+        # la simulation n'a pas créé est un CONSTAT, pas une mort à provoquer.
+        if dry_run_active; then
+            log_warn "🔍 [DRY-RUN] Répertoire absent: $laravel_dir — installation des dépendances non jouée."
+            return 0
+        fi
+
+        log_fatal "Répertoire Laravel non trouvé: $laravel_dir"
+    fi
+
+    cd "$laravel_dir"
+
+    if [ ! -f "composer.json" ]; then
+        if dry_run_active; then
+            log_warn "🔍 [DRY-RUN] composer.json absent de $laravel_dir — installation des dépendances non jouée."
+            return 0
+        fi
+
+        log_fatal "composer.json absent de $laravel_dir — impossible d'installer les dépendances."
+    fi
+
+    # ⛔ SOUS SIMULATION ON ANNONCE, ON NE SONDE PAS. `php artisan --version`
+    # BOOTE l'application : journaux et caches sont écrits DANS la cible, et
+    # l'AC de tête de la story 2.3 — « un --dry-run laisse `git status
+    # --porcelain` vide » — tomberait.
+    if dry_run_active; then
+        run_cmd composer install --no-interaction --prefer-dist --no-progress
+        log_applied "Dépendances Composer installées"
+
+        return 0
+    fi
+
+    if [ -f "vendor/autoload.php" ] && application_boots; then
+        log_info "✓ Dépendances déjà présentes et application bootable — rien à installer."
+
+        return 0
+    fi
+
+    if ! run_cmd_logged composer install --no-interaction --prefer-dist --no-progress; then
+        log_error "Échec de « composer install » dans $laravel_dir"
+
+        return 1
+    fi
+
+    # ⛔ POST-CONDITION MESURÉE, PAS DÉDUITE. `composer install` peut rendre 0
+    # en laissant un `vendor/` inexploitable (scripts post-install en échec
+    # avalés, plateforme incompatible). Un module qui annonce « dépendances
+    # installées » sans que l'application boote reconduirait, un cran plus loin,
+    # le défaut que cette fonction corrige.
+    if [ ! -f "vendor/autoload.php" ]; then
+        log_error "« composer install » a rendu 0 mais vendor/autoload.php est absent."
+
+        return 1
+    fi
+
+    if ! application_boots; then
+        log_error "Dépendances installées mais l'application ne boote pas (« php artisan --version » en échec)."
+
+        return 1
+    fi
+
+    log_applied "Dépendances Composer installées"
+
+    return 0
+}
+
+#
 # Vérifier si Laravel est déjà installé dans un répertoire
 #
 is_laravel_installed() {
@@ -1583,6 +1686,13 @@ main() {
 
     # Patcher le skeleton par défaut (PHP ^8.5, supprimer phpunit/pint/sail, PostgreSQL pour les tests)
     patch_fresh_laravel_skeleton "$target_dir"
+
+    # ⛔ LES DÉPENDANCES AVANT LA PREMIÈRE COMMANDE ARTISAN, ET APRÈS LE PATCH
+    # DU `composer.json` — l'ordre des deux compte : installer d'abord
+    # réinstallerait phpunit/pint/sail que le patch vient d'exclure.
+    if ! ensure_composer_dependencies "$target_dir"; then
+        log_fatal "Échec de l'installation des dépendances Composer"
+    fi
 
     # Configurer l'environnement
     configure_laravel_environment "$target_dir"

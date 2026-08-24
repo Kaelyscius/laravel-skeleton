@@ -273,7 +273,28 @@ jobs:
     name: Nightly Alert
     runs-on: ubuntu-latest
     needs: [install]
-    if: always() && needs.install.result != 'success' && github.event_name == 'schedule'
+    # ⛔ PLUS RESTREINT AU `schedule` — ET C'EST CE QUI LE REND VALIDABLE.
+    # 🔴 Mesuré : ce job a été livré par la story 2.4 sans jamais tourner. Les
+    # deux nightlies rouges des 22 et 23/08 (runs 32654512271 et 32688766596)
+    # n'ont ouvert AUCUNE issue et le label `nightly` n'existait pas — parce
+    # qu'un `Run workflow` ne déclenchait pas ce job, donc personne ne pouvait
+    # constater qu'il mourait sur « fatal: not a git repository ». Un mécanisme
+    # d'alerte qu'on ne peut éprouver qu'en attendant 03:17 n'est pas éprouvé.
+    # Les deux déclencheurs sont ÉNUMÉRÉS plutôt que la condition supprimée :
+    # ajouter un jour un `pull_request` à ce workflow ne doit pas mettre à
+    # ouvrir des issues en silence.
+    # 🔴 `== 'failure'` ET NON `!= 'success'` (constat d'audit). `!= 'success'`
+    # est VRAI pour `cancelled` et `skipped` : annuler un run manuel ouvrait une
+    # issue « nightly rouge » alors que rien n'avait échoué.
+    # 🔴 ET UN ROUGE VOLONTAIRE N'EST PAS UNE PANNE. Un `workflow_dispatch` avec
+    # `mutate_module` renseigné est la PROCÉDURE DE VALIDATION écrite dans
+    # `docs/ETAT.md` : ce run DOIT être rouge. Déposer une vraie issue de
+    # nightly rouge à chaque vérification du garde-fou, c'est apprendre à lire
+    # ces issues comme du bruit — le mécanisme même du désarmement.
+    if: >-
+      always() && needs.install.result == 'failure'
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      && github.event.inputs.mutate_module == ''
 
     permissions:
       contents: read
@@ -283,11 +304,22 @@ jobs:
       - name: 🚨 Ouvrir ou mettre à jour l'issue de nightly rouge
         env:
           GH_TOKEN: ${{ github.token }}
+          # 🔴 SANS CECI, LE JOB EST MORT À SON PREMIER APPEL, ET IL L'ÉTAIT.
+          # Ce job n'a AUCUN `actions/checkout` : le répertoire de travail n'est
+          # pas un dépôt git, donc `gh` ne peut pas déduire le dépôt et sort sur
+          # « fatal: not a git repository ». Mesuré le 2026-08-24 sur l'hôte
+          # (WSL2, gh 2.x) dans un répertoire non-git : `gh issue list` échoue à
+          # l'identique, et `GH_REPO=<owner>/<repo>` la fait sortir en 0.
+          # ⚖️ `GH_REPO` plutôt qu'un checkout : ce job n'a besoin d'aucun
+          # fichier du dépôt, et cloner pour dire une phrase serait payer une
+          # minute de runner pour une variable.
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Le titre est une DONNÉE, lue par le filtre via l'ENVIRONNEMENT —
+          # jamais interpolée dans le programme qui compare.
+          ISSUE_TITLE: 🌙 Nightly E2E rouge
         run: |
           set -uo pipefail
-
-          titre="🌙 Nightly E2E rouge"
 
           corps="Le nightly E2E d'installation a échoué.
 
@@ -301,15 +333,53 @@ jobs:
           # une issue neuve chaque nuit, indéfiniment.
           gh label create nightly --color B60205 --description "Nightly E2E d'installation" 2>/dev/null || true
 
-          # 🔴 `// empty` ET NON `.[0].number` NU (revue 2). Sur un ensemble
-          # vide, `--jq` imprime le LITTÉRAL « null » : `[ -n "null" ]` est
-          # VRAI, donc `gh issue comment null` échouait — sous `bash -e`, le job
-          # mourait à son PREMIER appel et l'issue n'était jamais créée. C'est
-          # le motif que `ci.yml` évite déjà pour cette raison exacte.
-          existante="$(gh issue list --state open --label nightly --search "$titre" --json number --jq '.[0].number // empty' || echo "")"
+          # 🔴 FILTRAGE CÔTÉ CLIENT, PLUS `--search` (revue de clôture).
+          # `--search` interroge l'index de recherche GitHub, qui est
+          # ASYNCHRONE : une issue créée cette nuit peut n'y être visible que
+          # plusieurs minutes plus tard. Deux nuits rouges rapprochées — ou un
+          # `Run workflow` de validation suivi du run planifié — créaient alors
+          # une SECONDE issue malgré le label.
+          #
+          # 🔴 ET LA COMPARAISON A QUITTÉ `--jq`, PARCE QU'AUCUN TEST NE POUVAIT
+          # L'EXÉCUTER (constat d'audit). Démontré : remplacer `env.ISSUE_TITLE`
+          # par `"$ISSUE_TITLE"` — une comparaison qui ne peut JAMAIS matcher,
+          # le programme jq étant en quotes simples — laissait 9/9 verts, et
+          # réintroduisait une issue neuve chaque nuit rouge, indéfiniment. Le
+          # filtre était du TEXTE que les gardes ne faisaient que relire.
+          # ⚖️ `python3` PLUTÔT QUE `jq`, ET C'EST LA DÉCISION DÉJÀ ÉCRITE DANS
+          # `tests/bats/lib/e2e.bash` : python3 est présent sur les runners
+          # GitHub ET dans la boucle locale — mesuré le 2026-08-24, `jq` ne l'est
+          # ni dans le conteneur `laravel-app_php` ni sur l'hôte. La comparaison
+          # devient donc exécutable sous un `gh` stubé, et c'est ce que
+          # `WorkflowInputSafetyTest` fait désormais.
+          # ⛔ Le titre reste une DONNÉE : `os.environ`, jamais une interpolation
+          # dans le programme.
+          existante="$(gh issue list --state open --label nightly --limit 100 --json number,title 2>/dev/null \
+            | python3 -c '
+          import json
+          import os
+          import sys
+
+          titre = os.environ["ISSUE_TITLE"]
+
+          try:
+              issues = json.load(sys.stdin)
+          except Exception:
+              # Une sortie illisible ne veut pas dire "aucune issue" : on ne dit RIEN,
+              # et le shell creera une issue plutot que de commenter au hasard.
+              raise SystemExit(0)
+
+          if not isinstance(issues, list):
+              raise SystemExit(0)
+
+          for issue in issues:
+              if isinstance(issue, dict) and issue.get("title") == titre:
+                  print(issue.get("number", ""))
+                  break
+          ' || echo "")"
 
           if [ -n "$existante" ]; then
             gh issue comment "$existante" --body "$corps"
           else
-            gh issue create --title "$titre" --label nightly --body "$corps"
+            gh issue create --title "$ISSUE_TITLE" --label nightly --body "$corps"
           fi

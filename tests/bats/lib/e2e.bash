@@ -107,6 +107,125 @@ e2e_log_looks_like_infrastructure_failure() {
 }
 
 # -----------------------------------------------------------------------------
+# Capture le journal d'installation ÉCRIT DANS LE CONTENEUR, et NOMME sa source.
+#
+# 🔴 CE QUI ÉTAIT CASSÉ. `install.bats` capturait ce journal par un seul
+# `docker exec … cat /tmp/laravel-install-*.log`. Or le défaut que la story 2.4
+# a fini par mesurer fait précisément BOUCLER le conteneur php
+# (`set -e` + `restart: unless-stopped`) : `docker exec` sur un conteneur en
+# redémarrage échoue, il ne restait qu'une bannière « INDISPONIBLE », et le grep
+# « Échec du module » lisait un fichier sans contenu. Le nightly rougissait sans
+# pouvoir MONTRER pourquoi.
+#
+# ⛔ REPLI, JAMAIS SUBSTITUTION — et c'est une contrainte écrite, pas un goût.
+# Remplacer sèchement `docker exec` par `docker logs` change la SOURCE : on lit
+# la sortie standard du conteneur au lieu de `/tmp/laravel-install-*.log`. Les
+# lignes « Échec du module <nom> (code: N) » qu'`execute_module` écrit dans le
+# journal n'y figurent pas forcément, et les signatures d'infrastructure
+# (`e2e_infrastructure_signatures`) cesseraient de matcher au même endroit :
+# une panne réseau serait alors réétiquetée INSTALLEUR. `docker logs` n'est donc
+# atteint QUE lorsque `docker exec` a échoué ou n'a rien rendu, et le rapport
+# DIT laquelle des deux sources il porte.
+#
+# ⛔ ET LE FICHIER N'EST JAMAIS VIDE. Même quand les deux sources échouent, une
+# bannière explicite est écrite avec les deux codes de sortie et les deux
+# messages d'erreur : un fichier vide est un diagnostic perdu, pas une absence
+# de problème. Le code de retour, lui, reste non nul — l'appelant décide.
+#
+# `DOCKER_BIN` est la couture : elle existe pour que `tests/bats/unit/` puisse
+# éprouver les trois chemins en une seconde, sans Docker.
+# -----------------------------------------------------------------------------
+e2e_capture_container_log() {
+    local conteneur="$1" sortie="$2"
+    local docker_bin="${DOCKER_BIN:-docker}"
+
+    local bac
+    bac="$(mktemp -d "${TMPDIR:-/tmp}/e2e-capture.XXXXXX")" || return 1
+
+    local statut_exec=0 statut_logs=0
+
+    "$docker_bin" exec "$conteneur" \
+        sh -c 'cat /tmp/laravel-install-*.log 2>/dev/null' \
+        > "$bac/exec.out" 2> "$bac/exec.err" || statut_exec=$?
+
+    if [ "$statut_exec" -eq 0 ] && [ -s "$bac/exec.out" ]; then
+        {
+            echo "── SOURCE DU JOURNAL : docker exec $conteneur → /tmp/laravel-install-*.log ──"
+            cat "$bac/exec.out"
+        } > "$sortie"
+
+        rm -rf -- "$bac"
+
+        return 0
+    fi
+
+    "$docker_bin" logs --tail 500 "$conteneur" > "$bac/logs.out" 2>&1 || statut_logs=$?
+
+    if [ "$statut_logs" -eq 0 ] && [ -s "$bac/logs.out" ]; then
+        {
+            echo "⚠️ Journal de référence indisponible : « docker exec $conteneur » a rendu $statut_exec, ou un journal vide."
+            cat "$bac/exec.err"
+            echo "── SOURCE DU JOURNAL : docker logs $conteneur (SORTIE DU CONTENEUR, PAS /tmp/laravel-install-*.log) ──"
+            echo "   Repli : le conteneur était probablement en redémarrage. Les lignes « Échec du module »"
+            echo "   n'y figurent que si l'installeur a écrit sur la sortie standard du conteneur."
+            cat "$bac/logs.out"
+        } > "$sortie"
+
+        rm -rf -- "$bac"
+
+        return 0
+    fi
+
+    {
+        echo "⚠️ AUCUN journal du conteneur $conteneur n'a pu être capturé."
+        echo "   « docker exec » a rendu $statut_exec ; le repli « docker logs » a rendu $statut_logs."
+        echo "   (conteneur absent, arrêté ou en redémarrage — l'installation s'est probablement arrêtée avant de le démarrer)"
+        echo "── Erreur de « docker exec » ──"
+        cat "$bac/exec.err"
+        echo "── Erreur de « docker logs » ──"
+        cat "$bac/logs.out"
+    } > "$sortie"
+
+    rm -rf -- "$bac"
+
+    return 1
+}
+
+# -----------------------------------------------------------------------------
+# Imprime les N dernières lignes d'un journal — SUR STDOUT, et l'appelant redirige.
+#
+# 🔴 CETTE FONCTION EXISTE PARCE QUE LE DIAGNOSTIC ÉTAIT JETÉ. `install.bats`
+# écrivait `tail -n 80 "$journal" 2> /dev/null >&2` : le shell applique les
+# redirections DE GAUCHE À DROITE, donc fd2 pointait déjà sur /dev/null quand
+# `>&2` l'a dupliqué dans fd1. La sortie de `tail` partait intégralement dans
+# /dev/null. Reproduit le 2026-08-24 sur l'hôte (bash 5.2, WSL2). Le test
+# rougissait en ne MONTRANT rien, sur le seul chemin où quelqu'un a besoin de
+# lire le journal.
+#
+# ⚖️ ELLE ÉCRIT SUR STDOUT, ET C'EST LE POINT. Une fonction qui redirige
+# elle-même vers `>&2` ne peut plus être éprouvée : `run` de Bats capture la
+# sortie standard. En rendant la redirection à l'appelant, la présence des
+# lignes devient MESURABLE plutôt qu'affirmée.
+#
+# ⛔ UN JOURNAL VIDE N'EST PAS UN JOURNAL ABSENT DE DIAGNOSTIC : on le DIT, et
+# on rend non nul, plutôt que de laisser une sortie vide qui ressemble à un
+# succès silencieux.
+# -----------------------------------------------------------------------------
+e2e_print_log_tail() {
+    local fichier="$1" lignes="${2:-80}"
+
+    if [ -s "$fichier" ]; then
+        tail -n "$lignes" "$fichier"
+
+        return 0
+    fi
+
+    echo "(journal absent)"
+
+    return 1
+}
+
+# -----------------------------------------------------------------------------
 # Lit un champ scalaire du lockfile d'installation.
 #
 # Le lockfile est écrit par `scripts/install-lockfile.sh` au format

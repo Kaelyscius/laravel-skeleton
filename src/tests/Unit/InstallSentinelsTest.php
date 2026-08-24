@@ -2078,7 +2078,530 @@ it('la CI se déclenche sur scripts/install.sh et scripts/install-lockfile.sh', 
         // `scripts/install.sh`, reconduit un cran plus loin.
         expect($paths)
             ->toContain('Makefile');
+
+        /*
+         * 🔴 TROIS CIBLES DE GARDE-FOUS ÉTAIENT HORS DE CETTE LISTE (clôture
+         * 2.4), donc trois garde-fous qu'on pouvait contredire sans qu'aucun
+         * run ne démarre. Le motif est identique à celui de `scripts/install.sh`
+         * ci-dessus : le garde existe, mais rien ne le rejoue.
+         *
+         *   • l'entrypoint php porte le défaut d'installation de clone neuf, et
+         *     il est éprouvé par `PhpEntrypointStateTest` ;
+         *   • les fichiers compose portent le healthcheck, le
+         *     `restart: unless-stopped` et les ports publiés que
+         *     `tests/bats/unit` DÉRIVE d'eux ;
+         *   • `nightly.yml` est balayé par `WorkflowInputSafetyTest` — le job
+         *     d'alerte y a été livré mort DEUX FOIS.
+         *
+         * ⚠️ `docker/apache/**` couvre déjà l'entrypoint apache depuis la 1.9 ;
+         * son homologue php ne l'était PAS.
+         */
+        expect($paths)
+            ->toContain('docker/php/scripts/docker-entrypoint.sh');
+        expect($paths)
+            ->toContain('docker-compose*.yml');
+        expect($paths)
+            ->toContain('.github/workflows/nightly.yml');
     }
+});
+
+/**
+ * Les chaînes d'installation À GARDER, DÉRIVÉES du graphe de `make`.
+ *
+ * 🔴 DEUX GARDES DE CETTE STORY EN ÉNUMÉRAIENT CINQ ; `make` en dérive NEUF.
+ * Les quatre absentes n'étaient pas théoriques : `setup-quick` et la branche
+ * `else` d'`install-incremental` lancent l'installeur contre un conteneur parti
+ * en « sans-vendor » et ne le redémarrent jamais. C'est la leçon déjà écrite au
+ * -dessus de `COMPOSITE_INSTALL_TARGETS` : « une énumération ne peut pas garder
+ * ce qu'elle ne connaît pas ».
+ *
+ * Sont écartés :
+ *  • les ALIAS PURS — un unique prérequis, lui-même composite (`install`,
+ *    `install-fast`) : garder l'alias reviendrait à garder deux fois sa cible ;
+ *  • les composites SANS prérequis (`install-incremental`), qui pilotent depuis
+ *    leur RECETTE : le graphe ne les voit pas, ils ont leur propre garde.
+ *
+ * @return list<string>
+ */
+function chainesInstallationGardees(): array
+{
+    $composites = ShellProbe::makefileComposites();
+    $gardees = [];
+
+    foreach ($composites as $cible) {
+        $prerequis = ShellProbe::makefilePrerequisites($cible);
+
+        if ($prerequis === []) {
+            continue;
+        }
+
+        if (count($prerequis) === 1 && in_array($prerequis[0], $composites, true)) {
+            continue;
+        }
+
+        $gardees[] = $cible;
+    }
+
+    sort($gardees);
+
+    return $gardees;
+}
+
+it('la liste des chaînes gardées est DÉRIVÉE de make, pas écrite à la main', function (): void {
+    // Anti-vacuité des deux gardes ci-dessous : si la dérivation rendait une
+    // liste vide ou minuscule, ils seraient verts en ne gardant presque rien.
+    $chaines = chainesInstallationGardees();
+
+    expect(count($chaines))
+        ->toBeGreaterThanOrEqual(6);
+
+    // Les deux chaînes que l'ÉNUMÉRATION manuelle avait manquées sont dedans.
+    expect($chaines)
+        ->toContain('setup-quick');
+    expect($chaines)
+        ->toContain('install-dev-full');
+
+    // Et les alias purs sont bien écartés — sinon la « dérivation » ne
+    // dériverait rien, elle recopierait.
+    foreach (['install', 'install-fast', 'install-incremental'] as $ecarte) {
+        expect(in_array($ecarte, $chaines, true))
+            ->toBeFalse("« {$ecarte} » n’aurait pas dû entrer dans la liste dérivée.");
+    }
+});
+
+it('le Makefile génère les certificats SSL AVANT de démarrer les conteneurs', function (): void {
+    /*
+     * 🔴 `docker/apache/scripts/docker-entrypoint.sh` sort en **1** quand
+     * `laravel.local.crt` / `.key` manquent, et `restart: unless-stopped` le
+     * reboucle. Or `setup-ssl` était le DERNIER prérequis de toutes les chaînes
+     * d'installation : sur un clone neuf, apache démarrait donc SYSTÉMATIQUEMENT
+     * sans certificats et échouait pendant toute l'installation.
+     *
+     * ⚖️ LU DANS LA BASE DE `make`, comme son garde voisin. La première
+     * rédaction employait une regex sur le TEXTE du Makefile pendant que le
+     * garde ajouté dans le même commit lisait le graphe — deux instruments pour
+     * la même question, dont le plus faible.
+     */
+    $verifiees = 0;
+
+    foreach (chainesInstallationGardees() as $cible) {
+        $prerequis = ShellProbe::makefilePrerequisites($cible);
+
+        // Tout prérequis qui DÉMARRE des conteneurs.
+        $demarrages = array_keys(array_filter(
+            $prerequis,
+            static fn (string $p): bool => $p === 'up' || str_starts_with($p, 'up-'),
+        ));
+
+        if ($demarrages === []) {
+            continue;
+        }
+
+        $rangSsl = array_search('setup-ssl', $prerequis, true);
+
+        /*
+         * ⚖️ UNE SEULE EXCEPTION, EXPLICITE, ET QUI SE JUSTIFIE ELLE-MÊME.
+         * `setup-quick` s'annonce « Installation rapide sans SSL » dans son
+         * propre texte d'aide : apache y échouera, c'est une limite ASSUMÉE et
+         * nommée, pas un oubli. Le test vérifie que l'aide le dit encore — le
+         * jour où elle cesse de le dire, l'exception tombe et le garde rougit.
+         */
+        if ($rangSsl === false) {
+            expect($cible)
+                ->toBe('setup-quick', "{$cible} démarre des conteneurs sans générer de certificats SSL.");
+
+            // ⚖️ SEULE LA CLAUSE D'AIDE EST LUE, PAS LA LIGNE ENTIÈRE (2ᵉ revue).
+            // La rédaction précédente réassertait le littéral complet, prérequis
+            // compris : elle aurait rougi sur une simple reformulation de l'aide,
+            // pour une raison étrangère au SSL, dans un garde présenté comme
+            // « unifié sur la base de make ». Ce qui justifie l'exception, c'est
+            // que la cible S'ANNONCE sans SSL — rien d'autre.
+            expect(RepoFile::read('Makefile'))
+                ->toMatch('/^setup-quick:[^#\n]*##[^\n]*sans SSL/m');
+
+            continue;
+        }
+
+        foreach ($demarrages as $rangUp) {
+            expect((int) $rangSsl)
+                ->toBeLessThan(
+                    $rangUp,
+                    "{$cible} : « setup-ssl » vient après « {$prerequis[$rangUp]} » — apache démarrera sans certificats et sortira en 1.",
+                );
+        }
+
+        $verifiees++;
+    }
+
+    // ⛔ UN PLANCHER, PAS UNE ÉGALITÉ. La rédaction précédente exigeait
+    // exactement un prérequis `up*` par chaîne : en ajouter un second aurait
+    // fait rougir ce test pour une raison ÉTRANGÈRE au SSL.
+    expect($verifiees)
+        ->toBeGreaterThanOrEqual(5);
+});
+
+/*
+|------------------------------------------------------------------------------
+| Le redémarrage post-installation — clôture 2.4, constat d'audit
+|------------------------------------------------------------------------------
+|
+| 🔴 UNE LIGNE DE LA MATRICE D'E/S N'ÉTAIT PAS SATISFAITE, ET LE DÉFAUT PASSAIT
+| POUR UN SUCCÈS. Sur un clone neuf, l'entrypoint php démarre en « sans-vendor »
+| et — c'est tout son objet — ne joue AUCUNE commande artisan. `install-laravel`
+| peuple ensuite `vendor/`, mais rien ne repassait par l'entrypoint : sa branche
+| « bootable » n'était jamais atteinte de toute l'installation.
+|
+| ⛔ ET `php artisan storage:link` N'EXISTE QU'À UN SEUL ENDROIT DU DÉPÔT —
+| cette branche « bootable ». Aucun module d'installation ne le joue. Le lien
+| `public/storage` n'était donc JAMAIS créé par une install de clone neuf ; et
+| comme `/health` ne le regarde pas, le nightly pouvait conclure VERT sur une
+| application incomplète.
+|
+| ⚖️ CE FICHIER PORTE LES DEUX MOITIÉS DU GARDE :
+|   • le GRAPHE — la cible est atteinte, au bon rang, dans TOUTES les chaînes
+|     que `make` dérive (pas cinq choisies à la main), plus celle qui pilote
+|     depuis sa recette ;
+|   • le COMPORTEMENT — la cible est EXÉCUTÉE contre un `docker` stubé : elle
+|     relève le témoin AVANT, redémarre, REJOUE son sondage, et n'accepte qu'un
+|     témoin RENOUVELÉ.
+| La troisième moitié — « un démarrage bootable écrit bien ce témoin, en dernier »
+| — vit dans `PhpEntrypointStateTest`, qui lance l'entrypoint pour de vrai.
+|
+*/
+
+it('redémarre php APRÈS l’install Laravel dans TOUTES les chaînes dérivées', function (): void {
+    // ⚖️ LU DANS LA BASE DE `make`, et sur la liste DÉRIVÉE — pas sur cinq
+    // chaînes choisies à la main, dont l'audit a montré qu'il en manquait deux.
+    $installateurs = ['install-laravel', 'install-laravel-prod'];
+    $verifiees = 0;
+
+    foreach (chainesInstallationGardees() as $cible) {
+        $prerequis = ShellProbe::makefilePrerequisites($cible);
+
+        $rangInstall = false;
+
+        foreach ($installateurs as $installateur) {
+            $rang = array_search($installateur, $prerequis, true);
+
+            if ($rang !== false) {
+                $rangInstall = $rang;
+            }
+        }
+
+        if ($rangInstall === false) {
+            continue;
+        }
+
+        $rangRestart = array_search('post-install-restart-php', $prerequis, true);
+
+        expect($rangRestart)
+            ->not->toBeFalse(
+                "{$cible} ne redémarre pas php après l'installation : la branche « bootable » de "
+                . "l'entrypoint ne sera jamais atteinte, et `public/storage` ne sera jamais créé.",
+            );
+
+        expect((int) $rangInstall)
+            ->toBeLessThan(
+                (int) $rangRestart,
+                "{$cible} : le redémarrage précède l'installation — il rejouerait un état sans vendor/.",
+            );
+
+        $verifiees++;
+    }
+
+    // Anti-vacuité : la dérivation a bien trouvé des chaînes à garder.
+    expect($verifiees)
+        ->toBeGreaterThanOrEqual(6);
+});
+
+it('redémarre AVANT npm, pour que le lockfile décrive une application complète', function (): void {
+    // ⛔ ANTI-VACUITÉ DU TEST PRÉCÉDENT : « après l'install » serait satisfait
+    // par un redémarrage placé tout à la fin, après `install-lockfile` — donc
+    // après que le lockfile a enregistré une application incomplète.
+    $verifiees = 0;
+
+    foreach (chainesInstallationGardees() as $cible) {
+        $prerequis = ShellProbe::makefilePrerequisites($cible);
+
+        $rangNpm = false;
+
+        foreach (['npm-install', 'npm-install-fast'] as $npm) {
+            $rang = array_search($npm, $prerequis, true);
+
+            if ($rang !== false) {
+                $rangNpm = $rang;
+            }
+        }
+
+        if ($rangNpm === false) {
+            continue;
+        }
+
+        $rangRestart = array_search('post-install-restart-php', $prerequis, true);
+
+        expect($rangRestart)
+            ->not->toBeFalse();
+        expect((int) $rangRestart)
+            ->toBeLessThan((int) $rangNpm, "{$cible} : le redémarrage tombe après l'installation npm.");
+
+        $verifiees++;
+    }
+
+    expect($verifiees)
+        ->toBeGreaterThanOrEqual(3);
+});
+
+it('les chaînes pilotées depuis leur RECETTE redémarrent php elles aussi', function (): void {
+    /*
+     * ⚖️ ET VOICI LA LIMITE DE L'INSTRUMENT, ÉCRITE PLUTÔT QUE SUBIE.
+     * `install-incremental` n'a AUCUN prérequis : il appelle `$(MAKE)
+     * install-laravel` depuis sa recette, dans une branche `else`. Le graphe ne
+     * le voit pas — c'est exactement pourquoi le Makefile le liste à la main
+     * dans `COMPOSITE_RECIPE_TARGETS`. On lit donc sa RECETTE, telle que `make`
+     * la stocke, et on garde l'ORDRE des deux appels.
+     *
+     * 🔴 La branche `else` de cette cible est le cas du CLONE NEUF : `vendor/`
+     * absent, donc conteneur parti en « sans-vendor », donc `public/storage`
+     * jamais créé si personne ne le redémarre.
+     */
+    $recette = ShellProbe::makefileRecipe('install-incremental');
+
+    /*
+     * 🔴 DEUX `strpos` NE DISENT RIEN DE LA BRANCHE (2ᵉ revue). Cette recette
+     * porte DEUX `if` — celui de `vendor/`, celui de `node_modules/`. Déplacer
+     * `$(MAKE) post-install-restart-php` dans le SECOND laissait le test vert
+     * alors que le redémarrage n'aurait plus tourné que si `node_modules`
+     * manquait, c'est-à-dire jamais dans le cas qui compte.
+     *
+     * ⚖️ ON EXIGE L'ADJACENCE. Les deux appels doivent se suivre, ligne à
+     * ligne : c'est la seule lecture qui prouve qu'ils sont dans la même
+     * branche sans avoir à analyser la structure du shell.
+     */
+    $lignes = array_values(array_filter(
+        array_map('trim', explode("\n", $recette)),
+        static fn (string $l): bool => $l !== '',
+    ));
+
+    $rangInstall = null;
+
+    foreach ($lignes as $rang => $ligne) {
+        if (str_contains($ligne, '$(MAKE) install-laravel')) {
+            $rangInstall = $rang;
+        }
+    }
+
+    expect($rangInstall)
+        ->not->toBeNull('`install-incremental` n’appelle plus l’installeur : ce garde n’a plus de sujet.');
+
+    $suivante = $lignes[$rangInstall + 1] ?? '';
+
+    expect(str_contains($suivante, '$(MAKE) post-install-restart-php'))
+        ->toBeTrue(
+            '`install-incremental` ne redémarre pas php JUSTE APRÈS avoir installé Laravel : '
+            . 'sur un clone neuf, l’entrypoint reste en « sans-vendor » et `public/storage` n’est '
+            . "jamais créé. Ligne suivante lue : « {$suivante} »",
+        );
+});
+
+/**
+ * Lance `post-install-restart-php` contre un `docker` stubé.
+ *
+ * Le stub JOURNALISE chaque appel : c'est ce journal qui rend mesurable
+ * « elle redémarre » et « elle rejoue son sondage », plutôt qu'affirmable.
+ * Il émule le TÉMOIN : ancien avant renouvellement, neuf ensuite.
+ */
+function sondeRedemarragePhp(string $env): string
+{
+    return <<<BASH
+        set -e
+        bac="\$(mktemp -d)"
+        case "\$bac" in
+            /tmp/*) ;;
+            *) echo "BAC_HORS_TMP=[\$bac]"; exit 9 ;;
+        esac
+
+        mkdir -p "\$bac/bin"
+        JOURNAL="\$bac/journal"; export JOURNAL
+        COMPTEUR="\$bac/compteur"; export COMPTEUR
+        : > "\$JOURNAL"
+        echo 0 > "\$COMPTEUR"
+
+        printf '%s\\n' \\
+            '#!/usr/bin/env bash' \\
+            'echo "\$*" >> "\$JOURNAL"' \\
+            'case "\$1" in' \\
+            '  restart) exit "\${RESTART_STATUS:-0}" ;;' \\
+            '  exec)' \\
+            '    if [ "\$3" = "rm" ]; then exit "\${RM_STATUS:-0}"; fi' \\
+            '    n=\$(( \$(cat "\$COMPTEUR") + 1 )); echo "\$n" > "\$COMPTEUR"' \\
+            '    if [ "\$n" -ge "\${FRAIS_APRES:-1}" ]; then echo "\${TEMOIN:-neuf}"; exit 0; fi' \\
+            '    exit 1 ;;' \\
+            'esac' \\
+            'exit 0' \\
+            > "\$bac/bin/docker"
+        chmod +x "\$bac/bin/docker"
+
+        statut=0
+        {$env} make -C "\$REPO_ROOT" post-install-restart-php \\
+            DOCKER="\$bac/bin/docker" COMPOSE_PROJECT_NAME=sonde \\
+            PHP_RESTART_ATTEMPTS=4 PHP_RESTART_DELAY=0 > "\$bac/sortie" 2>&1 || statut=\$?
+
+        echo "STATUT=\$statut"
+        echo "=== SORTIE ==="
+        cat "\$bac/sortie"
+        echo "=== APPELS_DOCKER ==="
+        cat "\$JOURNAL"
+        echo "=== FIN ==="
+
+        rm -rf "\$bac"
+        BASH;
+}
+
+/**
+ * Les appels `docker` journalisés par la sonde, un par ligne.
+ *
+ * @return list<string>
+ */
+function appelsDocker(string $sortie): array
+{
+    if (preg_match('/=== APPELS_DOCKER ===\n(.*)=== FIN ===/s', $sortie, $bloc) !== 1) {
+        throw new RuntimeException("Bloc APPELS_DOCKER absent de la sortie de sonde :\n" . $sortie);
+    }
+
+    return array_values(array_filter(
+        array_map('trim', explode("\n", $bloc[1])),
+        static fn (string $ligne): bool => $ligne !== '',
+    ));
+}
+
+/**
+ * Code de sortie de la sonde, lu sur une ligne ENTIÈRE.
+ */
+function statutRedemarrage(string $sortie): int
+{
+    if (preg_match('/^STATUT=(\d+)$/m', $sortie, $trouve) !== 1) {
+        throw new RuntimeException("Aucune ligne STATUT= dans la sortie de sonde :\n" . $sortie);
+    }
+
+    return (int) $trouve[1];
+}
+
+it('EXÉCUTÉE : EFFACE le témoin, redémarre, puis attend sa réécriture', function (): void {
+    $result = ShellProbe::run(
+        sondeRedemarragePhp('FRAIS_APRES=1'),
+        [
+            'REPO_ROOT' => ShellProbe::repoRoot(),
+        ],
+        60,
+    );
+
+    expect(statutRedemarrage($result['output']))->toBe(0);
+
+    $appels = appelsDocker($result['output']);
+
+    // ⛔ L'EFFACEMENT PRÉCÈDE LE REDÉMARRAGE, ET C'EST L'ORDRE QUI FAIT LA
+    // PREUVE : après lui, « le fichier existe » ne peut plus vouloir dire
+    // qu'une chose.
+    expect($appels[0] ?? '')
+        ->toContain('exec sonde_php rm -f /tmp/laravel-entrypoint-bootable');
+    expect($appels[1] ?? '')
+        ->toBe('restart sonde_php');
+});
+
+it('EXÉCUTÉE : un effacement IMPOSSIBLE refuse de mesurer, il ne devine pas', function (): void {
+    /*
+     * 🔴 LE SCÉNARIO EXACT DE LA 2ᵉ REVUE, ET IL PASSAIT. La rédaction
+     * précédente RELEVAIT la valeur d'avant pour la comparer ; quand ce relevé
+     * échouait, la valeur attendue devenait VIDE et n'importe quel vestige non
+     * vide satisfaisait « différent de attendu » dès le premier sondage. La
+     * cible imprimait « ✓ témoin renouvelé », STATUT=0.
+     *
+     * ⛔ ET LE RELEVÉ ÉCHOUE PRÉCISÉMENT QUAND LE CONTENEUR BOUCLE — la panne
+     * même que cette cible existe pour attraper. La post-condition n'était
+     * vraie que lorsque tout allait déjà bien.
+     */
+    $result = ShellProbe::run(
+        sondeRedemarragePhp('RM_STATUS=1 TEMOIN=vieux-vestige'),
+        [
+            'REPO_ROOT' => ShellProbe::repoRoot(),
+        ],
+        60,
+    );
+
+    expect(statutRedemarrage($result['output']))
+        ->not->toBe(0, 'Un vestige passe pour un témoin neuf quand le conteneur ne répond pas.');
+    expect($result['output'])
+        ->toContain('Impossible d\'EFFACER le témoin');
+
+    // Rien n'est redémarré : on n'a pas pu établir la pré-condition.
+    expect(array_filter(appelsDocker($result['output']), static fn (string $l): bool => str_starts_with($l, 'restart')))
+        ->toBe([]);
+});
+
+it('EXÉCUTÉE : un témoin JAMAIS réécrit est un échec', function (): void {
+    $result = ShellProbe::run(
+        sondeRedemarragePhp('FRAIS_APRES=999'),
+        [
+            'REPO_ROOT' => ShellProbe::repoRoot(),
+        ],
+        60,
+    );
+
+    expect(statutRedemarrage($result['output']))
+        ->not->toBe(0);
+    expect($result['output'])
+        ->toContain('INCOMPLÈTE');
+});
+
+it('EXÉCUTÉE : REJOUE son sondage au lieu de conclure au premier coup', function (): void {
+    // 🔴 Sans reprise, la cible conclurait sur un timing : l'entrypoint met
+    // plusieurs secondes à atteindre sa dernière ligne avant `exec`.
+    $result = ShellProbe::run(
+        sondeRedemarragePhp('FRAIS_APRES=3'),
+        [
+            'REPO_ROOT' => ShellProbe::repoRoot(),
+        ],
+        60,
+    );
+
+    expect(statutRedemarrage($result['output']))->toBe(0);
+
+    $sondages = array_values(array_filter(
+        appelsDocker($result['output']),
+        static fn (string $ligne): bool => str_contains($ligne, 'cat /tmp/laravel-entrypoint-bootable'),
+    ));
+
+    expect(count($sondages))
+        ->toBe(3, 'La cible n’a pas rejoué son sondage : elle conclurait sur un timing.');
+});
+
+it('EXÉCUTÉE : un conteneur qui refuse de repartir est FATAL, pas ignoré', function (): void {
+    $result = ShellProbe::run(
+        sondeRedemarragePhp('RESTART_STATUS=1'),
+        [
+            'REPO_ROOT' => ShellProbe::repoRoot(),
+        ],
+        60,
+    );
+
+    expect(statutRedemarrage($result['output']))
+        ->not->toBe(0);
+    expect($result['output'])
+        ->toContain('Redémarrage impossible');
+});
+
+it('les chaînes d’installation sont déclarées NON parallélisables', function (): void {
+    /*
+     * ⛔ DEUX GARDES DE CE FICHIER ASSERTENT UN ORDRE DE PRÉREQUIS — `setup-ssl`
+     * avant tout `up*`, l'installeur avant le redémarrage. Or `make -j` ne
+     * garantit RIEN sur l'ordre des prérequis : les gardes resteraient VERTS
+     * pendant que l'installation partirait en désordre, apache démarrant sans
+     * certificats et le redémarrage tombant avant l'installation.
+     * `.NOTPARALLEL` rend la contrainte exécutable plutôt que de la confier à
+     * la discipline de l'opérateur.
+     */
+    expect(RepoFile::read('Makefile'))
+        ->toMatch('/^\.NOTPARALLEL:/m');
 });
 
 it('le Makefile appelle install-lockfile après npm-install, et jamais en prod', function (): void {

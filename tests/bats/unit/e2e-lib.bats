@@ -567,6 +567,176 @@ arreter_serveur() {
 # Étiquetage infrastructure
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Les dernières lignes du journal — le diagnostic qui était JETÉ
+# ─────────────────────────────────────────────────────────────────────────────
+
+@test "les dernières lignes du journal APPARAISSENT réellement dans la sortie" {
+    # 🔴 `tail … 2> /dev/null >&2` envoyait tout dans /dev/null : le test
+    # d'installation rougissait sans rien montrer. Ici, `run` capture la sortie —
+    # une redirection perdue rend un `output` VIDE, et le test rougit.
+    seq 1 200 > "$BATS_TEST_TMPDIR/install.log"
+
+    run e2e_print_log_tail "$BATS_TEST_TMPDIR/install.log" 80
+    [ "$status" -eq 0 ]
+
+    [ "$(printf '%s\n' "$output" | wc -l)" -eq 80 ]
+    [[ "$output" == *"121"* ]]
+    [[ "$output" == *"200"* ]]
+    [[ "$output" != *"120"* ]]
+}
+
+@test "un journal VIDE ou ABSENT le DIT, et rend non nul" {
+    : > "$BATS_TEST_TMPDIR/vide.log"
+
+    run e2e_print_log_tail "$BATS_TEST_TMPDIR/vide.log" 80
+    [ "$status" -ne 0 ]
+    [ "$output" = "(journal absent)" ]
+
+    run e2e_print_log_tail "$BATS_TEST_TMPDIR/inexistant.log" 80
+    [ "$status" -ne 0 ]
+    [ "$output" = "(journal absent)" ]
+}
+
+@test "le nombre de lignes demandé est HONORÉ, pas décoratif" {
+    # ⛔ ANTI-VACUITÉ : sans ce test, `tail -n 80` codé en dur satisferait le
+    # précédent alors que l'appelant demande un autre volume.
+    seq 1 50 > "$BATS_TEST_TMPDIR/install.log"
+
+    run e2e_print_log_tail "$BATS_TEST_TMPDIR/install.log" 5
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s\n' "$output" | wc -l)" -eq 5 ]
+    [[ "$output" == *"46"* ]]
+    [[ "$output" != *"45"* ]]
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Capture du journal du conteneur — les trois chemins, sans Docker
+#
+# 🔴 CETTE FONCTION EXISTE PARCE QUE LE NIGHTLY NE POUVAIT PAS *MONTRER* SON
+# ÉCHEC. Le conteneur php bouclait en redémarrage (le défaut même que la story
+# corrige), `docker exec` échouait, et il ne restait qu'une bannière vide.
+# La couture `DOCKER_BIN` permet d'éprouver ici, en une seconde, ce qui ne se
+# manifeste qu'au bout de 20 à 40 minutes de E2E.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Fabrique un faux `docker` : `$1` = code de sortie de `exec` et son contenu,
+# `$2` = code de sortie de `logs` et son contenu.
+poser_docker_stub() {
+    local exec_status="$1" exec_out="$2" logs_status="$3" logs_out="$4"
+
+    DOCKER_BIN="$BATS_TEST_TMPDIR/docker"
+
+    cat > "$DOCKER_BIN" <<STUB
+#!/usr/bin/env bash
+case "\$1" in
+    exec)
+        printf '%s' "$exec_out"
+        [ -n "$exec_out" ] || printf 'exec indisponible\n' >&2
+        exit $exec_status
+        ;;
+    logs)
+        printf '%s' "$logs_out"
+        exit $logs_status
+        ;;
+esac
+echo "sous-commande docker inattendue: \$*" >&2
+exit 127
+STUB
+    chmod +x "$DOCKER_BIN"
+    export DOCKER_BIN
+}
+
+@test "capture le journal de RÉFÉRENCE et NOMME sa source" {
+    poser_docker_stub 0 'Échec du module 20-database (code: 1)
+' 0 'peu importe'
+
+    run e2e_capture_container_log "e2e-install_php" "$BATS_TEST_TMPDIR/container.log"
+    [ "$status" -eq 0 ]
+
+    grep -qF "SOURCE DU JOURNAL : docker exec e2e-install_php" "$BATS_TEST_TMPDIR/container.log"
+    grep -qF "/tmp/laravel-install-*.log" "$BATS_TEST_TMPDIR/container.log"
+    grep -qF "Échec du module 20-database" "$BATS_TEST_TMPDIR/container.log"
+
+    # ⛔ ANTI-SUBSTITUTION : tant que `docker exec` répond, `docker logs` n'est
+    # PAS lu. Sa source ne doit donc apparaître nulle part.
+    ! grep -qF "docker logs" "$BATS_TEST_TMPDIR/container.log"
+}
+
+@test "conteneur en REDÉMARRAGE : repli sur docker logs, source NOMMÉE" {
+    # `docker exec` sur un conteneur qui redémarre échoue — c'est le cas mesuré
+    # sur les deux nightlies rouges des 22 et 23/08.
+    poser_docker_stub 1 '' 0 'Attente de postgres sur le port 5432...
+PHP Fatal error: require(): Failed opening required vendor/autoload.php
+'
+
+    run e2e_capture_container_log "e2e-install_php" "$BATS_TEST_TMPDIR/container.log"
+    [ "$status" -eq 0 ]
+
+    grep -qF "SOURCE DU JOURNAL : docker logs e2e-install_php" "$BATS_TEST_TMPDIR/container.log"
+    # ⛔ LA SOURCE EST DITE DIFFÉRENTE, EXPLICITEMENT : ce n'est pas le journal
+    # d'`install.sh`, et un lecteur qui n'y trouve pas « Échec du module » doit
+    # savoir pourquoi avant d'accuser l'installeur.
+    grep -qF "PAS /tmp/laravel-install-*.log" "$BATS_TEST_TMPDIR/container.log"
+    grep -qF "Failed opening required vendor/autoload.php" "$BATS_TEST_TMPDIR/container.log"
+}
+
+@test "un journal de référence VIDE déclenche le repli, pas un rapport vide" {
+    # 🔴 `docker exec … cat /tmp/laravel-install-*.log` rend **0** quand le glob
+    # ne matche rien (le `2>/dev/null` avale l'erreur de `cat`). Un test qui ne
+    # regarderait que le code de sortie conclurait « journal capturé » sur un
+    # fichier de zéro octet — un garde-fou vert sur une absence de preuve.
+    poser_docker_stub 0 '' 0 'sortie du conteneur, faute de mieux'
+
+    run e2e_capture_container_log "e2e-install_php" "$BATS_TEST_TMPDIR/container.log"
+    [ "$status" -eq 0 ]
+
+    grep -qF "SOURCE DU JOURNAL : docker logs" "$BATS_TEST_TMPDIR/container.log"
+    grep -qF "sortie du conteneur, faute de mieux" "$BATS_TEST_TMPDIR/container.log"
+}
+
+@test "les DEUX sources en échec : statut non nul, et JAMAIS un fichier vide" {
+    poser_docker_stub 1 '' 1 'Error: No such container: e2e-install_php'
+
+    run e2e_capture_container_log "e2e-install_php" "$BATS_TEST_TMPDIR/container.log"
+    [ "$status" -ne 0 ]
+
+    [ -s "$BATS_TEST_TMPDIR/container.log" ]
+    grep -qF "AUCUN journal du conteneur e2e-install_php" "$BATS_TEST_TMPDIR/container.log"
+    grep -qF "No such container" "$BATS_TEST_TMPDIR/container.log"
+}
+
+@test "le repli ne RÉÉTIQUETTE pas : une panne d'infrastructure reste détectée" {
+    # ⛔ CONTRAINTE ÉCRITE DE LA SPEC : changer de source ne doit pas transformer
+    # une panne réseau en « échec de l'installeur ». La signature vit dans la
+    # sortie du conteneur ; elle doit survivre au repli et rester trouvable par
+    # l'étiquetage.
+    poser_docker_stub 1 '' 0 'npm ERR! network Could not resolve host: registry.npmjs.org
+'
+
+    run e2e_capture_container_log "e2e-install_php" "$BATS_TEST_TMPDIR/container.log"
+    [ "$status" -eq 0 ]
+
+    run e2e_log_looks_like_infrastructure_failure "$BATS_TEST_TMPDIR/container.log"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Could not resolve host"* ]]
+}
+
+@test "la BANNIÈRE elle-même ne porte aucune signature d'infrastructure" {
+    # 🔴 TÉMOIN : si le texte du repli contenait par mégarde l'une des treize
+    # signatures, TOUT échec d'installeur capturé par ce chemin serait étiqueté
+    # INFRASTRUCTURE — et le nightly cesserait d'accuser l'installeur, pour de
+    # bon. On mesure la bannière SEULE, sur un contenu de conteneur neutre.
+    poser_docker_stub 1 '' 0 'installation ordinaire, rien de special
+'
+
+    run e2e_capture_container_log "e2e-install_php" "$BATS_TEST_TMPDIR/container.log"
+    [ "$status" -eq 0 ]
+
+    run e2e_log_looks_like_infrastructure_failure "$BATS_TEST_TMPDIR/container.log"
+    [ "$status" -ne 0 ]
+}
+
 @test "un échec d'infrastructure laisse un MARQUEUR relisible par le workflow" {
     run e2e_infra_fail "réseau du runner indisponible"
     [ "$status" -ne 0 ]
