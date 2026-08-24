@@ -1,5 +1,32 @@
 # État du projet — 2026-08-24 (branche `main`)
 
+> ✅ **STORY 2.4 `done` — `nightly-freshness` EST BLOQUANT, ET IL N'IMPORTE PAS LES PANNES AMONT.**
+> Le nightly a tourné et **conclu vert** (run `32750543638`, 9 min 21 s, fenêtre
+> d'installation **271 s** < 900) : la condition qui tenait le garde hors du verdict global — « il
+> n'a jamais tourné » — est éteinte, et la bascule a été faite.
+>
+> 🔴 **MAIS LA BASCULE SEULE AURAIT DÉPLACÉ LE MODE DE PANNE.** Le run `32761876936` a rougi sur
+> un `HTTP/2 504` d'`api.github.com` pendant `composer install`, et il a été étiqueté
+> **INSTALLEUR** : `e2e_infrastructure_signatures()` ne connaissait **aucun 5xx de registre**.
+>
+> ⚠️ **ET CE RUN DOIT ÊTRE DÉCRIT TEL QU'IL EST** (précision de revue 3) : il était lancé avec
+> `mutate_module=20-database`, donc **rouge par construction de toute façon**. Ce qu'il établit
+> n'est pas « un nightly sain a rougi sur une panne amont » — c'est que **la mutation demandée n'a
+> jamais tiré** (le 504 est tombé au module 10, avant elle) et que **l'étiquetage a nommé le
+> mauvais coupable**. Le 504 est authentique, l'erreur d'imputation aussi. Mais le scénario qui
+> justifie la tolérance — **un nightly PLANIFIÉ, non muté, tombant sur un 504** — n'a **jamais été
+> observé**. La tolérance est écrite contre un mode de panne DÉDUIT d'une mesure réelle, pas contre
+> un incident vécu de bout en bout. C'est une différence, et elle est dite.
+>
+> Rendu bloquant sans ce correctif, le garde aurait rougi la CI **sur tous les pushs** après une
+> panne amont — le mode de panne que la décision de revue 2 voulait éviter, simplement déplacé.
+> Trois correctifs, **dans cet ordre** : signatures de registre, étiquette publiée par **nom
+> d'artefact**, puis tolérance conditionnée à un vert dans la fenêtre. Le détail est dans
+> « La bascule, faite le 2026-08-24 ».
+>
+> ⛔ **Et un échec d'infrastructure ne devient PAS vert** : le run nightly reste **rouge**. Seule la
+> lecture qu'en fait `nightly-freshness` change.
+
 > 🔴 **CLÔTURE DE LA STORY 2.4 — LE NIGHTLY AVAIT RAISON : LE SQUELETTE N'ÉTAIT PAS
 > INSTALLABLE DEPUIS UN CLONE PROPRE.** Deux runs rouges (`32654512271`, `32688766596`),
 > étiquetés INSTALLEUR. Cause **mesurée** dans le conteneur `laravel-app_php` :
@@ -157,16 +184,18 @@
 > toujours vrai. Elle était donc vraie dans le cas exact qu'elle prétendait interdire. Remplacée par
 > une assertion de PROPRIÉTÉ ; la mutation rougit.
 >
-> ⚠️ **DEUX AC RESTENT OUVERTES, ET AUCUNE N'A ÉTÉ FERMÉE SUR UNE LECTURE DE CODE.**
-> Le verdict de cette story est **un run réel**, et aucun n'a pu être lancé : le travail n'est pas
-> poussé, `workflow_dispatch` n'exécute que la version présente sur la branche par défaut. Restent
-> donc à observer, **dans cet ordre**, après merge :
-> `gh workflow run nightly.yml` → **vert observé**, fenêtre du lockfile < 15 min, numéro consigné ;
-> puis `gh workflow run nightly.yml -f mutate_module=20-database` → **rouge observé**, module nommé,
-> numéro consigné ; puis `gh issue list --label nightly` → l'issue existe **sur le dépôt**
-> (le label `nightly` n'existe toujours pas : vérifié le 2026-08-24 via l'API). La bascule de
-> `nightly-freshness` en bloquant (geste 2, plus bas) **n'a pas été faite** : la faire avant un
-> premier vert installerait dans le verdict global le rouge permanent que cette section décrit.
+> ✅ **LES DEUX AC SONT FERMÉES, ET SUR DES RUNS RÉELS — jamais sur une lecture de code.**
+> Le verdict de cette story était **un run réel** ; il a été rendu :
+> `32750543638` → **vert observé**, 9 min 21 s, fenêtre du lockfile **271 s** pour un plafond de
+> 900, et le job `alert` **skipped** (il s'abstient sur un run vert) ;
+> `32743211342` avec `mutate_module=20-database` → **rouge observé**, module nommé
+> (`Échec du module 20-database (code: 42)`), étiquette INSTALLEUR ;
+> `32745286801` puis `32748093741` → l'issue **#28** est **commentée**, jamais dupliquée : la
+> déduplication tient sur deux nuits consécutives.
+>
+> ✅ **ET LA BASCULE EST FAITE** (geste 2, plus bas) : `nightly-freshness` est dans les `needs:` et
+> dans la condition d'échec de `CI Summary`. Elle ne pouvait pas l'être avant un premier vert —
+> elle y aurait installé le rouge permanent que cette section décrivait.
 >
 > 🧪 **Campagne de mutation — 76 rouges observés, 12 témoins neutres verts.**
 > **Environnements nommés** (règle désormais ÉCRITE dans `docs/process/03-boucle-qualite.md`
@@ -195,7 +224,7 @@
 > (`github.actor == '…'`) a été ajouté ; la mutation rougit. Le motif est constant dans ce
 > projet : **un garde ne vaut que par le chemin que son test emprunte réellement.**
 >
-> 📊 **487 tests Pest · 49 tests Bats (+4 uid) · ratchet 0/0/0.**
+> 📊 **507 tests Pest · 54 tests Bats (+6 install, +4 uid) · ratchet 0/0/0 · PHPStan niveau 10 : 0.**
 
 > 🆕 **Story 2.4 implémentée, revues 1 et 2 traitées (≈60 + 31 constats).**
 > **423 tests Pest · 40 tests Bats · ratchet 0/0/0 · 87 mutations rejouées (60 + 27), toutes rouges
@@ -218,11 +247,11 @@
 > que la route vient de déclarer injoignables. `health` est dans `telescope.ignore_paths` ; effet
 > mesuré en HTTP : **13,74 s → 9,59 s**. ⚠️ Il reste **~3,2 s non localisées**, et c'est dit.
 >
-> ⚖️ **Décision d'Alex (revue 2) : `nightly-freshness` est HORS des `needs` de `CI Summary`** tant
-> que le premier nightly n'existe pas — un rouge attendu en permanence masquerait une régression
-> réelle. Il lit désormais aussi la **conclusion** du dernier run : « il tourne » n'est pas « il
-> passe ». La bascule en bloquant est une étape écrite, section « La bascule à faire JUSTE APRÈS le
-> premier nightly ».
+> ⚖️ **Décision d'Alex (revue 2) : `nightly-freshness` était HORS des `needs` de `CI Summary`** tant
+> que le premier nightly n'existait pas — un rouge attendu en permanence aurait masqué une
+> régression réelle. Il lit aussi la **conclusion** du dernier run : « il tourne » n'est pas « il
+> passe ». **La condition est éteinte depuis le run vert `32750543638`, et la bascule a été faite
+> le 2026-08-24** — voir la section « La bascule, faite le 2026-08-24 ».
 
 > 🆕 **Story 2.3 implémentée, revues 1 et 2 traitées (19 + 19 constats).**
 > **ratchet 0/0/0.** Mutations rejouées et rouges observés — ⚠️ **avec UNE exception consignée** :
@@ -436,9 +465,11 @@ morte. Après correction, mesuré trois fois : **0,073 / 0,073 / 0,075 s**. La d
   tournant dans le conteneur — était imputée à l'INSTALLEUR.
 - 🔴 **Rien ne prévenait d'un nightly rouge, et rien ne le maintenait en vie.** GitHub désactive les
   workflows `schedule` après 60 jours sans activité : le garde-fou se serait arrêté **sans un mot**.
-  Deux parades : une issue ouverte/commentée à chaque nuit rouge, et un job CI **bloquant**
-  `nightly-freshness` qui rougit si le workflow est désactivé, s'il n'a jamais tourné, ou si son
-  dernier run date de plus de 3 jours.
+  Deux parades : une issue ouverte/commentée à chaque nuit rouge, et un job CI `nightly-freshness`
+  qui rougit si le workflow est désactivé, s'il n'a jamais tourné, si son dernier run date de plus
+  de 3 jours, ou si ce dernier run a **échoué**. Il a été livré **hors** du verdict global — il
+  rougissait alors par construction — et il y est entré le **2026-08-24**, après le premier nightly
+  vert : il est **bloquant** depuis.
 - Échecs de `docker exec` **avalés par `|| true`** → journal vide et grep muet, sans dire pourquoi.
 - `teardown_file` appelait un **`sudo` interactif** après 20-40 min de run : il bloquait sans sudo
   sans mot de passe. `sudo -n`, et un nettoyage partiel ne rougit pas.
@@ -688,31 +719,70 @@ détachés ; la suite filtrée passe désormais en quelques secondes au lieu de 
 
 ---
 
-### 🔁 La bascule à faire JUSTE APRÈS le premier nightly
+### 🔁 La bascule, faite le 2026-08-24
 
-> ⛔ **Deux gestes, dans cet ordre, et le second est une décision d'Alex prise en revue 2.**
+> ✅ **Les deux gestes ont été posés, dans cet ordre. Ce qui suit est un compte rendu, plus une
+> marche à suivre.**
 
-**1. Lancer le nightly une fois, et consigner le run.**
-Actions → *Nightly E2E Install* → *Run workflow*, sans mutation. Puis une seconde fois avec
-`mutate_module = 20-database`, qui **DOIT** être rouge. Reporter les deux numéros de run ici.
+⚠️ **LA CONTRAINTE STRUCTURELLE RESTE VRAIE, et elle avait disparu de ce document** (revue 3) :
+`workflow_dispatch` n'est proposé que **depuis la branche par défaut**, et la CI de ce dépôt ne se
+déclenche que sur `main`/`develop`. C'est pourquoi aucun de ces runs n'a pu être lancé avant merge —
+et c'est pourquoi le verdict du travail en cours n'existera, lui aussi, **qu'au merge**. Ce n'est
+pas une note historique : c'est la règle qui s'appliquera à la prochaine story touchant un workflow.
 
-**2. Rebasculer `nightly-freshness` en BLOQUANT.** Il est aujourd'hui **hors** des `needs` de
-`CI Summary`, et c'est délibéré : tant qu'il rougit par construction (le nightly n'a jamais tourné),
-le laisser dans le verdict global **masquerait une régression réelle** d'`integrity`, `quality`,
-`tests` ou `browser` — on apprendrait à lire « CI rouge » comme « ah oui, le nightly ». C'est le
-mécanisme du garde-fou qu'on désarme, appliqué au garde-fou anti-désarmement.
+**1. Le nightly a tourné, et les runs sont consignés.**
 
-Concrètement, dans `.github/workflows/ci.yml`, job `summary` :
+| Run | Entrée | Verdict | Ce qu'il établit |
+|---|---|---|---|
+| `32750543638` | — | `success`, 9 min 21 s | Install nominale sur clone neuf ; fenêtre du lockfile **271 s** < 900 ; job `alert` **skipped** |
+| `32743211342` | `mutate_module=20-database` | `failure` | `Échec du module 20-database (code: 42)`, étiquette INSTALLEUR ; l'alerte s'abstient sur un rouge VOLONTAIRE |
+| `32745286801`, `32748093741` | — | `failure` | Déduplication : l'issue **#28** est commentée, jamais dupliquée |
+| `32761876936` | `mutate_module=20-database` | `failure` | **La mutation n'a pas tiré** : `HTTP/2 504` amont au module 10, étiqueté INSTALLEUR. ⚠️ Rouge **par construction** de toute façon — il prouve le trou d'étiquetage, **pas** un nightly sain tombé sur une panne amont |
 
-```yaml
-    needs: [integrity, quality, tests, browser, nightly-freshness]      # ← rajouter
-...
-        if: needs.integrity.result != 'success' || … || needs.nightly-freshness.result != 'success'
-```
+**2. `nightly-freshness` est BLOQUANT.** Il est dans les `needs:` de `CI Summary` et dans sa
+condition d'échec. Il a vécu **hors** du verdict global tant qu'il rougissait par construction — le
+nightly n'avait jamais tourné — parce que l'y laisser aurait **masqué une régression réelle**
+d'`integrity`, `quality`, `tests` ou `browser` : on apprend vite à lire « CI rouge » comme « ah oui,
+le nightly ». C'était le mécanisme du garde-fou qu'on désarme, appliqué au garde-fou
+anti-désarmement.
 
-…et retirer les quatre lignes d'avertissement du résumé qui annoncent la non-blocance.
+🔴 **ET LA BASCULE SEULE AURAIT DÉPLACÉ LE MODE DE PANNE, PAS ÉVITÉ.** Le run `32761876936` a rougi
+sur un `504` d'`api.github.com` pendant `composer install` — et il a été étiqueté **INSTALLEUR**,
+faute de la moindre signature 5xx dans `e2e_infrastructure_signatures()`. ⚠️ Ce run était lancé avec
+`mutate_module=20-database` : il était **rouge par construction**, et ce qu'il prouve est le trou
+d'ÉTIQUETAGE, pas un nightly sain tombé sur une panne amont — ce dernier scénario n'a jamais été
+observé. Basculer en l'état aurait rendu la CI rouge **sur tous les pushs** après une panne de
+registre. Trois correctifs, dans cet ordre :
 
-⚖️ **Ce que `nightly-freshness` vérifie déjà**, et qui ne changera pas à la bascule : le workflow est
+1. **Les signatures de registre** (`tests/bats/lib/e2e.bash`) — les 5xx amont sont reconnus.
+   ⛔ **Les codes NUS `504` / `502` / `503` ont été refusés, mesure à l'appui** : `grep -F 504`
+   matche `Get:5 … libxml2 amd64 [504 kB]`, une ligne d'`apt` présente dans presque tout journal
+   d'installation. Un vrai défaut d'installeur aurait alors été étiqueté INFRASTRUCTURE — donc
+   **toléré** par la bascule. Les signatures portent le code **avec son contexte HTTP**, et un
+   témoin Bats garde ce choix.
+2. **Le transport de l'étiquette par un NOM d'artefact** (`.github/workflows/nightly.yml`) — une
+   seconde étape `upload-artifact` publie `nightly-cause-infrastructure`, conditionnée à la sortie
+   de l'étape d'étiquetage. Un nom se lit en un `gh api …/artifacts --jq '.artifacts[].name'`, sans
+   téléchargement ni dézippage : le job tourne en `timeout-minutes: 5`.
+   ⚠️ `hashFiles()` ne pouvait pas servir de condition — son argument est relatif à
+   `GITHUB_WORKSPACE` et le marqueur vit dans `${{ runner.temp }}`. La condition aurait été vide en
+   permanence, l'artefact jamais publié : un garde-fou muet de plus.
+3. **La tolérance, avec ses dents** (`.github/workflows/ci.yml`) — un dernier run rouge dont
+   l'étiquette est INFRASTRUCTURE est toléré (`::warning`) **si et seulement si** un run vert existe
+   dans la même fenêtre de 3 jours. Une infrastructure durablement en panne finit par rougir : la
+   tolérance n'est pas un interrupteur d'extinction. **Le run nightly, lui, reste ROUGE** — seule la
+   lecture qu'en fait la CI change.
+
+⚠️ **CONSÉQUENCE OPÉRATIONNELLE À CONNAÎTRE, et elle n'est pas un défaut.** La procédure de
+validation du garde-fou — *Run workflow* avec `mutate_module=20-database` — produit un rouge
+**volontaire** que `nightly-freshness` ne distingue pas d'un vrai défaut d'installeur : il n'y a pas
+d'artefact de cause amont, donc le verdict global rougit sur les pushs suivants. **Relancer le
+nightly sans mutation juste après** rétablit le vert — le job ne lit que le *dernier* run. Le job
+`alert`, lui, sait déjà s'abstenir sur un rouge volontaire ; on n'a **pas** dupliqué cette
+connaissance ici, parce que tolérer un rouge « demandé » dans le verdict global rouvrirait
+l'interrupteur d'extinction que la tolérance amont referme.
+
+⚖️ **Ce que `nightly-freshness` vérifie**, et que la bascule n'a pas changé : le workflow est
 `active` (GitHub désactive les `schedule` après 60 jours d'inactivité), il a tourné il y a moins de
 3 jours, **et son dernier run a CONCLU `success`**. Ce dernier point vient de la revue 2 : sans lui,
 un nightly qui échoue toutes les nuits laissait le garde **vert** — le garde-fou écrit pour empêcher
@@ -720,32 +790,140 @@ qu'un garde-fou s'éteigne en silence était aveugle à son échec.
 
 ---
 
-### ⚠️ Ce que la story 2.4 n'a PAS pu observer — et le test qui l'empêche d'être oublié
+### 🔒 Ce qui empêche la bascule d'être désarmée
 
-**Le nightly n'a JAMAIS tourné.** Ni vert, ni rouge. Trois raisons structurelles : `workflow_dispatch`
-n'est déclenchable que lorsque le workflow existe sur la branche par défaut ; la CI de ce dépôt ne
-se déclenche que sur `main`/`develop` ; et le E2E exige les ports publiés **libres**, donc démonter
-la pile de développement d'Alex.
+🔴 **LIVRÉE SEULE, ELLE N'AURAIT ÉTÉ GARDÉE PAR RIEN.** La retirer — d'un `needs:`, d'une condition
+`if:` — n'aurait fait rougir aucun test. Trois gardes vivent désormais dans
+`src/tests/Unit/WorkflowInputSafetyTest.php`, sur le **patron exact** du job `alert` : ils
+**évaluent** la condition d'échec du résumé dans un contexte simulé, au lieu d'en comparer le
+TEXTE — une reformulation équivalente reste verte, c'est ce qui distingue un garde d'une
+photographie.
 
-🔴 **CE REPORT EST DEVENU UN TEST QUI ROUGIT.** Le job CI `nightly-freshness` échoue
-tant que le workflow n'a jamais tourné, s'il est désactivé, ou si son dernier run date de plus de
-3 jours. **La CI sera donc rouge sur ce job jusqu'au premier lancement du nightly** — c'est l'état
-réel, et c'est voulu : le projet préfère un rouge qui nomme la dette à une phrase dans un registre.
+- **Intention** — `nightly-freshness` à `failure`, `cancelled` ou `skipped` rougit le verdict global.
+- **Anti-vacuité** — tout au vert, le verdict est vert ; et **chacun** des jobs de `needs:` peut le
+  rougir à lui seul (ligne « régression réelle » de la matrice : le verdict ne dépend pas du seul
+  nightly).
+- **`needs:`** — le contexte de sonde est **dérivé des `needs:` réels**. Retirer `nightly-freshness`
+  de `needs:` fait donc évaluer la condition contre un identifiant absent, et l'évaluateur **refuse**
+  au lieu de rendre un verdict. C'est le piège déjà consigné pour le job `alert`, et il se garde
+  pareil.
 
-⚠️ **CORRIGÉ LE 2026-08-24 : ce paragraphe écrivait « le job CI **bloquant** ».** Il ne l'est pas —
-il est délibérément HORS des `needs` de `CI Summary` (décision d'Alex, revue 2, expliquée juste
-au-dessus). Une phrase fausse à côté d'un code juste, dans le document qui décrit précisément la
-bascule qui le rendrait vrai : le motif de tête de ce projet, reproduit dans son propre journal.
+⚠️ **`jetonsCondition()` a dû apprendre le TIRET** : `needs.nightly-freshness.result` n'était pas
+découpable par sa grammaire. Le relâchement est borné par le test « l'évaluateur REFUSE ce qu'il ne
+sait pas lire » — un identifiant bien formé mais absent du contexte lève toujours.
 
-**Les deux AC qui restent ouverts, et la manière EXACTE de les fermer :**
+🧪 **Et le corps de `nightly-freshness` est EXÉCUTÉ**, pas relu : `gh` stubé, quatre scénarios (vert,
+rouge sans étiquette, rouge amont toléré, panne amont persistante). ⚠️ **L'environnement de mesure
+est nommé, et il a failli décider du verdict** : le job calcule un âge par `date -u -d "$last" +%s`,
+or `/bin/date` du conteneur `laravel-app_php` est **BusyBox** et refuse l'ISO 8601 de l'API GitHub
+(`invalid date`, code 1, mesuré le 2026-08-24), là où le runner `ubuntu-latest` a GNU coreutils. Le
+binaire est donc **épinglé par un shim versionné** — septième fois dans cet epic que l'environnement
+de mesure, et non le code, décidait de ce qu'un test observait.
 
-- *« mutation de l'installeur exécutée, nightly observé rouge, numéro de run consigné »* →
-  Actions → **Nightly E2E Install** → *Run workflow* → `mutate_module = 20-database`. Le module est
-  muté **dans le clone** (jamais dans le dépôt), après confrontation à la liste blanche des modules
-  réels ; le rapport nomme le module fautif via `Échec du module <nom>`. Un run ainsi lancé **DOIT**
-  être rouge.
-- *« fenêtre `started_at`→`finished_at` < 15 min sur une install nominale »* → premier run planifié,
-  ou *Run workflow* sans mutation. La durée est publiée dans le résumé du job.
+🔴 **REVUE 3 — SIX GARDES NEUFS NE GARDAIENT RIEN, ET DEUX SIGNATURES ABSOLVAIENT DE VRAIS
+DÉFAUTS. Tout est mesuré, rien n'est argumenté.**
+
+1. **L'inversion refusée était revenue par la porte de derrière.** `could not be downloaded` et
+   `Failed to download` ont été ajoutées **sans contexte HTTP**, trois lignes sous le commentaire
+   qui refusait les codes nus pour cette raison exacte. Mesuré : un `(HTTP/2 404)` sur un paquet
+   inexistant → **INFRASTRUCTURE** (un défaut de dépendance absous, donc *toléré* par la bascule) ;
+   et le repli ORDINAIRE de composer `Failed to download … trying the source instead` accompagné
+   d'un vrai `Échec du module` → **INFRASTRUCTURE** aussi. Les deux signatures sont supprimées ;
+   deux témoins Bats les gardent.
+2. **Le témoin « 504 » ne gardait pas ce qu'il annonçait.** Sa fixture portait TROIS motifs et son
+   assertion était `*504* || *download*` : retirer les DIX signatures à contexte HTTP le laissait
+   **vert**. Fixture à un seul motif, assertion sur la signature EXACTE rendue, mutation partielle
+   rejouée → **rouge**.
+3. **`cancelled` / `timed_out` / `startup_failure` bloquaient toute la CI.** Le `case *)` traitait
+   tout ce qui n'était pas `success` comme « sans artefact, donc l'installeur ». Or l'étape
+   d'étiquetage est en `if: failure()` : **un run annulé ne publie aucun artefact**. Un nightly
+   annulé à la main rougissait donc tous les pushs en accusant le mauvais coupable. Le projet avait
+   **déjà tranché ce point** pour le job `alert` (`== 'failure'`, pas `!= 'success'`) ; le
+   raisonnement est transposé, avec branche dédiée — et il **garde ses dents**, ces conclusions
+   passant par la même exigence d'un vert récent.
+4. **Le PLAFOND de fraîcheur — la raison d'être n°1 du job — n'était gardé par rien** : `-gt 99999`
+   laissait tout vert. Idem pour « workflow introuvable via l'API » et pour la branche « encore en
+   cours ». Le harnais les couvrait gratuitement ; elles ont désormais leur sonde.
+5. **Trois liaisons muettes**, mutations prouvées vertes : `id: cause` renommé, le MARQUEUR renommé,
+   `with.path` asserté nulle part. Les quatre maillons (nom d'artefact → `id` → sortie → marqueur
+   écrit par `e2e_infra_fail`) sont maintenant **dérivés l'un de l'autre**, jamais recopiés.
+6. **Trois défauts de robustesse du job** : trois appels d'API pour un seul run (course possible si
+   un nightly démarre entre-temps), pannes d'API indiscernables d'une absence (`|| true`), et
+   `runs?per_page=1` **sans filtre de branche** — un `workflow_dispatch` lancé depuis une branche de
+   story devenait « le dernier nightly » et décidait du verdict de `main`.
+
+🎁 **Et une sonde de la revue a trouvé un défaut que personne n'avait vu** : toute branche
+non-`success` retombait sur le `echo "✅ Nightly frais … ET VERT"` final — un run **encore en cours**
+était donc annoncé vert. Sorties explicites ajoutées. Ce n'est pas la revue qui l'a dit, c'est le
+test qu'elle a demandé d'écrire.
+
+🧹 **Deux défauts d'hygiène du harnais** : `tempnam()` crée un fichier et `. '.sh'` en désigne un
+autre — seul le second était supprimé, le premier **fuyait à chaque appel** (les deux sondes, celle
+de la fraîcheur et sa jumelle de l'alerte, sont corrigées du même geste) ; et le retour de
+`file_put_contents()` n'était pas vérifié, si bien qu'une écriture en échec aurait donné une sonde
+exécutant un fichier **vide**, donc **verte**. Enfin, `gnu-date-shim.sh` dépendait de `python3` —
+présent dans l'image mais déclaré dans **aucun `apk add`**, donc transitif : il emploie désormais
+`php`, garanti là où la sonde tourne, et **refuse** tout format autre que `+%s`.
+
+🧪 **Campagne de mutation de la bascule — 21 rouges observés, 5 témoins neutres verts (26 joués,
+0 écart).**
+**Environnements nommés** : les 21 mutations Pest ont été appliquées sur l'arbre hôte et
+**exécutées dans le conteneur `laravel-app_php`** ; les 5 mutations Bats ont été **exécutées sur
+l'hôte nu** (WSL2, `bash` 5.2, GNU coreutils, GNU Make 4.4.1), où `make test-bats` tourne.
+
+⚠️ **ET L'INTERPRÉTEUR DES MUTATIONS BATS EST `bash`, PAS LE `sh` BUSYBOX — c'est une décision,
+pas un oubli.** La règle de l'epic est « éprouver sous l'interpréteur de PRODUCTION », et pour
+`docker/php/scripts/docker-entrypoint.sh` c'est bien BusyBox. Mais `tests/bats/lib/e2e.bash` ne
+tourne **jamais** dans une image : il est chargé par Bats, sur le runner. Et il est bash-only **par
+construction**, ce qui se vérifie sur disque — `done < <(…)` (substitution de processus) et
+`[[ … =~ … ]]`. Le mesurer sous `sh` ne prouverait rien : il n'y démarrerait même pas. Le bon geste
+est donc de **nommer** l'interpréteur et de dire pourquoi c'est celui-là, pas d'en changer par
+réflexe.
+
+⚠️ **ET LA MESURE SE FAIT PAR `make test` / `make test-bats`, JAMAIS PAR `docker compose exec -T
+php` SEUL** : ce dernier tourne en **uid 0 (root)**, pour qui un refus de permission n'existe pas —
+les sondes qui FABRIQUENT un refus rougissent alors sans rapport avec la mutation. Huitième fois
+dans cet epic que l'environnement de mesure, et non le code, décide de ce qu'un test observe.
+
+| Mutation | Attendu | Observé |
+|---|---|---|
+| `nightly-freshness` retiré des `needs:` du résumé | rouge | **rouge** |
+| Le terme `nightly-freshness` retiré de la condition d'échec | rouge | **rouge** |
+| Le tiret retiré de la classe de `jetonsCondition()` | rouge | **rouge** |
+| L'assouplissement ne réclame plus d'artefact de cause | rouge | **rouge** |
+| L'assouplissement n'exige plus un vert dans la fenêtre | rouge | **rouge** |
+| L'id du dernier run n'est plus lu | rouge | **rouge** |
+| Le nom d'artefact renommé d'UN SEUL côté | rouge | **rouge** |
+| L'étiquette de cause publiée INCONDITIONNELLEMENT | rouge | **rouge** |
+| 🆕 `id: cause` renommé d'un seul côté | rouge | **rouge** |
+| 🆕 Le MARQUEUR renommé dans l'étape d'étiquetage | rouge | **rouge** |
+| 🆕 `with.path` ne pointe plus le marqueur | rouge | **rouge** |
+| 🆕 Le PLAFOND de fraîcheur neutralisé (`-gt 99999`) | rouge | **rouge** |
+| 🆕 `REPO` retiré du bloc `env:` de l'étape | rouge | **rouge** |
+| 🆕 Un ENDPOINT change (le stub doit refuser, pas se taire) | rouge | **rouge** |
+| 🆕 `failure)` redevient `*)` (une annulation accuse l'installeur) | rouge | **rouge** |
+| 🆕 Le filtre de BRANCHE disparaît des requêtes de runs | rouge | **rouge** |
+| 🆕 La panne d'API des artefacts redevient « aucune étiquette » | rouge | **rouge** |
+| Les signatures 5xx retirées d'`e2e.bash` | rouge | **rouge** |
+| Les signatures 5xx redevenues des CODES NUS | rouge | **rouge** |
+| 🆕 `could not be downloaded` SANS contexte revient | rouge | **rouge** |
+| 🆕 `Failed to download` SANS contexte revient | rouge | **rouge** |
+| *Témoin* — la condition du résumé REFORMULÉE (De Morgan) | vert | **vert** |
+| *Témoin* — un commentaire de `ci.yml` réécrit | vert | **vert** |
+| *Témoin* — le libellé `name:` de l'étape de publication changé | vert | **vert** |
+| 🆕 *Témoin* — `id: cause` renommé **des deux côtés** | vert | **vert** |
+| *Témoin* — un commentaire d'`e2e.bash` réécrit | vert | **vert** |
+
+⚖️ **Les deux témoins qui portent le plus.** Le **De Morgan** : `A != x || B != x` réécrit en
+`!(A == x && B == x)` laisse les gardes verts — ils portent sur l'INTENTION, pas sur le texte. Et
+le **renommage des deux côtés** de `id: cause` : renommé d'un seul côté il rougit, renommé des deux
+il passe. Le garde mesure donc la LIAISON, pas le littéral — c'est exactement la différence entre
+un garde et une photographie.
+
+🎁 **Piège consigné.** Écrit d'abord sans guillemets (`if: !(…)`), le témoin De Morgan a fait rougir
+13 tests — non parce que le garde était une photographie, mais parce qu'en YAML un `!` en tête de
+scalaire est un **indicateur de TAG** : le workflow devenait illisible. Un témoin neutre doit rester
+*syntaxiquement* neutre, sans quoi il mesure l'analyseur au lieu du garde.
 
 ✅ **Ce QUI a été observé, sur cette pile, ce jour — php-fpm redémarré, opcache frais :**
 

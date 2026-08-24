@@ -36,10 +36,10 @@
     <p><b>⚠️ Cette page dérivera.</b> Elle est écrite à la main et n'a aucune autorité. Ce qu'elle garantit, en revanche : chaque fichier qu'elle cite existe, et un test le vérifie. Sur les <em>nombres</em>, elle ne peut rien — c'est pourquoi chacun affiche sa source et sa date de lecture.</p>
     <div class="stamp">
       <span><b>relevé le</b> 2026-08-24</span>
-      <span><b>branche</b> main</span>
-      <span><b>commit</b> 8b0a399</span>
-      <span><b>arbre de travail</b> propre au relevé</span>
-      <span class="err"><b>CI</b> 5 jobs / 6 verts · nightly ROUGE</span>
+      <span><b>branche</b> <span data-plan-field="branch">—</span></span>
+      <span><b>commit</b> <span data-plan-field="commit">—</span></span>
+      <span><b>arbre de travail</b> <span data-plan-field="dirty">—</span></span>
+      <span class="ok"><b>CI</b> 6 jobs verts · nightly VERT · <em>freshness</em> bloquant</span>
     </div>
   </div>
 </header>
@@ -131,7 +131,7 @@
           <p style="margin-bottom:0"><b>Ce chiffre n'est pas une porte.</b> Il n'y a <b>aucun seuil de couverture en intégration continue</b>, délibérément : un seuil aurait été vert pendant absolument tout ce que ce projet a trouvé. Voir <a class="plain" href="qualite.html#principe">le raisonnement</a>.</p>
         </div>
         <div class="prov" id="p-sec">
-          <p><b>Source :</b> workflow <em>Security Audit</em> <b class="ok">vert</b> sur <code>8b0a399</code> (run du 2026-08-24, 02:54 UTC), plus <code>composer audit</code> et <code>npm audit</code> à zéro au dernier relevé de story.</p>
+          <p><b>Source :</b> workflow <em>Security Audit</em> <b class="ok">vert</b> au dernier run observé (2026-08-24, 02:54 UTC), plus <code>composer audit</code> et <code>npm audit</code> à zéro au dernier relevé de story.</p>
           <p style="margin-bottom:0"><b>⚠️ Zéro alerte n'est pas zéro défaut.</b> Le trou de sécurité réel de ce dépôt — <code>TRUSTED_PROXIES</code>, trois itérations — <b>n'a jamais fait rougir un scanner</b>. Il a été trouvé en mesurant, et il avait été <b>introduit par une revue de code</b>.</p>
         </div>
       </div>
@@ -139,27 +139,27 @@
 
     <div class="stack">
       <div class="card pad">
-        <h4 class="min" style="margin-top:0">🔴 Le point rouge du jour</h4>
-        <p style="font-size:14px;color:var(--text-2)"><b class="err">Le test d'installation nocturne échoue.</b> Il a tourné deux fois — le 2026-08-23 à 17:20 et le 2026-08-24 à 04:06 — et <b>les deux fois il a échoué</b>, après environ 4 minutes, sur le tout premier test : « l'installation complète aboutit sur un clone neuf ».</p>
-        <p style="font-size:14px;color:var(--text-2)">Le workflow fait lui-même le travail d'imputation, et il tranche : <b>« Échec imputé à l'installeur »</b> — pas à l'infrastructure du runner, pas à un paramètre de déclenchement. Les cinq tests suivants sont marqués <em>skip</em>, comme prévu.</p>
-        <p style="font-size:14px;color:var(--text-2);margin-bottom:0">C'est <b>le 4ᵉ bloquant de mise en production</b>, et c'est aussi la première fois que l'installeur tourne <em>pour de vrai</em> — les stories 2.1 à 2.3 avaient été éprouvées au grain de la fonction, jamais de bout en bout. <b>Un garde-fou qui rougit à son premier vrai passage fait exactement son travail.</b></p>
+        <h4 class="min" style="margin-top:0">✅ Le point rouge du jour est levé</h4>
+        <p style="font-size:14px;color:var(--text-2)"><b class="ok">Le test d'installation nocturne passe.</b> Il avait échoué deux nuits de suite — le 2026-08-23 à 17:20 et le 2026-08-24 à 04:06 — en imputant l'échec <b>à l'installeur</b>. Il avait raison : le squelette n'était pas installable depuis un clone neuf. Le run <code>32750543638</code> est <b class="ok">vert</b> en 9 min 21 s, fenêtre d'installation mesurée à <b>271 s</b> pour un plafond de 900.</p>
+        <p style="font-size:14px;color:var(--text-2)">Le rouge volontaire fonctionne aussi : lancé avec <code>mutate_module=20-database</code>, le run <code>32743211342</code> échoue et <b>nomme le module fautif</b>. Un garde-fou qu'on ne peut pas faire rougir à volonté n'est pas un garde-fou.</p>
+        <p style="font-size:14px;color:var(--text-2);margin-bottom:0"><b>⚠️ Et un run a montré le trou suivant :</b> le <code>32761876936</code>, muté lui aussi, a rougi <em>avant</em> d'atteindre la mutation — une panne <code>504</code> chez un registre amont, étiquetée « installeur » faute de signature. Corrigé avant la bascule : sans quoi une panne de réseau aurait rougi la CI sur tous les envois suivants.</p>
       </div>
 
       <div class="card pad">
-        <h4 class="min" style="margin-top:0">État des workflows sur <code>8b0a399</code></h4>
+        <h4 class="min" style="margin-top:0">État des workflows au dernier relevé</h4>
         <div class="tw" style="margin:0">
           <table>
             <thead><tr><th>Workflow</th><th>Verdict</th></tr></thead>
             <tbody>
               <tr><td>Integrity · Quality · Tests · Browser · CI Summary</td><td class="ok">verts</td></tr>
-              <tr><td>Nightly freshness</td><td class="err">rouge</td></tr>
+              <tr><td>Nightly freshness</td><td class="ok">vert — et <b>bloquant</b></td></tr>
               <tr><td>Docker Build &amp; Validation</td><td class="ok">vert</td></tr>
               <tr><td>Security Audit</td><td class="ok">vert</td></tr>
-              <tr><td>Nightly E2E Install</td><td class="err">rouge ×2</td></tr>
+              <tr><td>Nightly E2E Install</td><td class="ok">vert (<code>32750543638</code>)</td></tr>
             </tbody>
           </table>
         </div>
-        <p class="mut" style="font-size:12.5px;margin:12px 0 0">Le job <em>nightly freshness</em> est <b>volontairement hors des dépendances</b> du résumé de CI tant que le nocturne n'est pas stabilisé — un rouge attendu en permanence masque une régression réelle. Le résumé, lui, est vert.</p>
+        <p class="mut" style="font-size:12.5px;margin:12px 0 0">Le job <em>nightly freshness</em> a vécu <b>volontairement hors des dépendances</b> du résumé de CI tant que le nocturne n'avait jamais tourné — un rouge attendu en permanence masque une régression réelle. Depuis le premier passage vert, il est <b>dans le verdict global</b>. Il tolère une panne <b>amont</b> (registre, réseau) à une condition : qu'un passage vert existe dans les trois jours. Voir <a class="plain" href="qualite.html#ci">l'arbitrage</a>.</p>
       </div>
     </div>
   </div>
@@ -274,8 +274,8 @@
     </div>
     <div class="ev now">
       <span class="when">2026-08-23 → aujourd'hui</span>
-      <h4>Le nocturne tourne — et il rougit</h4>
-      <p>La story 2.4 est fusionnée dans <code>main</code>. Le workflow nocturne se déclenche pour la première fois, et échoue deux nuits de suite sur l'installation complète depuis un clone neuf. <b>C'est le prochain travail.</b></p>
+      <h4>Le nocturne tourne — il rougit, puis il passe</h4>
+      <p>La story 2.4 est fusionnée dans <code>main</code>. Le workflow nocturne se déclenche pour la première fois et échoue deux nuits de suite sur l'installation depuis un clone neuf — <b>il avait raison</b>. Six blocages levés plus tard, il est vert, et le garde-fou qui surveille sa fraîcheur est <b>entré dans le verdict global</b>.</p>
     </div>
   </div>
 </section>
@@ -291,10 +291,10 @@
   <div class="items">
     <div class="item">
       <button data-toggle aria-expanded="false"><span class="dot d-warn"></span>
-        <span class="ttl">La story 2.4 est fusionnée dans <code>main</code>, mais son statut dit « en revue »<em>divergence entre Git et le fichier de suivi</em></span><span class="chev">›</span></button>
+        <span class="ttl">La story 2.4 a porté « en revue » plusieurs jours après sa fusion<em>écart résolu le 2026-08-24</em></span><span class="chev">›</span></button>
       <div class="body"><div class="in">
-        <p><code>sprint-status.yaml</code> porte <code>2-4-bats-e2e-install-test-nightly-blocking: review</code>, tandis que le commit de tête de <code>main</code> est <code>merge: story 2.4</code>.</p>
-        <p style="margin-bottom:0"><b>Ce n'est pas forcément une erreur :</b> le passage à <code>done</code> peut légitimement attendre que le nocturne passe au vert — ce qui n'est pas le cas. Mais alors la raison mérite d'être écrite dans le fichier, sans quoi le prochain lecteur conclura à un oubli. <b>Cette page ne tranche pas : elle affiche le statut du fichier, qui fait autorité, et signale la divergence.</b></p>
+        <p><code>sprint-status.yaml</code> portait <code>2-4-bats-e2e-install-test-nightly-blocking: review</code> tandis que le commit de tête de <code>main</code> était <code>merge: story 2.4</code>. <b>Ce n'était pas un oubli :</b> deux critères d'acceptation exigeaient des <em>passages réels</em> du workflow nocturne, impossibles avant la fusion.</p>
+        <p style="margin-bottom:0">Les deux ont été fermés sur des runs observés — <code>32750543638</code> vert, <code>32743211342</code> rouge sur mutation demandée — et le statut est passé à <code>done</code>. <b>L'écart est consigné plutôt qu'effacé :</b> il dit pourquoi un statut peut légitimement retarder sur Git, et à quelle condition il se referme.</p>
       </div></div>
     </div>
     <div class="item">

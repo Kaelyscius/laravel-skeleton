@@ -513,7 +513,20 @@ function jetonsCondition(string $expression): array
             continue;
         }
 
-        $motif = '/(\|\||&&|==|!=|!|\(|\)|\'[^\']*\'|[A-Za-z_][A-Za-z0-9_.]*(?:\(\))?)/A';
+        /*
+         * ⚠️ LE TIRET EST DANS LA CLASSE, ET CE N'EST PAS UN RELÂCHEMENT DE
+         * CONFORT. Un identifiant de job GitHub peut porter un tiret, et
+         * `needs.nightly-freshness.result` est précisément l'expression que la
+         * condition d'échec du résumé référence depuis la bascule du
+         * 2026-08-24. Sans lui, `jetonsCondition()` levait « jeton inattendu »
+         * et le garde du verdict global n'aurait jamais pu être écrit.
+         *
+         * ⛔ CE QUI BORNE LE RELÂCHEMENT : le test « l'évaluateur REFUSE ce
+         * qu'il ne sait pas lire ». Un identifiant bien formé mais absent du
+         * contexte lève toujours — c'est le tiret qui entre dans la grammaire,
+         * pas la tolérance.
+         */
+        $motif = '/(\|\||&&|==|!=|!|\(|\)|\'[^\']*\'|[A-Za-z_][A-Za-z0-9_.-]*(?:\(\))?)/A';
 
         if (preg_match($motif, $expression, $jeton, 0, $offset) === 1) {
             $jetons[] = $jeton[0];
@@ -998,8 +1011,15 @@ function appelsGh(string $sortie): array
  */
 function environnementSondeAlerte(): array
 {
-    $chemin = tempnam(sys_get_temp_dir(), 'alerte-') . '.sh';
-    file_put_contents($chemin, corpsEtapeAlerte());
+    // ⛔ MÊME DÉFAUT QUE LA SONDE DE FRAÎCHEUR, CORRIGÉ DU MÊME GESTE :
+    // `tempnam()` crée un fichier, `. '.sh'` en désigne un autre, et seul le
+    // second était supprimé. En laisser un corrigé à côté de son jumeau
+    // défectueux est exactement le motif « trois sur cinq » que ce dépôt punit.
+    $chemin = tempnam(sys_get_temp_dir(), 'alerte-');
+
+    if ($chemin === false || file_put_contents($chemin, corpsEtapeAlerte()) === false) {
+        throw new RuntimeException('Corps du step d’alerte non écrit dans la sonde.');
+    }
 
     return [
         'ETAPE' => $chemin,
@@ -1125,4 +1145,886 @@ it('crée le label `nightly` avant de s’en servir', function (): void {
         ->toHaveCount(1);
     expect($creations[0])
         ->toContain('--label nightly');
+});
+
+/*
+|------------------------------------------------------------------------------
+| Le verdict global DÉPEND du nightly — clôture 2.4, la bascule
+|------------------------------------------------------------------------------
+|
+| 🔴 CE QUE CES TROIS TESTS EXISTENT POUR EMPÊCHER.
+| `nightly-freshness` a vécu HORS des `needs:` de `CI Summary` — délibérément,
+| tant qu'il rougissait par construction. Il y est rentré le 2026-08-24, après
+| le premier nightly réellement vert (run `32750543638`). Livrée seule, cette
+| bascule n'aurait été gardée par RIEN : la retirer — d'un `needs:`, d'une
+| condition `if:` — n'aurait fait rougir aucun test, et le garde-fou
+| anti-désarmement se serait éteint exactement comme les garde-fous qu'il
+| surveille. C'est le motif de tête de ce dépôt, appliqué à sa propre clôture.
+|
+| ⚖️ MÊME PATRON QUE LE JOB `alert`, ET C'EST VOULU : on ÉVALUE la condition
+| dans un contexte simulé plutôt que d'en comparer le TEXTE. Une reformulation
+| équivalente doit rester verte ; c'est ce qui distingue un garde d'une
+| photographie. `conditionEstVraie()` / `jetonsCondition()` sont réutilisés tels
+| quels — une implémentation partagée, jamais une copie.
+|
+| ⛔ ET LE CONTEXTE EST DÉRIVÉ DES `needs:` RÉELS, pas énuméré ici. C'est ce qui
+| fait rougir le retrait de `nightly-freshness` des `needs:` : la condition
+| référence alors un identifiant que le contexte ne fournit plus, et
+| l'évaluateur REFUSE au lieu de rendre un verdict.
+|
+*/
+
+/**
+ * Le job `summary` de la CI, lu sur disque.
+ *
+ * @return array<string, mixed>
+ */
+function jobResumeCi(): array
+{
+    $document = RepoFile::yaml('.github/workflows/ci.yml');
+    $jobs = $document['jobs'] ?? null;
+    $resume = is_array($jobs) ? ($jobs['summary'] ?? null) : null;
+
+    expect(is_array($resume))
+        ->toBeTrue('Le job `summary` de la CI a disparu : plus rien ne rend de verdict global.');
+
+    /** @var array<string, mixed> $resume */
+    return $resume;
+}
+
+/**
+ * Les jobs dont dépend le verdict global, lus sur disque.
+ *
+ * @return list<string>
+ */
+function besoinsResumeCi(): array
+{
+    $needs = jobResumeCi()['needs'] ?? null;
+    $needs = is_string($needs) ? [$needs] : $needs;
+
+    return array_values(array_filter(
+        is_array($needs) ? $needs : [],
+        static fn (mixed $job): bool => is_string($job),
+    ));
+}
+
+/**
+ * La condition `if:` de l'étape qui fait ÉCHOUER le verdict global.
+ *
+ * ⚠️ L'étape est trouvée par son EFFET (`exit 1`), pas par son nom : un libellé
+ * peut être retouché sans rien changer, et un garde qui suit le libellé
+ * cesserait de mesurer sur une reformulation anodine.
+ */
+function conditionVerdictSummary(): string
+{
+    $steps = jobResumeCi()['steps'] ?? null;
+
+    foreach (is_array($steps) ? $steps : [] as $step) {
+        $run = is_array($step) ? ($step['run'] ?? null) : null;
+
+        if (! is_string($run) || ! str_contains($run, 'exit 1')) {
+            continue;
+        }
+
+        $condition = is_array($step) ? ($step['if'] ?? null) : null;
+
+        // ⛔ PAS DE REPLI SUR UNE EXPRESSION NEUTRE ICI. Une étape `exit 1`
+        // SANS `if:` ferait échouer la CI à chaque run : ce n'est pas un
+        // « verdict toujours vrai » anodin, c'est un dépôt qui ne peut plus
+        // rien merger. On le dit, plutôt que de l'évaluer.
+        expect(is_string($condition))
+            ->toBeTrue('L’étape bloquante du résumé n’a plus de condition `if:` : la CI échouerait à chaque run.');
+
+        return is_string($condition) ? $condition : '';
+    }
+
+    throw new RuntimeException('Aucune étape `exit 1` dans le job `summary` : le verdict global ne bloque plus rien.');
+}
+
+/**
+ * Contexte de sonde du verdict global, DÉRIVÉ des `needs:` réels.
+ *
+ * Tous les jobs sont `success` sauf ceux que `$echecs` nomme.
+ *
+ * @param  array<string, string>  $echecs
+ * @return array<string, string|null>
+ */
+function contexteVerdict(array $echecs = []): array
+{
+    $contexte = [
+        'always()' => 'true',
+        'success()' => 'true',
+        'failure()' => 'false',
+        'cancelled()' => 'false',
+        'github.event_name' => 'push',
+    ];
+
+    foreach (besoinsResumeCi() as $job) {
+        $contexte['needs.' . $job . '.result'] = $echecs[$job] ?? 'success';
+    }
+
+    return $contexte;
+}
+
+it('le verdict global ROUGIT quand le garde-fou du nightly rougit', function (): void {
+    /*
+     * ⛔ L'INTENTION, TELLE QU'UN HUMAIN SE LA POSE : le nightly est périmé,
+     * désactivé, ou son dernier run a échoué sur un vrai défaut d'installeur —
+     * est-ce que la CI le dit ? Avant le 2026-08-24, la réponse était NON, et
+     * c'était assumé : le nightly n'avait jamais tourné. Elle est OUI depuis.
+     */
+    $condition = conditionVerdictSummary();
+
+    foreach (['failure', 'cancelled', 'skipped'] as $verdict) {
+        expect(conditionEstVraie($condition, contexteVerdict([
+            'nightly-freshness' => $verdict,
+        ])))
+            ->toBeTrue(
+                "Un `nightly-freshness` « {$verdict} » laisse le verdict global VERT : le garde-fou "
+                . 'anti-désarmement est lui-même désarmé.',
+            );
+    }
+});
+
+it('n’a pas rendu le verdict global aveugle pour autant', function (): void {
+    /*
+     * ⛔ ANTI-VACUITÉ, ET C'EST ELLE QUI DONNE SA VALEUR AU TEST PRÉCÉDENT.
+     * Une condition toujours vraie — ou un évaluateur qui rendrait `true` en
+     * toute circonstance — satisferait le garde ci-dessus tout en rendant la
+     * CI rouge en permanence, donc illisible.
+     *
+     * La seconde moitié est la ligne « régression réelle » de la matrice : le
+     * verdict ne doit pas dépendre du SEUL nightly. Un `tests` rouge le rougit,
+     * nightly vert ou non.
+     */
+    $condition = conditionVerdictSummary();
+
+    expect(conditionEstVraie($condition, contexteVerdict()))
+        ->toBeFalse('Tout au vert, le verdict global échoue quand même : la CI ne peut plus rien merger.');
+
+    foreach (besoinsResumeCi() as $job) {
+        expect(conditionEstVraie($condition, contexteVerdict([
+            $job => 'failure',
+        ])))
+            ->toBeTrue("Le job « {$job} » peut échouer sans rougir le verdict global.");
+    }
+});
+
+it('le verdict global DÉPEND toujours du job qu’il lit', function (): void {
+    /*
+     * ⛔ SANS `needs: […, nightly-freshness]`, LA CONDITION LIT UN CONTEXTE
+     * ABSENT. `needs.nightly-freshness.result` deviendrait vide chez GitHub,
+     * `!= 'success'` serait VRAI en permanence, et la CI rougirait toujours —
+     * ou, selon la rédaction, jamais. Les deux gardes ci-dessus évaluent la
+     * condition ; ils ne voient pas le graphe de jobs qui la nourrit. C'est le
+     * même piège que pour le job `alert` du nightly, et il se garde pareil.
+     */
+    expect(besoinsResumeCi())
+        ->toContain('nightly-freshness');
+
+    $document = RepoFile::yaml('.github/workflows/ci.yml');
+    $jobs = $document['jobs'] ?? null;
+
+    expect(array_keys(is_array($jobs) ? $jobs : []))
+        ->toContain('nightly-freshness');
+
+    // …et le résumé le RAPPORTE, plutôt que de le lire en silence.
+    $steps = jobResumeCi()['steps'] ?? null;
+    $corps = '';
+
+    foreach (is_array($steps) ? $steps : [] as $step) {
+        $run = is_array($step) ? ($step['run'] ?? null) : null;
+        $corps .= is_string($run) ? $run : '';
+    }
+
+    expect($corps)
+        ->toContain('needs.nightly-freshness.result');
+});
+
+/*
+|------------------------------------------------------------------------------
+| `nightly-freshness`, EXÉCUTÉ — clôture 2.4
+|------------------------------------------------------------------------------
+|
+| 🔴 POURQUOI L'EXÉCUTER PLUTÔT QUE LE RELIRE. La tolérance ajoutée le
+| 2026-08-24 — « un dernier run rouge de cause AMONT est toléré si un vert
+| existe dans la fenêtre » — est la seule partie de cette story qui peut, si
+| elle est trop large, ÉTEINDRE le garde-fou qu'on vient de rendre bloquant. Un
+| test qui en relirait le texte serait vert sur une condition inversée.
+|
+| ⚠️ ENVIRONNEMENT DE MESURE, NOMMÉ. Le corps est exécuté sous `bash`, avec un
+| `gh` stubé (`tests/Fixtures/shell/gh-api-stub.sh`) et un `date` épinglé
+| (`tests/Fixtures/shell/gnu-date-shim.sh`) : `/bin/date` du conteneur
+| `laravel-app_php` est BusyBox et REFUSE l'ISO 8601 de l'API GitHub, là où le
+| runner `ubuntu-latest` a GNU coreutils. Sans cet épinglage, la sonde
+| mesurerait le binaire de la machine au lieu de la logique du workflow.
+|
+*/
+
+/**
+ * L'étape unique du job `nightly-freshness`, lue sur disque.
+ *
+ * @return array<string, mixed>
+ */
+function etapeFraicheurNightly(): array
+{
+    $document = RepoFile::yaml('.github/workflows/ci.yml');
+    $jobs = $document['jobs'] ?? null;
+    $job = is_array($jobs) ? ($jobs['nightly-freshness'] ?? null) : null;
+    $steps = is_array($job) ? ($job['steps'] ?? null) : null;
+    $premier = is_array($steps) ? ($steps[0] ?? null) : null;
+
+    expect(is_array($premier))
+        ->toBeTrue('Le job `nightly-freshness` n’a plus d’étape.');
+
+    /** @var array<string, mixed> $premier */
+    return $premier;
+}
+
+/**
+ * Le corps du step de `nightly-freshness`, tel que la CI le porte.
+ */
+function corpsFraicheurNightly(): string
+{
+    $run = etapeFraicheurNightly()['run'] ?? null;
+
+    expect(is_string($run))
+        ->toBeTrue('Le job `nightly-freshness` n’a plus de corps `run:`.');
+
+    return is_string($run) ? $run : '';
+}
+
+/**
+ * Le plafond de fraîcheur, LU dans le `env:` du step — jamais recopié.
+ */
+function plafondFraicheurNightly(): int
+{
+    $env = etapeFraicheurNightly()['env'] ?? null;
+    $plafond = is_array($env) ? ($env['MAX_AGE_DAYS'] ?? null) : null;
+
+    expect(is_numeric($plafond))
+        ->toBeTrue('`MAX_AGE_DAYS` a disparu du step `nightly-freshness`.');
+
+    return is_numeric($plafond) ? (int) $plafond : 0;
+}
+
+/**
+ * L'environnement de la sonde, DÉRIVÉ du bloc `env:` de l'étape.
+ *
+ * 🔴 POURQUOI DÉRIVÉ, ET PAS ÉCRIT ICI (revue 3). La sonde injectait `REPO` et
+ * `GH_TOKEN` de sa propre initiative, alors que la CI les tient de son `env:`.
+ * Supprimer `REPO: ${{ github.repository }}` de `ci.yml` laissait donc TOUTES
+ * les sondes vertes — et tuait le job en CI, où `$REPO` serait vide. Le harnais
+ * fournissait ce que le sujet ne fournissait plus : il masquait le défaut au
+ * lieu de le révéler.
+ *
+ * ⛔ Depuis, une clé retirée du `env:` n'est plus posée par la sonde : le corps
+ * tourne sous `set -u`, la variable est non liée, et l'étape meurt. Et une clé
+ * AJOUTÉE que ce harnais ne sait pas modéliser lève, plutôt que d'être passée
+ * à vide — « je ne sais pas mesurer » doit rougir.
+ *
+ * @return array<string, string>
+ */
+function envSondeFraicheur(): array
+{
+    $declare = etapeFraicheurNightly()['env'] ?? null;
+
+    expect(is_array($declare))
+        ->toBeTrue('Le step `nightly-freshness` n’a plus de bloc `env:` : ses entrées ne sont plus déclarées.');
+
+    $fixtures = [
+        'GH_TOKEN' => 'jeton',
+        'REPO' => 'proprietaire/depot',
+        'DEFAULT_BRANCH' => 'main',
+        'MAX_AGE_DAYS' => (string) plafondFraicheurNightly(),
+    ];
+
+    $env = [];
+
+    foreach (array_keys(is_array($declare) ? $declare : []) as $cle) {
+        $cle = (string) $cle;
+
+        if (! array_key_exists($cle, $fixtures)) {
+            throw new RuntimeException(
+                "Le step `nightly-freshness` déclare « {$cle} » dans son `env:`, que cette sonde ne sait "
+                . 'pas modéliser. Ajoutez-lui une valeur de fixture plutôt que de la laisser vide.',
+            );
+        }
+
+        $env[$cle] = $fixtures[$cle];
+    }
+
+    return $env;
+}
+
+/**
+ * Le pilote de sonde : `gh` stubé, `date` épinglé, résumé capturé.
+ */
+function sondeFraicheurNightly(): string
+{
+    return <<<'BASH'
+        set -e
+        bac="$(mktemp -d)"
+        mkdir -p "$bac/bin"
+
+        # ⛔ RÉSOLU AVANT DE PRÉFIXER LE `PATH` : le shim délègue au `date` réel,
+        # et sans ce relevé préalable il s'appellerait lui-même.
+        REAL_DATE="$(command -v date)"; export REAL_DATE
+
+        cp "$STUB_GH" "$bac/bin/gh"
+        cp "$SHIM_DATE" "$bac/bin/date"
+        chmod +x "$bac/bin/gh" "$bac/bin/date"
+
+        PATH="$bac/bin:$PATH"; export PATH
+
+        GITHUB_STEP_SUMMARY="$bac/resume.md"; export GITHUB_STEP_SUMMARY
+        : > "$GITHUB_STEP_SUMMARY"
+
+        statut=0
+        bash "$ETAPE" > "$bac/sortie" 2>&1 || statut=$?
+
+        echo "STATUT=$statut"
+        echo "=== SORTIE ==="
+        cat "$bac/sortie"
+        echo "=== RESUME ==="
+        cat "$GITHUB_STEP_SUMMARY"
+        echo "=== FIN ==="
+
+        rm -rf "$bac"
+        BASH;
+}
+
+/**
+ * Exécute le VRAI corps de `nightly-freshness` contre un `gh` stubé.
+ *
+ * @param  array<string, string>  $fixtures
+ * @return array{status: int, output: string}
+ */
+function executerFraicheurNightly(array $fixtures): array
+{
+    /*
+     * ⛔ `tempnam()` CRÉE UN FICHIER, ET `. '.sh'` EN DÉSIGNE UN AUTRE.
+     * La rédaction précédente écrivait dans le second et ne supprimait que
+     * lui : le premier FUYAIT à chaque appel. Et le retour de
+     * `file_put_contents()` n'était pas vérifié — une écriture en échec
+     * donnait une sonde qui exécute un fichier VIDE, donc un `exit 0`, donc
+     * une sonde VERTE qui n'a rien mesuré.
+     */
+    $chemin = tempnam(sys_get_temp_dir(), 'fraicheur-');
+
+    if ($chemin === false) {
+        throw new RuntimeException('Impossible de créer le fichier de sonde de fraîcheur.');
+    }
+
+    $ecrit = file_put_contents($chemin, corpsFraicheurNightly());
+
+    if ($ecrit === false || $ecrit === 0) {
+        @unlink($chemin);
+
+        throw new RuntimeException("Corps de l’étape non écrit dans la sonde : {$chemin}");
+    }
+
+    try {
+        $result = ShellProbe::run(
+            sondeFraicheurNightly(),
+            array_merge(envSondeFraicheur(), [
+                'ETAPE' => $chemin,
+                'STUB_GH' => ShellProbe::repoRoot() . '/src/tests/Fixtures/shell/gh-api-stub.sh',
+                'SHIM_DATE' => ShellProbe::repoRoot() . '/src/tests/Fixtures/shell/gnu-date-shim.sh',
+            ], $fixtures),
+            60,
+        );
+
+        if (preg_match('/STATUT=(\d+)/', $result['output'], $statut) !== 1) {
+            throw new RuntimeException("Sonde de fraîcheur illisible :\n" . $result['output']);
+        }
+
+        return [
+            'status' => (int) $statut[1],
+            'output' => $result['output'],
+        ];
+    } finally {
+        @unlink($chemin);
+    }
+}
+
+/**
+ * Un horodatage ISO 8601, tel que l'API GitHub le rend.
+ */
+function ilYAJours(float $jours): string
+{
+    return gmdate('Y-m-d\TH:i:s\Z', time() - (int) round($jours * 86400));
+}
+
+it('EXÉCUTÉ : un dernier nightly frais et VERT laisse le garde vert', function (): void {
+    // Anti-vacuité de tous les tests qui suivent : si le chemin nominal
+    // n'aboutissait pas, leurs rouges ne prouveraient rien.
+    $sonde = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'success',
+        'FIX_RUNID' => '32750543638',
+    ]);
+
+    expect($sonde['status'])->toBe(0, $sonde['output']);
+    expect($sonde['output'])->toContain('Nightly frais');
+});
+
+it('EXÉCUTÉ : un rouge SANS artefact de cause fait échouer le garde', function (): void {
+    /*
+     * 🔴 LE VRAI DÉFAUT D'INSTALLEUR. Le nightly publie `nightly-install-logs`
+     * à tous les coups ; l'étiquette `nightly-cause-infrastructure` n'existe
+     * que lorsque le marqueur d'infrastructure a été écrit. La fixture porte
+     * donc l'artefact ORDINAIRE — c'est le cas réel, et il doit rougir.
+     */
+    $sonde = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'failure',
+        'FIX_RUNID' => '32743211342',
+        'FIX_ARTIFACTS' => 'nightly-install-logs',
+        'FIX_GREEN' => ilYAJours(1),
+    ]);
+
+    expect($sonde['status'])->toBe(1, $sonde['output']);
+    expect($sonde['output'])->toContain('sans artefact de cause amont');
+});
+
+it('EXÉCUTÉ : un rouge de cause AMONT est toléré si un vert existe dans la fenêtre', function (): void {
+    /*
+     * ⚖️ LE CAS MESURÉ (run 32761876936) : `HTTP/2 504` d'`api.github.com`
+     * pendant `composer install`, sur un commit dont un autre run était vert
+     * (32750543638). Sans cette tolérance, la bascule en bloquant aurait rendu
+     * la CI rouge sur TOUS les pushs suivants — le mode de panne exact que la
+     * décision de revue 2 voulait éviter, simplement déplacé.
+     */
+    $sonde = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'failure',
+        'FIX_RUNID' => '32761876936',
+        'FIX_ARTIFACTS' => "nightly-install-logs\nnightly-cause-infrastructure",
+        'FIX_GREEN' => ilYAJours(1),
+    ]);
+
+    expect($sonde['status'])->toBe(0, $sonde['output']);
+    expect($sonde['output'])->toContain('::warning');
+    expect($sonde['output'])->toContain('cause AMONT');
+
+    // ⛔ ET IL NE FAIT PAS SEMBLANT D'ÊTRE VERT : le résumé DIT que le dernier
+    // run est rouge. Une tolérance muette serait un désarmement.
+    expect($sonde['output'])->toContain('toléré');
+});
+
+it('EXÉCUTÉ : une panne amont PERSISTANTE reprend ses dents', function (): void {
+    /*
+     * ⛔ C'EST LA MOITIÉ QUI EMPÊCHE LA TOLÉRANCE DE DEVENIR UN INTERRUPTEUR
+     * D'EXTINCTION. Sans elle, une infrastructure durablement en panne — ou un
+     * nightly qui produirait l'étiquette à tort — laisserait le garde vert
+     * indéfiniment.
+     */
+    $plafond = plafondFraicheurNightly();
+
+    $aucunVert = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'failure',
+        'FIX_RUNID' => '1',
+        'FIX_ARTIFACTS' => 'nightly-cause-infrastructure',
+        'FIX_GREEN' => '',
+    ]);
+
+    expect($aucunVert['status'])->toBe(1, $aucunVert['output']);
+    expect($aucunVert['output'])->toContain('AUCUN run vert');
+
+    $vertTropVieux = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'failure',
+        'FIX_RUNID' => '1',
+        'FIX_ARTIFACTS' => 'nightly-cause-infrastructure',
+        'FIX_GREEN' => ilYAJours($plafond + 2),
+    ]);
+
+    expect($vertTropVieux['status'])->toBe(1, $vertTropVieux['output']);
+    expect($vertTropVieux['output'])->toContain('redevient bloquant');
+});
+
+it('EXÉCUTÉ : les DEUX silences d’origine rougissent encore', function (): void {
+    /*
+     * ⛔ CE SONT LES DEUX RAISONS D'EXISTER DE CE JOB, ET ELLES SONT ANTÉRIEURES
+     * À LA TOLÉRANCE. `ci.yml` les énumère en tête : (1) GitHub DÉSACTIVE un
+     * workflow `schedule` après 60 jours sans activité — le nightly s'arrête
+     * alors sans un mot ; (2) un nightly qui n'a jamais tourné se lit comme un
+     * nightly vert, c'est-à-dire comme une absence de rouge.
+     *
+     * 🔴 POURQUOI LES ÉPROUVER MAINTENANT. La clôture 2.4 a réécrit le `case`
+     * qui décide du verdict, juste en aval de ces deux branches, et les a
+     * laissées sans aucun test — alors que le harnais d'exécution construit
+     * pour la tolérance (`FIX_STATE`, `FIX_LAST` vide) les couvrait déjà.
+     * Une capacité de mesure existante et inemployée, c'est la forme discrète
+     * du garde-fou silencieux : la branche n'est pas gardée, et l'outillage
+     * qui l'aurait gardée est là, juste à côté.
+     *
+     * Ces deux chemins précèdent la lecture de la conclusion : ils doivent
+     * rougir SANS qu'aucun verdict ni artefact n'entre en jeu.
+     */
+    $desactive = executerFraicheurNightly([
+        'FIX_STATE' => 'disabled_inactivity',
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'success',
+    ]);
+
+    expect($desactive['status'])->toBe(1, $desactive['output']);
+    expect($desactive['output'])->toContain('disabled_inactivity');
+
+    // ⚠️ Un run VERT et FRAIS est fourni exprès : si le garde regardait la
+    // conclusion avant l'état du workflow, il passerait au vert et ce test
+    // serait la seule chose à le dire.
+    $jamaisLance = executerFraicheurNightly([
+        'FIX_STATE' => 'active',
+        'FIX_LAST' => '',
+        'FIX_VERDICT' => '',
+    ]);
+
+    expect($jamaisLance['status'])->toBe(1, $jamaisLance['output']);
+    expect($jamaisLance['output'])->toContain('JAMAIS tourné');
+});
+
+/**
+ * Le nom du FICHIER-MARQUEUR qu'écrit réellement `e2e_infra_fail`.
+ *
+ * ⛔ LU DANS LA FONCTION, PAS RECOPIÉ. Écrit en dur ici, il resterait juste
+ * après un renommage — donc vert sur une chaîne rompue.
+ */
+function marqueurInfrastructure(): string
+{
+    $source = RepoFile::read('tests/bats/lib/e2e.bash');
+
+    $debut = strpos($source, 'e2e_infra_fail() {');
+
+    expect($debut)
+        ->not->toBeFalse('`e2e_infra_fail` a disparu : plus rien n’écrit le marqueur d’infrastructure.');
+
+    $corps = substr($source, (int) $debut, 600);
+
+    expect(preg_match('#\$E2E_REPORT_DIR/([A-Za-z0-9_]+)"#', $corps, $m))
+        ->toBe(1, '`e2e_infra_fail` n’écrit plus de fichier sous `$E2E_REPORT_DIR`.');
+
+    return $m[1] ?? '';
+}
+
+it('l’étiquette de cause amont : les QUATRE maillons tiennent ensemble', function (): void {
+    /*
+     * 🔴 QUATRE FICHIERS, DES CHAÎNES DE CARACTÈRES, ET AUCUN COMPILATEUR ENTRE
+     * EUX. Trois mutations prouvées VERTES en revue, chacune tuant la tolérance
+     * en silence :
+     *   • `id: cause` renommé en `id: etiquette` → l'étape de publication ne se
+     *     déclenche plus jamais ;
+     *   • `marker="…/INFRASTRUCTURE_FAILURE"` renommé en `…/INFRA_FAIL` → la
+     *     sortie vaut `installer` même sur une vraie panne amont ;
+     *   • `with.path` n'était asserté nulle part, alors que
+     *     `if-no-files-found: error` le rend porteur.
+     * Le nom de l'artefact était le seul maillon gardé. Les voici tous les
+     * quatre, chacun DÉRIVÉ de son voisin plutôt que recopié.
+     */
+    $corps = corpsFraicheurNightly();
+
+    // ── Maillon 1 : le lecteur (ci.yml) nomme une étiquette ───────────────
+    expect(preg_match("/grep -Fx '([^']+)'/", $corps, $lu))
+        ->toBe(1, '`nightly-freshness` ne cherche plus aucun nom d’artefact : la tolérance est morte.');
+
+    $etiquette = $lu[1] ?? '';
+
+    // ── Maillon 2 : le publieur (nightly.yml) porte ce nom ────────────────
+    $document = RepoFile::yaml('.github/workflows/nightly.yml');
+    $jobs = $document['jobs'] ?? null;
+    $install = is_array($jobs) ? ($jobs['install'] ?? null) : null;
+    $steps = is_array($install) ? ($install['steps'] ?? null) : null;
+    $steps = is_array($steps) ? $steps : [];
+
+    $publieur = null;
+
+    foreach ($steps as $step) {
+        $with = is_array($step) ? ($step['with'] ?? null) : null;
+
+        if (is_array($with) && ($with['name'] ?? null) === $etiquette) {
+            $publieur = $step;
+        }
+    }
+
+    expect(is_array($publieur))
+        ->toBeTrue("Aucune étape du nightly ne publie l’artefact « {$etiquette} », que `nightly-freshness` cherche pourtant.");
+
+    /** @var array<string, mixed> $publieur */
+    $condition = is_string($publieur['if'] ?? null) ? (string) $publieur['if'] : '';
+
+    // ── Maillon 3 : l'`id` référencé par sa condition EXISTE ───────────────
+    // ⛔ DÉRIVÉ DE LA CONDITION, jamais écrit ici : c'est ce qui fait rougir un
+    // `id:` renommé d'un seul côté.
+    expect(preg_match('/steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)/', $condition, $ref))
+        ->toBe(1, "L’étape qui publie « {$etiquette} » ne dépend plus d’aucune sortie d’étape : elle se déclenche donc à tous les coups, et TOUT échec du nightly serait toléré.");
+
+    $idAttendu = $ref[1] ?? '';
+    $sortieAttendue = $ref[2] ?? '';
+
+    $calculatrice = null;
+
+    foreach ($steps as $step) {
+        if (is_array($step) && ($step['id'] ?? null) === $idAttendu) {
+            $calculatrice = $step;
+        }
+    }
+
+    expect(is_array($calculatrice))
+        ->toBeTrue("La condition de publication lit `steps.{$idAttendu}.outputs.{$sortieAttendue}`, mais AUCUNE étape ne porte `id: {$idAttendu}` — la condition est vide en permanence, et la tolérance morte.");
+
+    /** @var array<string, mixed> $calculatrice */
+    $corpsCalculatrice = is_string($calculatrice['run'] ?? null) ? (string) $calculatrice['run'] : '';
+
+    expect($corpsCalculatrice)
+        ->toContain($sortieAttendue . '=');
+    expect($corpsCalculatrice)
+        ->toContain('GITHUB_OUTPUT');
+
+    // ── Maillon 4 : le MARQUEUR, tel que `e2e_infra_fail` l'écrit ──────────
+    $marqueur = marqueurInfrastructure();
+
+    expect($corpsCalculatrice)
+        ->toContain('/' . $marqueur);
+
+    /** @var array<string, mixed> $with */
+    $with = $publieur['with'];
+    $chemin = is_string($with['path'] ?? null) ? (string) $with['path'] : '';
+
+    expect(str_ends_with($chemin, '/' . $marqueur))
+        ->toBeTrue("L’artefact « {$etiquette} » publie « {$chemin} », qui n’est pas le marqueur « {$marqueur} » qu’écrit `e2e_infra_fail`. Avec `if-no-files-found: error`, l’étape rougirait sur une panne amont RÉELLE.");
+
+    // Une étiquette sans son marqueur serait un mensonge lisible par API.
+    expect($with['if-no-files-found'] ?? null)
+        ->toBe('error');
+});
+
+/*
+|------------------------------------------------------------------------------
+| Les branches que PERSONNE n'exerçait — revue 3
+|------------------------------------------------------------------------------
+|
+| 🔴 LE HARNAIS LES COUVRAIT GRATUITEMENT, ET AUCUNE N'AVAIT DE SONDE.
+| Mutation prouvée VERTE en revue : `[ "$age_days" -gt "$MAX_AGE_DAYS" ]` porté
+| à `-gt 99999` laissait 29/29 verts. C'est la raison d'être n°1 de ce job —
+| GitHub désactive un `schedule` après 60 jours — et celle que son nom annonce.
+| Idem pour « workflow introuvable via l'API » et pour la branche « encore en
+| cours », dont on pouvait inverser la sémantique sans faire rougir personne.
+|
+| ⚖️ L'argument est le même que pour les deux silences déjà corrigés, et il vaut
+| ici aussi : une branche que le harnais peut exercer et qu'aucun test
+| n'exerce est un garde-fou muet qui s'ignore.
+|
+*/
+
+it('EXÉCUTÉ : un nightly TROP VIEUX rougit, même vert', function (): void {
+    // 🔴 LA MUTATION QUI ÉTAIT RESTÉE VERTE. Le plafond est la raison d'être
+    // n°1 du job ; il n'était gardé par rien.
+    $plafond = plafondFraicheurNightly();
+
+    $sonde = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours($plafond + 2),
+        'FIX_VERDICT' => 'success',
+        'FIX_RUNID' => '1',
+    ]);
+
+    expect($sonde['status'])->toBe(1, $sonde['output']);
+    expect($sonde['output'])->toContain('Le garde-fou ne tourne plus');
+});
+
+it('EXÉCUTÉ : un workflow INTROUVABLE via l’API rougit en nommant la cause', function (): void {
+    $sonde = executerFraicheurNightly([
+        'FIX_STATE' => '__API_DOWN__',
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'success',
+    ]);
+
+    expect($sonde['status'])->toBe(1, $sonde['output']);
+    expect($sonde['output'])->toContain('nightly.yml » introuvable');
+});
+
+it('EXÉCUTÉ : un workflow DÉSACTIVÉ rougit en nommant son état', function (): void {
+    // GitHub désactive les `schedule` après 60 jours sans activité : c'est le
+    // silence que ce job existe pour transformer en rouge.
+    $sonde = executerFraicheurNightly([
+        'FIX_STATE' => 'disabled_inactivity',
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'success',
+    ]);
+
+    expect($sonde['status'])->toBe(1, $sonde['output']);
+    expect($sonde['output'])->toContain('disabled_inactivity');
+});
+
+it('EXÉCUTÉ : un nightly qui n’a JAMAIS tourné rougit', function (): void {
+    $sonde = executerFraicheurNightly([
+        'FIX_LAST' => '',
+    ]);
+
+    expect($sonde['status'])->toBe(1, $sonde['output']);
+    expect($sonde['output'])->toContain('JAMAIS tourné');
+});
+
+it('EXÉCUTÉ : un run ENCORE EN COURS ne rougit pas, et le dit', function (): void {
+    /*
+     * ⛔ ANTI-VACUITÉ DE LA BRANCHE : inverser sa sémantique — y faire tomber un
+     * `failure` — serait resté vert, faute de sonde. Les deux moitiés sont
+     * mesurées : « en cours » passe, et l'annotation dit que le verdict n'est
+     * pas concluant plutôt que de le maquiller en réussite.
+     */
+    $sonde = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours(0.1),
+        'FIX_VERDICT' => 'in_progress',
+        'FIX_RUNID' => '1',
+    ]);
+
+    expect($sonde['status'])->toBe(0, $sonde['output']);
+    expect($sonde['output'])->toContain('encore en cours');
+    // …et il ne prétend PAS que le nightly est vert.
+    expect($sonde['output'])->not->toContain('Nightly frais');
+});
+
+/*
+|------------------------------------------------------------------------------
+| Un run ANNULÉ n'est pas un défaut d'installeur — revue 3
+|------------------------------------------------------------------------------
+|
+| 🔴 LE `case *)` ACCUSAIT L'INSTALLEUR POUR TOUT CE QUI N'ÉTAIT PAS `success`.
+| Or l'étape d'étiquetage du nightly est en `if: failure()` : un run ANNULÉ ne
+| publie aucun artefact de cause. Un nightly annulé à la main rougissait donc
+| TOUS les pushs, avec un message nommant le mauvais coupable.
+|
+| ⚖️ LE PROJET AVAIT DÉJÀ TRANCHÉ CE POINT, pour le job `alert` : `== 'failure'`
+| et non `!= 'success'`, motif écrit — « annuler un run manuel ouvrait une issue
+| "nightly rouge" alors que RIEN n'avait échoué ». Une alerte qu'on apprend à
+| ignorer est une alerte désarmée ; un verdict global qu'on apprend à ignorer
+| l'est tout autant. Le raisonnement est transposé, pas réinventé.
+|
+| ⛔ MAIS IL GARDE SES DENTS : ces conclusions passent par la MÊME exigence d'un
+| vert récent que la tolérance amont. Un nightly annulé toutes les nuits finit
+| donc par rougir — sans quoi l'annulation deviendrait l'interrupteur
+| d'extinction que toute cette story existe pour interdire.
+|
+*/
+
+it('EXÉCUTÉ : un run ANNULÉ n’accuse pas l’installeur', function (): void {
+    foreach (['cancelled', 'skipped', 'neutral', 'stale'] as $verdict) {
+        $sonde = executerFraicheurNightly([
+            'FIX_LAST' => ilYAJours(0.5),
+            'FIX_VERDICT' => $verdict,
+            'FIX_RUNID' => '1',
+            'FIX_GREEN' => ilYAJours(1),
+        ]);
+
+        expect($sonde['status'])->toBe(0, "Un run « {$verdict} » bloque toute la CI :\n" . $sonde['output']);
+        expect($sonde['output'])
+            ->not->toContain("c'est l'installeur qui est en cause");
+        expect($sonde['output'])->toContain('a été prouvé non plus');
+    }
+});
+
+it('EXÉCUTÉ : une panne d’EXÉCUTION du runner n’accuse pas l’installeur', function (): void {
+    foreach (['timed_out', 'startup_failure'] as $verdict) {
+        $sonde = executerFraicheurNightly([
+            'FIX_LAST' => ilYAJours(0.5),
+            'FIX_VERDICT' => $verdict,
+            'FIX_RUNID' => '1',
+            'FIX_GREEN' => ilYAJours(1),
+        ]);
+
+        expect($sonde['status'])->toBe(0, $sonde['output']);
+        expect($sonde['output'])->toContain('runner');
+    }
+});
+
+it('EXÉCUTÉ : des annulations qui DURENT finissent par rougir', function (): void {
+    // ⛔ C'est la moitié qui empêche l'annulation de devenir l'interrupteur
+    // d'extinction. Sans elle, annuler le nightly chaque nuit suffirait à
+    // éteindre le garde-fou pour toujours.
+    $sonde = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'cancelled',
+        'FIX_RUNID' => '1',
+        'FIX_GREEN' => '',
+    ]);
+
+    expect($sonde['status'])->toBe(1, $sonde['output']);
+    expect($sonde['output'])->toContain('AUCUN run vert');
+});
+
+it('EXÉCUTÉ : une conclusion INCONNUE fait rougir plutôt que deviner', function (): void {
+    // « Je ne sais pas » doit rougir : c'est la doctrine de l'évaluateur de
+    // conditions, appliquée au lecteur de conclusions.
+    $sonde = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'conclusion_de_demain',
+        'FIX_RUNID' => '1',
+        'FIX_GREEN' => ilYAJours(1),
+    ]);
+
+    expect($sonde['status'])->toBe(1, $sonde['output']);
+    expect($sonde['output'])->toContain('inconnue de ce garde');
+});
+
+/*
+|------------------------------------------------------------------------------
+| Une panne d'API n'est pas une absence — revue 3
+|------------------------------------------------------------------------------
+|
+| 🔴 L'appel aux artefacts portait `|| true` : une API en carafe devenait
+| indiscernable d'« aucune étiquette », et le message accusait l'installeur pour
+| un code parfaitement sain. Celui du dernier vert n'était pas gardé du tout :
+| sous `set -e`, il tuait l'étape sans nommer de cause. Les deux échouent
+| désormais en DISANT qu'ils n'ont pas pu établir la cause.
+|
+*/
+
+it('EXÉCUTÉ : une API en panne ne se fait pas passer pour une absence de cause', function (): void {
+    $artefacts = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'failure',
+        'FIX_RUNID' => '1',
+        'FIX_ARTIFACTS' => '__API_DOWN__',
+    ]);
+
+    expect($artefacts['status'])->toBe(1, $artefacts['output']);
+    expect($artefacts['output'])->toContain('INDÉTERMINÉE');
+    expect($artefacts['output'])
+        ->not->toContain("c'est l'installeur qui est en cause");
+
+    $vert = executerFraicheurNightly([
+        'FIX_LAST' => ilYAJours(0.5),
+        'FIX_VERDICT' => 'failure',
+        'FIX_RUNID' => '1',
+        'FIX_ARTIFACTS' => 'nightly-cause-infrastructure',
+        'FIX_GREEN' => '__API_DOWN__',
+    ]);
+
+    expect($vert['status'])->toBe(1, $vert['output']);
+    expect($vert['output'])->toContain('INDÉTERMINÉE');
+});
+
+it('ne lit JAMAIS « le dernier nightly » toutes branches confondues', function (): void {
+    /*
+     * 🔴 `runs?per_page=1` SANS FILTRE DE BRANCHE. Un `workflow_dispatch` lancé
+     * depuis une branche de story devenait « le dernier nightly » et décidait
+     * du verdict de `main` ; et `runs?status=success` ouvrait la fenêtre
+     * d'assouplissement sur un vert obtenu n'importe où. Le garde du verdict de
+     * la branche par défaut doit lire la branche par défaut.
+     */
+    $corps = corpsFraicheurNightly();
+
+    preg_match_all('#/actions/workflows/nightly\.yml/runs\?([^"]*)"#', $corps, $requetes);
+
+    expect($requetes[1])
+        ->not->toBe([], 'Plus aucune requête de runs : le garde ne lit plus rien.');
+
+    foreach ($requetes[1] as $query) {
+        // ⚠️ `toContain` prend des AIGUILLES, pas un message — cinquième
+        // rencontre de ce piège dans ce fichier, et je viens d'y retomber.
+        // Le message passe par `toBeTrue`, qui, lui, en accepte un.
+        expect(str_contains($query, 'branch='))
+            ->toBeTrue("Requête de runs sans filtre de branche : « {$query} ».");
+    }
 });

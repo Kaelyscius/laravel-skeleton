@@ -3,13 +3,13 @@
    Regénérer : make reading-room */
 window.RR_PLAN = {
  "generated": "2026-08-24",
- "commit": "8b0a399",
- "branch": "story/2-4-fix-install-clone-neuf",
+ "commit": "de9b391",
+ "branch": "story/2-4-nightly-freshness-bloquant",
  "dirty": true,
  "counts": {
   "epics": 11,
   "stories": 131,
-  "done": 16,
+  "done": 17,
   "requirements": 333
  },
  "families": {
@@ -921,7 +921,7 @@ window.RR_PLAN = {
       }
      ],
      "notes": [],
-     "status": "review"
+     "status": "done"
     },
     {
      "id": "2.5",

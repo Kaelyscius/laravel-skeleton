@@ -630,20 +630,42 @@ jobs:
   # Ce job transforme ces deux silences en ROUGE, sur une porte que quelqu'un
   # regarde à chaque push.
   #
-  # ⚠️ IL EST ROUGE TANT QUE LE NIGHTLY N'A JAMAIS TOURNÉ — c'est l'état réel au
-  # moment où cette story est écrite (le workflow n'existe pas encore sur la
-  # branche par défaut, donc `workflow_dispatch` n'est pas proposé).
+  # ✅ IL EST BLOQUANT DEPUIS LE 2026-08-24, ET IL NE L'A PAS TOUJOURS ÉTÉ.
+  # Il a été livré HORS des `needs` de `CI Summary` (décision d'Alex, revue 2)
+  # parce qu'il rougissait ALORS par construction : le nightly n'avait jamais
+  # tourné. Un rouge attendu en permanence dans le verdict global aurait MASQUÉ
+  # une régression réelle d'`integrity`, `quality`, `tests` ou `browser` — on
+  # apprend vite à lire « CI rouge » comme « ah oui, le nightly ». C'était le
+  # mécanisme du garde-fou qu'on désarme, appliqué au garde-fou anti-désarmement.
   #
-  # ⛔ ET C'EST EXACTEMENT POURQUOI IL EST HORS DES `needs` DE `CI Summary`
-  # (décision d'Alex, revue 2). Un rouge ATTENDU en permanence dans le verdict
-  # global MASQUE une régression réelle d'`integrity`, `quality`, `tests` ou
-  # `browser` : on apprend à lire « CI rouge » comme « ah oui, le nightly ».
-  # C'est le mécanisme même du garde-fou qu'on désarme, appliqué au garde-fou
-  # anti-désarmement. Il est donc rapporté à part et annoté.
-  # 🔁 **BASCULE À FAIRE JUSTE APRÈS LE PREMIER RUN OBSERVÉ** : le remettre dans
-  # `needs:` et dans la condition d'échec du résumé. La marche à suivre est
-  # écrite dans `docs/ETAT.md`, section « La bascule à faire juste après le
-  # premier nightly ».
+  # La condition qui l'écartait est éteinte : le nightly a tourné et CONCLU vert
+  # (run `32750543638`, 9 min 21 s, fenêtre d'installation mesurée à 271 s pour
+  # un plafond de 900). Il est donc rentré dans `needs:` et dans la condition
+  # d'échec du résumé.
+  #
+  # ⚖️ ET IL TOLÈRE UNE PANNE AMONT, PARCE QUE LA BASCULE SEULE AURAIT DÉPLACÉ
+  # LE MODE DE PANNE PLUTÔT QUE DE L'ÉVITER. Un second run sur le MÊME commit
+  # (`32761876936`) a rougi sur un `HTTP/2 504` d'`api.github.com` pendant
+  # `composer install` : rien n'était cassé chez nous, et la CI aurait pourtant
+  # rougi sur TOUS les pushs suivants. Un dernier run rouge dont la cause est
+  # étiquetée INFRASTRUCTURE est donc toléré — **à condition** qu'un run vert
+  # existe dans la même fenêtre de `MAX_AGE_DAYS`. Une infrastructure
+  # durablement en panne finit par rougir : la tolérance ne devient pas un
+  # interrupteur d'extinction.
+  #
+  # ⚠️ CONSÉQUENCE À CONNAÎTRE : un run lancé avec `mutate_module` (la procédure
+  # de validation du garde-fou) est un rouge VOLONTAIRE, et ce job ne le
+  # distingue pas d'un vrai défaut d'installeur — il n'y a pas d'artefact de
+  # cause amont. Le verdict global rougira jusqu'au prochain nightly. Relancer
+  # le nightly SANS mutation rétablit le vert : seul le DERNIER run est lu.
+  # ⛔ On n'a pas dupliqué ici la connaissance du job `alert` (« un rouge demandé
+  # n'est pas une panne ») : tolérer un rouge demandé dans le verdict global
+  # rouvrirait l'interrupteur d'extinction que la tolérance amont referme.
+  #
+  # ⛔ CE JOB EST LUI-MÊME GARDÉ. `src/tests/Unit/WorkflowInputSafetyTest.php`
+  # évalue la condition d'échec du résumé dans un contexte simulé et vérifie
+  # que `nightly-freshness` figure dans les `needs:` — sans quoi la condition
+  # lirait un contexte absent et resterait fausse en permanence.
   nightly-freshness:
     name: Nightly freshness (le garde-fou tourne-t-il ?)
     runs-on: ubuntu-latest
@@ -658,6 +680,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          # ⛔ LA BRANCHE PAR DÉFAUT EST UNE ENTRÉE, PAS UN DÉCOR (revue 3).
+          # Sans elle, `runs?per_page=1` rend le dernier run TOUTES BRANCHES
+          # CONFONDUES : un `workflow_dispatch` lancé depuis une branche de
+          # story devenait « le dernier nightly » et décidait du verdict de
+          # `main`. Idem pour la recherche du dernier VERT, qui ouvrait la
+          # fenêtre d'assouplissement sur un vert obtenu n'importe où.
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           MAX_AGE_DAYS: 3
         run: |
           set -euo pipefail
@@ -675,13 +704,29 @@ jobs:
             exit 1
           fi
 
+          if [ -z "${DEFAULT_BRANCH:-}" ]; then
+            if ! DEFAULT_BRANCH="$(gh api "repos/$REPO" --jq '.default_branch')"; then
+              echo "::error title=Nightly freshness::Branche par défaut indéterminable (contexte absent ET API en échec). Le garde refuse de lire « le dernier run » sans savoir de quelle branche."
+              exit 1
+            fi
+          fi
+
+          # ⛔ UN SEUL APPEL POUR LES TROIS CHAMPS (revue 3). Trois `gh api`
+          # séparés sur le même endpoint pouvaient décrire DEUX runs différents
+          # si un nightly démarrait entre-temps — et la tolérance serait allée
+          # chercher l'étiquette dans les artefacts du mauvais run.
           # ⛔ `// empty` ET NON `// null` : sans lui, `--jq` imprime le LITTÉRAL
           # « null » sur un ensemble vide, et tout test `[ -z … ]` devient faux.
-          last="$(gh api "repos/$REPO/actions/workflows/nightly.yml/runs?per_page=1" --jq '.workflow_runs[0].created_at // empty')"
-          verdict="$(gh api "repos/$REPO/actions/workflows/nightly.yml/runs?per_page=1" --jq '.workflow_runs[0].conclusion // empty')"
+          if ! ligne="$(gh api "repos/$REPO/actions/workflows/nightly.yml/runs?branch=$DEFAULT_BRANCH&per_page=1" --jq '.workflow_runs[0] // empty | [.created_at, (.conclusion // ""), (.id | tostring)] | @tsv')"; then
+            echo "::error title=Nightly freshness::API GitHub injoignable en lisant le dernier run du nightly. La fraîcheur est INDÉTERMINÉE, pas prouvée."
+            exit 1
+          fi
+
+          last=""; verdict=""; run_id=""
+          IFS="$(printf '\t')" read -r last verdict run_id <<< "$ligne" || true
 
           if [ -z "$last" ]; then
-            echo "::error title=Nightly freshness::Le nightly n'a JAMAIS tourné. Actions → Nightly E2E Install → Run workflow."
+            echo "::error title=Nightly freshness::Le nightly n'a JAMAIS tourné sur « $DEFAULT_BRANCH ». Actions → Nightly E2E Install → Run workflow."
             exit 1
           fi
 
@@ -690,7 +735,7 @@ jobs:
           {
             echo "## 🌙 Fraîcheur du nightly"
             echo ""
-            echo "Dernier run : \`$last\` (il y a ${age_days} jour(s), conclusion \`${verdict:-en cours}\`) · plafond : ${MAX_AGE_DAYS} jours."
+            echo "Dernier run : \`$last\` (il y a ${age_days} jour(s), conclusion \`${verdict:-en cours}\`) · branche \`$DEFAULT_BRANCH\` · plafond : ${MAX_AGE_DAYS} jours."
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$age_days" -gt "$MAX_AGE_DAYS" ]; then
@@ -698,17 +743,123 @@ jobs:
             exit 1
           fi
 
+          # ═══════════════════════════════════════════════════════════════════
+          # « UN VERT DANS LA FENÊTRE » — le SEUL assouplissement autorisé.
+          # ═══════════════════════════════════════════════════════════════════
+          # ⚖️ Toute conclusion qui n'est ni `success` ni « en cours » passe par
+          # ici. C'est ce qui empêche l'assouplissement de devenir un
+          # interrupteur d'extinction : une situation qui DURE finit par rougir,
+          # qu'elle vienne d'une panne amont, d'annulations répétées ou d'un
+          # runner qui échoue au démarrage.
+          GREEN_AGE_DAYS=""
+
+          exiger_un_vert_recent() {
+            raison="$1"
+
+            if ! green="$(gh api "repos/$REPO/actions/workflows/nightly.yml/runs?status=success&branch=$DEFAULT_BRANCH&per_page=1" --jq '.workflow_runs[0].created_at // empty')"; then
+              echo "::error title=Nightly freshness::API GitHub injoignable en cherchant le dernier run VERT. La fraîcheur est INDÉTERMINÉE, pas prouvée — on ne l'impute à personne."
+              exit 1
+            fi
+
+            if [ -z "$green" ]; then
+              echo "::error title=Nightly freshness::${raison} — et AUCUN run vert n'existe sur « $DEFAULT_BRANCH ». L'assouplissement exige une réussite récente."
+              exit 1
+            fi
+
+            GREEN_AGE_DAYS=$(( ( $(date -u +%s) - $(date -u -d "$green" +%s) ) / 86400 ))
+
+            if [ "$GREEN_AGE_DAYS" -gt "$MAX_AGE_DAYS" ]; then
+              echo "::error title=Nightly freshness::${raison} — et le dernier vert date de ${GREEN_AGE_DAYS} jours (plafond ${MAX_AGE_DAYS}). La situation DURE : le garde redevient bloquant."
+              exit 1
+            fi
+          }
+
           # 🔴 LA CONCLUSION COMPTE AUTANT QUE LA DATE (revue 2). Sans elle, un
           # nightly qui ÉCHOUE toutes les nuits laissait ce garde VERT : le
           # garde-fou écrit pour empêcher qu'un garde-fou s'éteigne en silence
           # était aveugle à son échec. « Il tourne » n'est pas « il passe ».
+          #
+          # ⛔ ET SEUL `failure` ACCUSE L'INSTALLEUR (revue 3). La rédaction
+          # précédente traitait en `*)` tout ce qui n'était pas `success` :
+          # un run ANNULÉ à la main rougissait donc tous les pushs en nommant
+          # l'installeur — alors que l'étape d'étiquetage du nightly est en
+          # `if: failure()` et ne publie AUCUN artefact sur une annulation. Le
+          # projet avait DÉJÀ tranché ce point pour le job `alert`
+          # (`== 'failure'` et non `!= 'success'`, parce qu'« annuler un run
+          # manuel ouvrait une issue "nightly rouge" alors que rien n'avait
+          # échoué »). Le même raisonnement vaut pour le verdict global.
           case "$verdict" in
-            success) ;;
+            success)
+              ;;
+
             ""|in_progress|queued|waiting|requested|pending)
               echo "::warning title=Nightly freshness::Dernier run encore en cours (conclusion « ${verdict:-vide} ») — verdict non concluant, fraîcheur OK."
+              # ⛔ SORTIE EXPLICITE. Sans elle, l'exécution retombait sur le
+              # « ✅ Nightly frais … ET VERT » final : un run ENCORE EN COURS
+              # était annoncé vert. Trouvé par la sonde, pas par relecture.
+              exit 0
               ;;
+
+            cancelled|skipped|neutral|stale|action_required)
+              exiger_un_vert_recent "Dernier nightly « $verdict » : aucun verdict rendu"
+              echo "::warning title=Nightly freshness::Dernier nightly « $verdict » — rien n'a échoué, mais rien n'a été prouvé non plus. Toléré : un run vert date d'il y a ${GREEN_AGE_DAYS} jour(s)."
+              exit 0
+              ;;
+
+            timed_out|startup_failure)
+              exiger_un_vert_recent "Dernier nightly « $verdict » : le run n'a pas abouti"
+              echo "::warning title=Nightly freshness::Dernier nightly « $verdict » — panne d'EXÉCUTION du run (runner), l'installeur n'est pas en cause. Toléré : un run vert date d'il y a ${GREEN_AGE_DAYS} jour(s)."
+              exit 0
+              ;;
+
+            failure)
+              # ═════════════════════════════════════════════════════════════
+              # LA TOLÉRANCE, ET SES DENTS — clôture 2.4
+              # ═════════════════════════════════════════════════════════════
+              # ⛔ L'ÉTIQUETTE VOYAGE PAR UN NOM D'ARTEFACT. Le nightly publie
+              # `nightly-cause-infrastructure` quand — et seulement quand — son
+              # marqueur `INFRASTRUCTURE_FAILURE` existe. Un NOM se lit en un
+              # appel d'API, sans téléchargement ni dézippage : ce job tourne en
+              # `timeout-minutes: 5` et ne doit rien rapatrier.
+              #
+              # ⚠️ CE N'EST PAS UNE ABSOLUTION. Le run nightly reste ROUGE ; seule
+              # la lecture qu'en fait ce job-ci change.
+              if [ -z "$run_id" ]; then
+                echo "::error title=Nightly freshness::Le dernier nightly a ÉCHOUÉ et son identifiant de run est illisible : la cause n'a pas pu être établie."
+                exit 1
+              fi
+
+              # ⛔ UNE PANNE D'API N'EST PAS « AUCUNE ÉTIQUETTE » (revue 3). Avec
+              # un `|| true` sur cet appel, une API en carafe devenait
+              # indiscernable d'un artefact absent — et le message accusait
+              # l'installeur pour un code parfaitement sain.
+              if ! noms="$(gh api "repos/$REPO/actions/runs/$run_id/artifacts?per_page=100" --jq '.artifacts[].name')"; then
+                echo "::error title=Nightly freshness::API GitHub injoignable en lisant les artefacts du run ${run_id}. La cause de l'échec est INDÉTERMINÉE — on ne l'impute ni à l'installeur ni à l'amont."
+                exit 1
+              fi
+
+              cause="$(printf '%s\n' "$noms" | grep -Fx 'nightly-cause-infrastructure' || true)"
+
+              if [ -z "$cause" ]; then
+                echo "::error title=Nightly freshness::Le dernier nightly a conclu « $verdict », sans artefact de cause amont. Le garde-fou tourne mais il ÉCHOUE — et c'est l'installeur qui est en cause."
+                exit 1
+              fi
+
+              exiger_un_vert_recent "Dernier nightly rouge pour cause AMONT"
+
+              echo "::warning title=Nightly freshness::Dernier nightly rouge, cause AMONT (artefact « nightly-cause-infrastructure ») — toléré : un run vert existe il y a ${GREEN_AGE_DAYS} jour(s). Le run nightly, lui, reste rouge."
+              {
+                echo ""
+                echo "🏗️ Dernier run rouge pour cause **amont** (registre/réseau), toléré : un run vert date d'il y a ${GREEN_AGE_DAYS} jour(s)."
+              } >> "$GITHUB_STEP_SUMMARY"
+
+              exit 0
+              ;;
+
             *)
-              echo "::error title=Nightly freshness::Le dernier nightly a conclu « $verdict ». Le garde-fou tourne mais il ÉCHOUE."
+              # ⛔ « JE NE SAIS PAS » DOIT ROUGIR. Une conclusion que ce garde ne
+              # connaît pas ne doit pas hériter d'un verdict par défaut.
+              echo "::error title=Nightly freshness::Conclusion « $verdict » inconnue de ce garde. Il refuse de conclure plutôt que de rendre un verdict qu'il n'a pas les moyens de rendre."
               exit 1
               ;;
           esac
@@ -721,7 +872,7 @@ jobs:
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [integrity, quality, tests, browser]
+    needs: [integrity, quality, tests, browser, nightly-freshness]
     if: always()
 
     steps:
@@ -735,15 +886,11 @@ jobs:
           echo "| Quality (ECS · PHPStan · Ratchet) | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Pest × PostgreSQL 18) | ${{ needs.tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests navigateur (Chromium) | ${{ needs.browser.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "⚠️ **\`Nightly freshness\` est rapporté à part et n'est PAS bloquant** tant que le" >> $GITHUB_STEP_SUMMARY
-          echo "premier nightly n'a pas tourné : le laisser dans ce résumé masquerait une régression" >> $GITHUB_STEP_SUMMARY
-          echo "réelle derrière un rouge attendu. Bascule en bloquant : voir \`docs/ETAT.md\`," >> $GITHUB_STEP_SUMMARY
-          echo "section « La bascule à faire juste après le premier nightly »." >> $GITHUB_STEP_SUMMARY
+          echo "| Nightly freshness (le garde-fou tourne-t-il ?) | ${{ needs.nightly-freshness.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Rector et PHP Insights sont **informatifs** (architecture §9.2) :" >> $GITHUB_STEP_SUMMARY
           echo "leur échec n'arrête pas le pipeline mais reste visible dans le job Quality." >> $GITHUB_STEP_SUMMARY
 
       - name: ❌ Fail if a blocking job failed
-        if: needs.integrity.result != 'success' || needs.quality.result != 'success' || needs.tests.result != 'success' || needs.browser.result != 'success'
+        if: needs.integrity.result != 'success' || needs.quality.result != 'success' || needs.tests.result != 'success' || needs.browser.result != 'success' || needs.nightly-freshness.result != 'success'
         run: exit 1

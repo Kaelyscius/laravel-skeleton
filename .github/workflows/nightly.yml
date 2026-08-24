@@ -143,10 +143,27 @@ jobs:
       # elle dit seulement de quoi il s'agit, pour que personne ne parte
       # débugger l'installeur quand c'est le registre qui était en panne.
       - name: 🏷️ Étiqueter la cause de l'échec
+        id: cause
         if: failure()
         run: |
           marker="${{ runner.temp }}/e2e/report/INFRASTRUCTURE_FAILURE"
           input_marker="${{ runner.temp }}/e2e/report/INPUT_FAILURE"
+
+          # ⚖️ L'ÉTIQUETTE SORT DU JOB, ET C'EST NEUF (clôture 2.4). Elle vivait
+          # en trois exemplaires — résumé, annotation `::error`, marqueur dans
+          # l'artefact `nightly-install-logs` — dont AUCUN ne se lit depuis un
+          # autre workflow sans télécharger ni dézipper. `nightly-freshness`
+          # (ci.yml) a besoin de la connaître en un appel d'API : la sortie
+          # ci-dessous conditionne un artefact dont le NOM porte l'étiquette.
+          # Le marqueur reste la source unique — on le publie, on ne le recalcule
+          # pas.
+          if [ -f "$input_marker" ]; then
+            echo "cause=input" >> "$GITHUB_OUTPUT"
+          elif [ -f "$marker" ]; then
+            echo "cause=infrastructure" >> "$GITHUB_OUTPUT"
+          else
+            echo "cause=installer" >> "$GITHUB_OUTPUT"
+          fi
 
           {
             echo "## 🌙 Nightly E2E — échec"
@@ -221,6 +238,34 @@ jobs:
           name: nightly-install-logs
           path: ${{ runner.temp }}/e2e/report
           if-no-files-found: warn
+          retention-days: 14
+
+      # =========================================================================
+      # L'ÉTIQUETTE VOYAGE PAR UN NOM D'ARTEFACT — clôture 2.4
+      # =========================================================================
+      # ⛔ POURQUOI UN NOM, ET PAS UNE ANNOTATION NI UN ZIP. `nightly-freshness`
+      # (`.github/workflows/ci.yml`) tolère un dernier nightly rouge à condition
+      # de savoir que la cause était AMONT. Il tourne en `timeout-minutes: 5` et
+      # ne doit rien télécharger : `gh api repos/…/actions/runs/<id>/artifacts
+      # --jq '.artifacts[].name'` lui suffit, sans transfert. Les annotations,
+      # elles, ne se lisent qu'à travers l'API des check-runs.
+      #
+      # ⚠️ `hashFiles()` NE POUVAIT PAS SERVIR DE CONDITION : son argument est
+      # relatif à `GITHUB_WORKSPACE` et ne peut désigner aucun fichier hors de
+      # lui — or le marqueur vit dans `${{ runner.temp }}`. La condition aurait
+      # été vide en permanence, l'artefact jamais publié, et la tolérance
+      # jamais atteinte : un garde-fou muet de plus. C'est la sortie de l'étape
+      # d'étiquetage qui décide, et elle est mesurée par un shell.
+      #
+      # `if-no-files-found: error` : une étiquette sans son marqueur serait un
+      # mensonge lisible par API. Mieux vaut rougir l'étape.
+      - name: 🏗️ Étiquette « cause amont » (artefact NOMMÉ, sans contenu utile)
+        if: always() && steps.cause.outputs.cause == 'infrastructure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-cause-infrastructure
+          path: ${{ runner.temp }}/e2e/report/INFRASTRUCTURE_FAILURE
+          if-no-files-found: error
           retention-days: 14
 
       # Le nettoyage ne décide d'aucun verdict — d'où le `|| true` assumé.

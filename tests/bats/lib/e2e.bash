@@ -59,6 +59,43 @@ e2e_infra_fail() {
 # pour les signatures FUTURES et pour le journal lui-même, qui contient des
 # chemins arbitraires. Il n'est pas gardé, et le prétendre serait exactement le
 # défaut que ce dépôt traque.
+#
+# 🔴 LE TROU MESURÉ (run 32761876936, clôture 2.4). Un run lancé avec
+# `mutate_module=20-database` a rougi AVANT d'atteindre la mutation : un `504`
+# d'`api.github.com` pendant `composer install`, au module 10. Aucune des treize
+# signatures d'alors ne connaissait de 5xx de registre, donc l'échec a été
+# étiqueté **INSTALLEUR** — la mutation n'a pas tiré, et le rapport accusait le
+# code. Les signatures de panne amont sont ajoutées ci-dessous.
+#
+# ⛔ ET LES CODES NUS `504` / `502` / `503` ONT ÉTÉ REFUSÉS, MESURE À L'APPUI.
+# `grep -F 504` matche `Get:5 http://deb.debian.org … libxml2 amd64 [504 kB]` —
+# une ligne d'`apt` parfaitement ordinaire, présente dans presque tout journal
+# d'installation. Un vrai défaut d'installeur serait alors étiqueté
+# INFRASTRUCTURE, et `nightly-freshness` le TOLÉRERAIT : le garde-fou
+# anti-désarmement se désarmerait par sa propre heuristique. Les signatures
+# retenues portent donc le code **avec son contexte HTTP**. Le témoin
+# « une taille de paquet apt n'est pas une panne amont » garde ce choix.
+#
+# 🔴 ET LA MÊME INVERSION EST REVENUE PAR LA PORTE DE DERRIÈRE — RETIRÉE DEPUIS.
+# La première rédaction de cette liste ajoutait aussi `could not be downloaded`
+# et `Failed to download`, SANS contexte HTTP, trois lignes sous le commentaire
+# qui refusait les codes nus pour cette raison exacte. Mesuré en revue :
+#   • `Failed to download acme/nope from dist: … (HTTP/2 404)` → INFRASTRUCTURE.
+#     Un paquet inexistant est un défaut de DÉPENDANCE, et il était absous.
+#   • `Failed to download acme/pkg from dist, trying the source instead` — le
+#     repli ORDINAIRE et bénin de composer — accompagné d'un vrai
+#     `Échec du module` → INFRASTRUCTURE aussi.
+# Les deux sont supprimées. Ce qui reste porte un **5xx**, et un 5xx n'est jamais
+# imputable à l'installeur : c'est la passerelle d'en face qui a cédé. Les deux
+# témoins « un 404 de dist reste INSTALLEUR » et « le repli dist→source reste
+# INSTALLEUR » gardent ce retrait.
+#
+# ⚠️ CE QUE CETTE HEURISTIQUE NE SAIT TOUJOURS PAS FAIRE, et il faut le dire :
+# `grep -F` compare une ligne à UN littéral, donc elle ne peut pas exiger
+# « `from dist:` ET un 5xx sur la même ligne ». Elle ne distingue pas non plus un
+# 5xx d'un registre d'un 5xx rendu par NOTRE apache. Ce second cas reste
+# théorique — l'E2E n'interroge que `/health`, dont le code attendu est vérifié
+# par `e2e_wait_for_http`, qui échoue en NOMMANT le code observé.
 # -----------------------------------------------------------------------------
 e2e_infrastructure_signatures() {
     cat <<'SIGNATURES'
@@ -75,6 +112,16 @@ Cannot connect to the Docker daemon
 no space left on device
 address already in use
 port is already allocated
+502 Bad Gateway
+503 Service Unavailable
+504 Gateway Time-out
+504 Gateway Timeout
+HTTP/1.1 502
+HTTP/1.1 503
+HTTP/1.1 504
+HTTP/2 502
+HTTP/2 503
+HTTP/2 504
 SIGNATURES
 }
 
