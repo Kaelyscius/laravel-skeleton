@@ -450,6 +450,195 @@ it('distingue les CINQ états sur un arbre RÉEL, pas sur une lecture', function
     expect($result['status'])->toBe(0);
 });
 
+it('n’ARRACHE PAS l’arbre à l’hôte : seuls `storage/` et `bootstrap/cache/` changent de main', function (): void {
+    /*
+     * 🔴 CE GARDE EXISTE PARCE QUE LE PREMIER NIGHTLY RÉELLEMENT ABOUTI EST MORT
+     * ICI (run 32742873104, runner GitHub nu). L'entrypoint faisait
+     * `find "$APP_ROOT" -not -user www-data … -exec chown www-data:www-data {} +`
+     * — il confisquait TOUT l'arbre vers l'uid de `www-data`, soit **1000** dans
+     * cette image. Or `scripts/install-lockfile.sh` tourne SUR L'HÔTE, et l'hôte
+     * d'un runner GitHub est **1001** : son `mktemp` dans
+     * `src/.install-state/`, devenu propriété de 1000, était refusé. Onze
+     * modules réussis, Laravel installé, et l'installation mourait à sa
+     * dernière étape.
+     *
+     * ⛔ ET RIEN NE POUVAIT L'ATTRAPER, POUR LA RAISON HABITUELLE : sur la
+     * machine de développement (WSL2) l'hôte EST uid 1000, exactement
+     * `www-data`. Le conflit n'y existe pas. Sixième fois dans cet epic que
+     * l'environnement de mesure décide du verdict — après BusyBox/GNU,
+     * bash/ash, `timeout` 124/143, `jq` absent et un relecteur en root. Cette
+     * fois : **1000 contre 1001**.
+     *
+     * ⚖️ CE QUE CETTE SONDE MESURE, EXACTEMENT — et ce qu'elle ne mesure pas.
+     * Elle stube `chown` sur le `PATH` et ENREGISTRE chaque appel, puis applique
+     * ces appels à un modèle de propriété dont l'uid de départ est **1001**,
+     * délibérément DIFFÉRENT de celui de `www-data`. C'est l'uid qui est
+     * ÉPINGLÉ, au lieu d'être hérité de la machine qui lance le test.
+     * ⚠️ Elle ne relit pas la propriété réelle des inodes, et c'est dit plutôt
+     * que sous-entendu : les tests tournent en uid 1000 — donc `chown`
+     * vers `www-data` y serait un no-op indiscernable — et un second uid
+     * exigerait des privilèges (mesuré le 2026-08-24 : `unshare -Ur` rend
+     * « Operation not permitted » dans ce conteneur). Le modèle est donc la
+     * mesure la plus fidèle disponible, et il porte sur ce qui décide vraiment :
+     * QUELS CHEMINS l'entrypoint demande à changer de main.
+     */
+    $result = ShellProbe::run(<<<'BASH'
+        set -e
+        bac="$(mktemp -d)"
+        case "$bac" in
+            /tmp/*) ;;
+            *) echo "BAC_HORS_TMP=[$bac]"; exit 9 ;;
+        esac
+
+        mkdir -p "$bac/bin" "$bac/supervisor"
+        mkdir -p "$bac/app/storage/logs" "$bac/app/bootstrap/cache" \
+                 "$bac/app/.install-state" "$bac/app/config" "$bac/app/public"
+        touch "$bac/app/artisan" "$bac/app/composer.json" "$bac/app/.env" \
+              "$bac/app/.install-state/lock.yml" "$bac/app/config/app.php"
+
+        JOURNAL_CHOWN="$bac/chown.txt"; export JOURNAL_CHOWN
+        JOURNAL_FIND="$bac/find.txt"; export JOURNAL_FIND
+        : > "$JOURNAL_CHOWN"
+        : > "$JOURNAL_FIND"
+
+        # `chown` ET `find` sont stubés, et TOUS DEUX enregistrent.
+        # 🔴 STUBER `chown` SEUL NE SUFFISAIT PAS, et la mutation l'a prouvé :
+        # le défaut passait par `find … -not -user www-data -exec chown …`, dont
+        # le PRÉDICAT est évalué contre les inodes réels. Les tests tournant en
+        # uid 1000 — c'est-à-dire `www-data` — le filtre ne matchait RIEN, `find`
+        # n'appelait jamais `chown`, et la sonde restait verte sur le défaut
+        # exact qu'elle existe pour attraper. C'était l'uid de la machine qui
+        # décidait, dans le garde écrit contre ce travers.
+        printf '%s\n' \
+            '#!/bin/sh' \
+            'echo "$*" >> "$JOURNAL_CHOWN"' \
+            'exit 0' \
+            > "$bac/bin/chown"
+        printf '%s\n' \
+            '#!/bin/sh' \
+            'echo "$*" >> "$JOURNAL_FIND"' \
+            'exit 0' \
+            > "$bac/bin/find"
+        printf '%s\n' '#!/bin/sh' 'exit 0' > "$bac/bin/nc"
+        printf '%s\n' '#!/bin/sh' 'exit 0' > "$bac/bin/php"
+        chmod +x "$bac/bin/chown" "$bac/bin/find" "$bac/bin/nc" "$bac/bin/php"
+
+        PATH="$bac/bin:$PATH"; export PATH
+
+        statut=0
+        APP_ROOT="$bac/app" SUPERVISOR_LOG_DIR="$bac/supervisor" \
+        BOOTABLE_MARKER="$bac/temoin" APP_ENV=local \
+            "$SH" "$ENTRYPOINT" true > "$bac/sortie" 2>&1 || statut=$?
+
+        echo "STATUT=$statut"
+        echo "RACINE=$bac/app"
+        echo "=== CHOWNS ==="
+        sed "s|$bac/app|<APP>|g" "$JOURNAL_CHOWN"
+        echo "=== FINDS ==="
+        sed "s|$bac/app|<APP>|g" "$JOURNAL_FIND"
+        echo "=== FIN ==="
+
+        rm -rf "$bac"
+        BASH
+        , entrypointPhp(), 60, ShellProbe::posixShell()['path']);
+
+    expect($result['output'])
+        ->toContain('STATUT=0');
+
+    if (preg_match('/=== CHOWNS ===\n(.*)=== FINDS ===\n(.*)=== FIN ===/s', $result['output'], $bloc) !== 1) {
+        throw new RuntimeException("Blocs CHOWNS/FINDS absents :\n" . $result['output']);
+    }
+
+    $lignes = static fn (string $brut): array => array_values(array_filter(
+        array_map('trim', explode("\n", $brut)),
+        static fn (string $l): bool => $l !== '',
+    ));
+
+    $appels = $lignes($bloc[1]);
+
+    /*
+     * ⛔ UN `find … -exec chown …` EST UNE SAISIE RÉCURSIVE, et c'est ainsi
+     * qu'il est modélisé — sous la PRÉMISSE ÉPINGLÉE que l'hôte n'est pas
+     * `www-data`. C'est précisément la prémisse du runner (1001 contre 1000),
+     * et sous elle le filtre `-not -user www-data` matche TOUT l'arbre.
+     */
+    foreach ($lignes($bloc[2]) as $find) {
+        if (! str_contains($find, 'chown')) {
+            continue;
+        }
+
+        $mots = preg_split('/\s+/', $find) ?: [];
+
+        foreach ($mots as $mot) {
+            if (str_starts_with($mot, '<APP>')) {
+                $appels[] = '-R www-data:www-data ' . $mot;
+
+                break;
+            }
+        }
+    }
+
+    // Anti-vacuité : l'entrypoint ajuste bien QUELQUE CHOSE. Un stub jamais
+    // appelé rendrait tout le reste vrai pour la pire des raisons.
+    expect($appels)
+        ->not->toBe([], 'Aucun `chown` : la sonde ne mesure rien.');
+
+    /*
+     * ⛔ LE MODÈLE DE PROPRIÉTÉ, AVEC UN UID DE DÉPART ÉPINGLÉ À 1001.
+     * On applique les appels enregistrés, puis on regarde qui possède quoi.
+     */
+    $possesseur = [
+        '<APP>' => '1001',
+        '<APP>/artisan' => '1001',
+        '<APP>/composer.json' => '1001',
+        '<APP>/.env' => '1001',
+        '<APP>/config/app.php' => '1001',
+        '<APP>/.install-state' => '1001',
+        '<APP>/.install-state/lock.yml' => '1001',
+        '<APP>/storage' => '1001',
+        '<APP>/storage/logs' => '1001',
+        '<APP>/bootstrap/cache' => '1001',
+    ];
+
+    foreach ($appels as $appel) {
+        $mots = preg_split('/\s+/', $appel) ?: [];
+        $cibles = array_values(array_filter(
+            $mots,
+            static fn (string $m): bool => str_starts_with($m, '<APP>'),
+        ));
+
+        foreach ($cibles as $cible) {
+            foreach (array_keys($possesseur) as $chemin) {
+                if ($chemin === $cible || str_starts_with($chemin, $cible . '/')) {
+                    $possesseur[$chemin] = 'www-data(1000)';
+                }
+            }
+        }
+    }
+
+    // ⛔ CE QUI DOIT RESTER À L'HÔTE. `.install-state/` est le chemin exact qui
+    // a tué le nightly : `install-lockfile.sh` y écrit DEPUIS L'HÔTE.
+    foreach ([
+        '<APP>',
+        '<APP>/artisan',
+        '<APP>/composer.json',
+        '<APP>/.env',
+        '<APP>/config/app.php',
+        '<APP>/.install-state',
+        '<APP>/.install-state/lock.yml',
+    ] as $chemin) {
+        expect($possesseur[$chemin])
+            ->toBe('1001', "L’entrypoint arrache « {$chemin} » à l’hôte : `install-lockfile.sh` y écrira depuis l’hôte et sera REFUSÉ.");
+    }
+
+    // …et ce qui doit bien changer de main, sinon le conteneur ne peut plus
+    // écrire ses journaux ni ses caches : anti-vacuité de l'assertion inverse.
+    foreach (['<APP>/storage', '<APP>/storage/logs', '<APP>/bootstrap/cache'] as $chemin) {
+        expect($possesseur[$chemin])
+            ->toBe('www-data(1000)', "« {$chemin} » n’est plus ajusté : le conteneur ne pourra pas y écrire.");
+    }
+});
+
 it('reconnaît le dépassement SOUS LES DEUX `timeout`, GNU comme BusyBox', function (): void {
     /*
      * 🔴 LE BRAS `143` N'ÉTAIT ÉPROUVÉ NULLE PART OÙ LA CI MESURE.

@@ -93,6 +93,26 @@
 > branche ». Rien n'assertait que le témoin soit **écrit**. Deux sondes ajoutées, mutation rejouée
 > dans les deux sens, rouge.
 >
+> ✅ **PREMIER NIGHTLY RÉELLEMENT ABOUTI (run `32742873104`, runner GitHub nu).** L'installation
+> Laravel PASSE sur un clone neuf pour la première fois de l'histoire du dépôt : 11 modules,
+> Laravel 13.24.0, PHP 8.5.9, **4m02**. Le redémarrage a rendu « ✓ témoin renouvelé » en conditions
+> réelles, et le diagnostic des 80 lignes s'affiche enfin.
+>
+> 🔴 **MAIS LE RUN EST ROUGE, ET LA CAUSE EST UN CORRECTIF DE CETTE STORY.** Échec à
+> `install-lockfile` : `mktemp` refusé dans `src/.install-state/`. Ce script tourne **sur l'hôte** ;
+> l'hôte d'un runner est **1001** ; et le bloc de permissions de l'entrypoint confisquait TOUT
+> l'arbre vers `www-data` = **1000**. L'hôte perdait la propriété de son propre arbre.
+> **Sixième fois dans cet epic que l'environnement de mesure décide du verdict** — après BusyBox/GNU,
+> `bash`/`ash`, `timeout` 124/143, `jq` absent, un relecteur en root. Cette fois : **1000 contre
+> 1001**, invisible sur WSL2 où l'hôte EST 1000.
+> ✅ Le `chown` récursif de l'arbre est supprimé : seuls `storage/` et `bootstrap/cache/` sont
+> ajustés. Le code, la configuration et `.install-state/` restent à l'hôte.
+>
+> 🎁 **Et le garde écrit contre ce travers l'a d'abord reproduit** : il ne stubait que `chown`, alors
+> que le défaut passe par `find -not -user www-data -exec chown` — prédicat évalué sur les inodes
+> réels, donc inerte sous un test tournant en uid 1000. `find` est stubé lui aussi, et la mutation
+> rougit.
+>
 > ⚠️ **DEUX AC RESTENT OUVERTES, ET AUCUNE N'A ÉTÉ FERMÉE SUR UNE LECTURE DE CODE.**
 > Le verdict de cette story est **un run réel**, et aucun n'a pu être lancé : le travail n'est pas
 > poussé, `workflow_dispatch` n'exécute que la version présente sur la branche par défaut. Restent
@@ -104,7 +124,7 @@
 > `nightly-freshness` en bloquant (geste 2, plus bas) **n'a pas été faite** : la faire avant un
 > premier vert installerait dans le verdict global le rouge permanent que cette section décrit.
 >
-> 🧪 **Campagne de mutation — 65 rouges observés, 9 témoins neutres verts.**
+> 🧪 **Campagne de mutation — 68 rouges observés, 10 témoins neutres verts.**
 > **Environnements nommés** (règle désormais ÉCRITE dans `docs/process/03-boucle-qualite.md`
 > §Étape 5, elle ne vivait que dans ce journal et dans `ADR-0013`) :
 > les 25 mutations Pest ont été appliquées sur l'arbre hôte et **exécutées dans le conteneur
@@ -131,7 +151,7 @@
 > (`github.actor == '…'`) a été ajouté ; la mutation rougit. Le motif est constant dans ce
 > projet : **un garde ne vaut que par le chemin que son test emprunte réellement.**
 >
-> 📊 **482 tests Pest · 49 tests Bats · ratchet 0/0/0.**
+> 📊 **483 tests Pest · 49 tests Bats · ratchet 0/0/0.**
 
 > 🆕 **Story 2.4 implémentée, revues 1 et 2 traitées (≈60 + 31 constats).**
 > **423 tests Pest · 40 tests Bats · ratchet 0/0/0 · 87 mutations rejouées (60 + 27), toutes rouges

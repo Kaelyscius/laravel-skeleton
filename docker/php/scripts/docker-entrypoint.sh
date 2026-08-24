@@ -169,13 +169,39 @@ echo -e "${YELLOW}🚀 Démarrage du container PHP...${NC}"
 wait_for_service postgres 5432
 wait_for_service redis 6379
 
-# Corriger les permissions pour le développement (compatibilité PHPStorm/IDE)
-# www-data dans le container = UID 1000 = même que l'utilisateur hôte
+# ─────────────────────────────────────────────────────────────────────────────
+# PERMISSIONS : ON N'AJUSTE QUE CE QUE LE CONTENEUR DOIT ÉCRIRE.
+#
+# 🔴 CE BLOC CONFISQUAIT L'ARBRE ENTIER, ET C'EST CE QUI A ROUGI LE PREMIER
+# NIGHTLY RÉELLEMENT ABOUTI (run 32742873104). Il faisait :
+#
+#     find "$APP_ROOT" -not -user www-data … -exec chown www-data:www-data {} +
+#
+# c'est-à-dire : « tout ce qui n'appartient pas à www-data devient www-data ».
+# `www-data` vaut UID **1000** dans cette image. Sur la machine de
+# développement documentée (WSL2/PhpStorm) l'hôte est AUSSI 1000 : le geste est
+# un no-op, et le défaut est invisible. Sur un runner GitHub, l'hôte est
+# **1001** — l'entrypoint retirait donc à l'hôte la propriété de son propre
+# arbre. `scripts/install-lockfile.sh` s'exécute SUR L'HÔTE (aucun `docker
+# exec`) : son `mktemp` dans `src/.install-state/`, désormais possédé par 1000,
+# était refusé, et l'installation mourait à sa dernière étape après avoir
+# réussi les onze modules.
+#
+# ⚖️ CE QUI DOIT ÊTRE ÉCRIVABLE PAR LE CONTENEUR EST CONNU ET COURT : `storage/`
+# et `bootstrap/cache/`. Le reste — le code, la configuration, `.install-state/`
+# — appartient à l'hôte et DOIT lui rester. On ajuste donc ces deux
+# répertoires-là, nommément, et rien d'autre.
+#
+# ⚠️ LE CONFORT WSL2/PhpStorm EST PRÉSERVÉ : quand l'hôte EST uid 1000, il l'est
+# déjà pour tout l'arbre — le `find` ne faisait rien pour lui. Ce qu'il
+# corrigeait réellement, ce sont les fichiers écrits en root PAR L'ENTRYPOINT,
+# et ceux-là vivent précisément dans `storage/` et `bootstrap/cache/`.
+# ⛔ Les args `UID`/`GID` de `docker-compose.yml` restent FIXES : les rendre
+# dynamiques serait la correction la plus profonde, mais elle change la
+# construction des images pour tout le monde et mérite son propre arbitrage.
+# ─────────────────────────────────────────────────────────────────────────────
 if [ -d "$APP_ROOT" ]; then
-    echo -e "${YELLOW}Correction des permissions pour le développement...${NC}"
-
-    # Corriger le propriétaire si nécessaire (www-data = UID 1000)
-    find "$APP_ROOT" -not -user www-data -not -path "*/vendor/*" -not -path "*/node_modules/*" -exec chown www-data:www-data {} + 2>/dev/null || true
+    echo -e "${YELLOW}Ajustement des permissions d'écriture du conteneur...${NC}"
 
     # S'assurer que les répertoires critiques ont les bonnes permissions
     if [ -d "$APP_ROOT/storage" ]; then
