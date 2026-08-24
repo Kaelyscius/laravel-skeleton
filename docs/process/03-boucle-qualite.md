@@ -295,6 +295,58 @@ Trois règles, payées chacune par une story :
   mutations avaient été observées avant un refactor du mécanisme de requête ;
   elles ne prouvaient plus rien sur le code livré.)
 
+**Deux règles de plus, ajoutées le 2026-08-24 (clôture de la story 2.4). Elles
+étaient PRATIQUÉES depuis la 2.3 mais n'étaient écrites nulle part — elles ne
+vivaient que dans `docs/ETAT.md` et `ADR-0013`, c'est-à-dire dans un journal et
+une décision, pas dans le mode d'emploi que quelqu'un ouvre pour faire le
+travail :**
+
+- **Nommer l'ENVIRONNEMENT de la mesure, à chaque rouge consigné.** Conteneur
+  `laravel-app_php` ? Runner `ubuntu-latest` nu ? Hôte WSL2 ? Ce n'est pas de la
+  méticulosité : la story 2.3 a produit un garde **rouge sous GNU coreutils et
+  vert sous BusyBox `cp`**, pour une raison étrangère à son sujet — et un autre
+  test s'est révélé vert en local, rouge en CI (run 32627114533), parce qu'il
+  mesurait une branche que seul le conteneur emprunte. Une mutation dont on ne
+  sait pas *où* elle a rougi ne prouve rien sur la machine d'à côté. Corollaire :
+  quand l'environnement change le verdict, on l'**épingle** dans le test (voir
+  `ShellProbe::pinnedEnvironment()`), on ne le subit pas.
+
+- **Inclure un TÉMOIN NEUTRE, attendu VERT.** Une modification cosmétique du
+  code touché — un libellé que rien n'assertait, un commentaire, une couleur —
+  qu'on rejoue avec les autres. S'il rougit, la campagne mesure autre chose que
+  ce qu'elle croit (un test trop large, une suite non déterministe) ; s'il reste
+  vert, il donne au reste des rouges leur valeur : ils rougissent *pour leur
+  sujet*, pas parce que toucher au fichier suffit à faire tomber la suite. Une
+  campagne sans témoin ne distingue pas un garde-fou d'un détecteur de diff.
+
+- **Épingler le BINAIRE quand c'est lui qui rend le verdict.** (Clôture 2.4,
+  2ᵉ revue : une sonde déclenchait un vrai dépassement de `timeout`, donc lisait
+  le code de la machine — 124 sur le runner GNU, 143 sous le BusyBox de l'image.
+  Le bras qui compte en PRODUCTION n'était éprouvé que dans la boucle locale, et
+  le supprimer restait vert en CI. Un stub sur le `PATH` exerce les deux, partout.)
+
+- **Nommer l'INTERPRÉTEUR, pas seulement la machine.** (Clôture 2.4 : onze
+  sondes d'un script `#!/bin/sh` tournaient sous `bash` ; un `local -a` glissé
+  dedans les laissait toutes VERTES alors que le script meurt en « syntax
+  error » sous le BusyBox de l'image. Et le corriger a immédiatement révélé que
+  `timeout` rend **124** sous GNU coreutils et **143** sous BusyBox — un état
+  écrit le matin même, inatteignable en production. « Environnement de la
+  mesure » veut dire : quel binaire exécute le sujet.)
+
+- **Vérifier par quel CHEMIN le test atteint le refus qu'il prétend garder.**
+  (Clôture 2.4 : un test « l'évaluateur refuse ce qu'il ne sait pas lire »
+  n'exerçait que des expressions MAL FORMÉES, rejetées dès le découpage en
+  jetons — la résolution d'identifiant qu'il gardait n'était jamais atteinte, et
+  la mutation correspondante restait verte. Un garde ne vaut que par le chemin
+  que son test emprunte réellement.)
+
+- **Muter une LIGNE DE RECETTE `make` entière, jamais une instruction glissée
+  avant elle.** (Clôture 2.4 : une mutation « la post-condition n'est plus
+  vérifiée », écrite en insérant `@exit 0` avant la boucle d'attente, est restée
+  **verte** — chaque ligne de recette est un shell distinct, donc `exit 0` ne
+  terminait que sa propre ligne et `make` enchaînait sur la suivante. La
+  mutation ne mutait rien. Réécrite en retirant le bloc entier, elle rougit.)
+
 Une mutation qui laisse tout vert n'est pas un échec de la campagne : c'est sa
 trouvaille. La 1.10a en a eu une — un test nommé « la limite est de 5 » restait
 vert avec la limite à 500, parce qu'il comptait les coups portés au seau et non

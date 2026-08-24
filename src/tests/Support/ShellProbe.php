@@ -165,6 +165,142 @@ final class ShellProbe
     }
 
     /**
+     * L'interpréteur POSIX RÉEL de cette machine, avec son IDENTITÉ.
+     *
+     * 🔴 POURQUOI CETTE MÉTHODE EXISTE. Toutes les sondes de ce dépôt lançaient
+     * `bash`. Or `docker/php/scripts/docker-entrypoint.sh` porte `#!/bin/sh` et
+     * l'image est `php:8.5-fpm-alpine`, où `/bin/sh` est **BusyBox**. Mesuré :
+     * un `local -a _probe=(a b)` glissé dans `detect_laravel_state` laisse les
+     * 11 sondes VERTES sous bash, et fait mourir le script en « syntax error »
+     * sous BusyBox — donc boucle de redémarrage, le défaut même que la story
+     * vient de corriger. C'est le motif de la story 2.3 (un garde mesuré sous
+     * GNU coreutils, faux sous BusyBox) reproduit dans le garde censé le clore.
+     *
+     * ⚖️ L'IDENTITÉ EST RENDUE, PAS DEVINÉE. L'appelant peut la NOMMER dans son
+     * rapport — « nommer l'environnement de la mesure » ne veut pas dire nommer
+     * la machine, mais l'interpréteur qui décide du verdict. Et un `/bin/sh` qui
+     * serait en fait `bash` doit pouvoir être REFUSÉ par le test plutôt que
+     * mesuré en croyant mesurer autre chose.
+     *
+     * @return array{path: string, name: string}
+     */
+    public static function posixShell(): array
+    {
+        $path = '/bin/sh';
+        $reel = realpath($path);
+
+        return [
+            'path' => $path,
+            'name' => $reel === false ? 'introuvable' : basename($reel),
+        ];
+    }
+
+    /**
+     * Les prérequis d'une cible, LUS DANS LA BASE DE `make`, pas dans le fichier.
+     *
+     * ⛔ POURQUOI PAS UN `preg_match` SUR LE MAKEFILE. Une regex lit du TEXTE ;
+     * `make -pRrq :` rend le graphe que `make` va réellement parcourir, après
+     * expansion des variables, des `include` et des conditionnelles. Un
+     * prérequis posé par variable, ou une règle rendue inatteignable, se voient
+     * ici et pas là-bas.
+     *
+     * ⚠️ ET C'EST UNE LECTURE, PAS UNE EXÉCUTION. `-p` imprime la base et `q :`
+     * demande une cible inexistante : aucune recette n'est jouée. Un `make -n`
+     * aurait été bien pire — `make` EXÉCUTE les lignes contenant `$(MAKE)`
+     * même en simulation, et `check_container` en contient une qui démarre les
+     * conteneurs.
+     *
+     * @return list<string>
+     */
+    public static function makefilePrerequisites(string $target): array
+    {
+        $command = sprintf(
+            'cd %s && make -pRrq : 2>/dev/null',
+            escapeshellarg(self::repoRoot()),
+        );
+
+        $output = [];
+        $status = 0;
+        exec($command, $output, $status);
+
+        foreach ($output as $line) {
+            if (! str_starts_with($line, $target . ':')) {
+                continue;
+            }
+
+            $reste = substr($line, strlen($target) + 1);
+            $valeurs = preg_split('/\s+/', trim($reste)) ?: [];
+
+            return array_values(array_filter(
+                $valeurs,
+                static fn (string $value): bool => $value !== '',
+            ));
+        }
+
+        throw new RuntimeException("Cible « {$target} » absente de la base de make.");
+    }
+
+    /**
+     * La RECETTE d'une cible, telle que `make` la stocke.
+     *
+     * Sert aux cibles qui pilotent depuis leur recette (`$(MAKE) …`) plutôt que
+     * par leurs prérequis : le graphe ne les voit pas, et c'est précisément
+     * pourquoi le Makefile les énumère à la main dans
+     * `COMPOSITE_RECIPE_TARGETS`.
+     */
+    public static function makefileRecipe(string $target): string
+    {
+        $command = sprintf(
+            'cd %s && make -pRrq : 2>/dev/null',
+            escapeshellarg(self::repoRoot()),
+        );
+
+        $output = [];
+        $status = 0;
+        exec($command, $output, $status);
+
+        $dans = false;
+        $commencee = false;
+        $lignes = [];
+
+        foreach ($output as $line) {
+            if (! $dans) {
+                if (str_starts_with($line, $target . ':')) {
+                    $dans = true;
+                }
+
+                continue;
+            }
+
+            // ⚠️ `make -p` INTERCALE SES PROPRES COMMENTAIRES entre la règle et
+            // sa recette (« # Phony target », « # recipe to execute … »).
+            // S'arrêter à la première ligne non tabulée coupait donc AVANT
+            // d'avoir lu la moindre ligne de recette.
+            if (str_starts_with($line, '#')) {
+                continue;
+            }
+
+            // La recette est indentée par une TABULATION.
+            if (str_starts_with($line, "\t")) {
+                $commencee = true;
+                $lignes[] = substr($line, 1);
+
+                continue;
+            }
+
+            if ($commencee || trim($line) === '') {
+                break;
+            }
+        }
+
+        if ($lignes === []) {
+            throw new RuntimeException("Recette de « {$target} » introuvable dans la base de make.");
+        }
+
+        return implode("\n", $lignes);
+    }
+
+    /**
      * Les chaînes d'installation COMPOSITES, dérivées comme le Makefile les
      * dérive : par le graphe de dépendances, jamais par une énumération.
      *
@@ -358,12 +494,12 @@ final class ShellProbe
      * @param  array<string, string>  $env
      * @return array{status: int, output: string, seconds: float}
      */
-    public static function run(string $bash, array $env = [], int $timeout = 30): array
+    public static function run(string $bash, array $env = [], int $timeout = 30, ?string $interpreter = null): array
     {
         $script = self::writeTempFile('probe-', '.sh', $bash);
 
         try {
-            return self::runFile($script, $env, $timeout);
+            return self::runFile($script, $env, $timeout, $interpreter);
         } finally {
             @unlink($script);
         }
@@ -392,8 +528,12 @@ final class ShellProbe
      * @param  array<string, string>  $env
      * @return array{status: int, stdout: string, stderr: string}
      */
-    public static function runSeparated(string $bash, array $env = [], int $timeout = 30): array
-    {
+    public static function runSeparated(
+        string $bash,
+        array $env = [],
+        int $timeout = 30,
+        ?string $interpreter = null,
+    ): array {
         $script = self::writeTempFile('probe-split-', '.sh', $bash);
         $out = self::writeTempFile('probe-out-', '.txt', '');
         $err = self::writeTempFile('probe-err-', '.txt', '');
@@ -406,10 +546,11 @@ final class ShellProbe
             }
 
             $command = sprintf(
-                'cd %s && timeout %d env %s bash %s > %s 2> %s',
+                'cd %s && timeout %d env %s %s %s > %s 2> %s',
                 escapeshellarg(self::srcDir()),
                 $timeout,
                 $assignments,
+                escapeshellarg($interpreter ?? 'bash'),
                 escapeshellarg($script),
                 escapeshellarg($out),
                 escapeshellarg($err),
@@ -437,8 +578,12 @@ final class ShellProbe
      * @param  array<string, string>  $env
      * @return array{status: int, output: string, seconds: float}
      */
-    public static function runFile(string $absolutePath, array $env = [], int $timeout = 30): array
-    {
+    public static function runFile(
+        string $absolutePath,
+        array $env = [],
+        int $timeout = 30,
+        ?string $interpreter = null,
+    ): array {
         if (! is_file($absolutePath)) {
             throw new RuntimeException("Script shell introuvable : {$absolutePath}");
         }
@@ -453,11 +598,16 @@ final class ShellProbe
         // (`detect_working_directory` lit `pwd`), pas un décor. `2>&1` est
         // obligatoire depuis que `log()` écrit sur stderr — sans lui, chaque
         // `toContain()` lirait une sortie vide.
+        // ⚖️ L'INTERPRÉTEUR EST UN PARAMÈTRE, PAS UN LITTÉRAL — et son défaut
+        // reste `bash`, parce que la quasi-totalité des sujets de ce dépôt
+        // (`scripts/install.sh`, `scripts/lib/*.sh`) en exigent les tableaux.
+        // Ce qui porte `#!/bin/sh` se sonde sous `sh`, explicitement.
         $command = sprintf(
-            'cd %s && timeout %d env %s bash %s 2>&1',
+            'cd %s && timeout %d env %s %s %s 2>&1',
             escapeshellarg(self::srcDir()),
             $timeout,
             $assignments,
+            escapeshellarg($interpreter ?? 'bash'),
             escapeshellarg($absolutePath),
         );
 

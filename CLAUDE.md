@@ -61,7 +61,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make fix-permissions` - Fix file permissions for PhpStorm/IDE
 
 ### Laravel Development
-- `make install-dev-full` - **Installation complète recommandée** (build + up + Laravel + npm + SSL)
+- `make install-dev-full` - **Installation complète recommandée** (build + **SSL** + up + Laravel + npm + lockfile)
+  ⚠️ **`setup-ssl` passe AVANT `up-dev-full` depuis le 2026-08-24** : l'entrypoint apache sort en `1`
+  sans certificats (`docker/apache/scripts/docker-entrypoint.sh:23-33`) et `restart: unless-stopped`
+  le reboucle. L'ordre est gardé par `src/tests/Unit/InstallSentinelsTest.php`.
 - `make install-laravel` - Install Laravel with dependencies (containers déjà démarrés)
 - `make install-laravel DRY_RUN=true` - **Simulation** : rien n'est installé, aucune sentinelle
   écrite, aucun `chown`/`chmod` appliqué. Les étapes 2/5 à 5/5 de la recette (permissions
@@ -147,7 +150,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make setup-interactive` - Interactive environment setup
 - `make setup-dev` - Development environment setup
 - `make setup-prod` - Production environment setup
-- `make install-dev-full` - Full dev install (build + up + Laravel + npm + SSL)
+- `make install-dev-full` - Full dev install (build + SSL + up + Laravel + npm + lockfile)
 - `make update-deps` - Update Composer + NPM dependencies
 
 ## Project Architecture

@@ -54,6 +54,21 @@ on:
       # d'infrastructure sans qu'aucun run ne démarre — le nightly, lui, ne
       # tourne qu'une fois par nuit et ne le dirait que le lendemain.
       - 'tests/bats/**'
+      # 🔴 TROIS CIBLES DE GARDE-FOUS VIVAIENT HORS DE CETTE LISTE (clôture 2.4).
+      #   • `docker/php/scripts/docker-entrypoint.sh` — `docker/apache/**` est
+      #     couvert depuis la 1.9, mais PAS son homologue php, alors que c'est
+      #     lui qui portait le défaut d'installation de clone neuf et qu'il est
+      #     désormais éprouvé par `src/tests/Unit/PhpEntrypointStateTest.php` ;
+      #   • `docker-compose*.yml` — le healthcheck, `restart: unless-stopped` et
+      #     les ports publiés que `tests/bats/unit` DÉRIVE de ces fichiers ;
+      #   • `.github/workflows/nightly.yml` — gardé par
+      #     `src/tests/Unit/WorkflowInputSafetyTest.php`, qui balaye tout le
+      #     répertoire des workflows : on pouvait donc casser le job d'alerte
+      #     sans qu'aucun run ne démarre. C'est le défaut exact déjà consigné
+      #     pour `scripts/install.sh`, reconduit deux crans plus loin.
+      - 'docker/php/scripts/docker-entrypoint.sh'
+      - 'docker-compose*.yml'
+      - '.github/workflows/nightly.yml'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main, develop]
@@ -96,6 +111,21 @@ on:
       # d'infrastructure sans qu'aucun run ne démarre — le nightly, lui, ne
       # tourne qu'une fois par nuit et ne le dirait que le lendemain.
       - 'tests/bats/**'
+      # 🔴 TROIS CIBLES DE GARDE-FOUS VIVAIENT HORS DE CETTE LISTE (clôture 2.4).
+      #   • `docker/php/scripts/docker-entrypoint.sh` — `docker/apache/**` est
+      #     couvert depuis la 1.9, mais PAS son homologue php, alors que c'est
+      #     lui qui portait le défaut d'installation de clone neuf et qu'il est
+      #     désormais éprouvé par `src/tests/Unit/PhpEntrypointStateTest.php` ;
+      #   • `docker-compose*.yml` — le healthcheck, `restart: unless-stopped` et
+      #     les ports publiés que `tests/bats/unit` DÉRIVE de ces fichiers ;
+      #   • `.github/workflows/nightly.yml` — gardé par
+      #     `src/tests/Unit/WorkflowInputSafetyTest.php`, qui balaye tout le
+      #     répertoire des workflows : on pouvait donc casser le job d'alerte
+      #     sans qu'aucun run ne démarre. C'est le défaut exact déjà consigné
+      #     pour `scripts/install.sh`, reconduit deux crans plus loin.
+      - 'docker/php/scripts/docker-entrypoint.sh'
+      - 'docker-compose*.yml'
+      - '.github/workflows/nightly.yml'
       - '.github/workflows/ci.yml'
   workflow_dispatch:
 

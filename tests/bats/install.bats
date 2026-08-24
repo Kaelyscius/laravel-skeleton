@@ -169,14 +169,13 @@ setup_file() {
     # écrit son détail (`/tmp/laravel-install-*.log`).
     # ⛔ LE STATUT N'EST PLUS AVALÉ (revue 1) : un `|| true` laissait un journal
     # VIDE et le grep « module fautif » ne rapportait rien SANS DIRE POURQUOI.
-    if ! docker exec "${E2E_PROJECT}_php" \
-        sh -c 'cat /tmp/laravel-install-*.log 2>/dev/null' \
-        > "$E2E_REPORT_DIR/install-container.log" 2> "$E2E_REPORT_DIR/install-container.err"; then
-        {
-            echo "⚠️ Journal du conteneur INDISPONIBLE : « docker exec ${E2E_PROJECT}_php » a échoué."
-            echo "   (conteneur absent ou arrêté — l'installation s'est probablement arrêtée avant de le démarrer)"
-            cat "$E2E_REPORT_DIR/install-container.err" 2> /dev/null
-        } >> "$E2E_REPORT_DIR/install-container.log"
+    # 🔁 LA CAPTURE VIT DÉSORMAIS DANS `lib/e2e.bash` (clôture 2.4), avec un
+    # REPLI sur `docker logs` quand `docker exec` échoue — le cas exact d'un
+    # conteneur php en boucle de redémarrage, qui est précisément la panne que
+    # cette story corrige. La source retenue est NOMMÉE dans le rapport, et le
+    # fichier n'est jamais vide. Éprouvée par `tests/bats/unit/e2e-lib.bats`.
+    if ! e2e_capture_container_log "${E2E_PROJECT}_php" "$E2E_REPORT_DIR/install-container.log"; then
+        echo "⚠️ Aucun journal du conteneur ${E2E_PROJECT}_php n'a pu être capturé — la bannière écrite dans install-container.log dit pourquoi." >&3
     fi
 
     # Étiquetage : un échec dont l'UN des journaux porte une signature de panne
@@ -248,7 +247,16 @@ skip_unless_installed() {
 
     if [ "$status_recorded" != "0" ]; then
         echo "── 80 dernières lignes du journal d'installation ──" >&2
-        tail -n 80 "$E2E_REPORT_DIR/install.log" 2> /dev/null >&2 || echo "(journal absent)" >&2
+
+        # 🔴 L'ORDRE DES REDIRECTIONS JETAIT LE DIAGNOSTIC. La rédaction
+        # précédente était `tail … 2> /dev/null >&2` : le shell applique de
+        # GAUCHE À DROITE, donc fd2 pointait DÉJÀ sur /dev/null quand `>&2` l'a
+        # dupliqué dans fd1. La sortie de `tail` partait intégralement dans
+        # /dev/null — reproduit le 2026-08-24 sur l'hôte (bash 5.2, WSL2).
+        # ⚖️ LA LECTURE VIT DÉSORMAIS DANS `lib/e2e.bash`, où `tests/bats/unit/`
+        # peut MESURER que les lignes sortent bien — un ordre de redirections
+        # « qui a l'air juste » est exactement ce qui a produit le défaut.
+        e2e_print_log_tail "$E2E_REPORT_DIR/install.log" 80 >&2 || true
 
         if [ -f "$E2E_REPORT_DIR/INFRASTRUCTURE_FAILURE" ]; then
             echo "⚠️ Échec étiqueté INFRASTRUCTURE :" >&2
