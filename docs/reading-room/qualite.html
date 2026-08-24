@@ -254,10 +254,10 @@
         <table>
           <thead><tr><th>Suite</th><th class="mono">Fichiers</th><th class="mono">Déclarations</th><th>Ce qu'elle garde</th></tr></thead>
           <tbody>
-            <tr><td><b>Unit</b></td><td class="num">15</td><td class="num">150</td><td>Invariants du dépôt : autoload, couplage inter-modules, profils Docker, primitives shell, sentinelles d'installation, référents documentaires.</td></tr>
+            <tr><td><b>Unit</b></td><td class="num">17</td><td class="num">234</td><td>Invariants du dépôt : autoload, couplage inter-modules, profils Docker, primitives shell, sentinelles d'installation, référents documentaires.</td></tr>
             <tr><td><b>Feature</b></td><td class="num">23</td><td class="num">271</td><td>Le comportement réel : accès au panneau, activation des modules, multi-locataire, sondes de santé, composants Blade, polices, tokens.</td></tr>
             <tr><td><b>Browser</b></td><td class="num">5</td><td class="num">34</td><td>Ce qu'un navigateur seul peut dire : cascade CSS réelle, polices effectivement chargées, pseudo-états, rafraîchissement client.</td></tr>
-            <tr><td><b>Bats</b></td><td class="num">2</td><td class="num">46</td><td>Le shell et l'installation de bout en bout — hors du conteneur, parce qu'ils pilotent Docker et l'hôte.</td></tr>
+            <tr><td><b>Bats</b></td><td class="num">3</td><td class="num">64</td><td>Le shell et l'installation de bout en bout — hors du conteneur, parce qu'ils pilotent Docker et l'hôte.</td></tr>
           </tbody>
         </table>
       </div>
@@ -265,7 +265,7 @@
         <p><b>Pourquoi la suite navigateur n'est pas dans <code>phpunit.xml</code>.</b> C'est délibéré : sinon <code>php artisan test</code> exigerait un Chromium en intégration continue <em>et en production</em>. Elle se lance par <code>make test-browser</code>, dans un conteneur dédié au profil <code>test</code>, et son verdict se lit dans le rapport JUnit — pas dans le code de sortie.</p>
       </div>
       <div class="note warn">
-        <p style="margin-bottom:0"><b>⚠️ Ces nombres sont des <em>déclarations</em>, pas des <em>exécutions</em>.</b> Un compte statique de <code>it(</code> et <code>test(</code> ne vaut pas un compte d'exécution : les jeux de données en démultiplient, les tests conditionnels en retirent. Le dernier relevé d'exécution est de <b>424 tests Pest et 2 266 assertions</b>, mesuré le 2026-08-24. <b>Le seul chiffre qui engage est celui que <code>make test</code> imprime.</b></p>
+        <p style="margin-bottom:0"><b>⚠️ Ces nombres sont des <em>déclarations</em>, pas des <em>exécutions</em>.</b> Un compte statique de <code>it(</code> et <code>test(</code> ne vaut pas un compte d'exécution : les jeux de données en démultiplient, les tests conditionnels en retirent. Le dernier relevé d'exécution est de <b>507 tests Pest et 2 778 assertions</b>, mesuré le 2026-08-24. <b>Le seul chiffre qui engage est celui que <code>make test</code> imprime.</b></p>
       </div>
     </div>
 
@@ -345,10 +345,10 @@
 
       <rect class="nb-mut" x="20" y="108" width="500" height="60" rx="8"/>
       <text class="lbl" x="34" y="130">Nightly freshness — « le garde-fou tourne-t-il ? »</text>
-      <text class="lbl-s" x="34" y="150">lit la date ET la conclusion du dernier run nocturne : « il tourne » n'est pas « il passe »</text>
-      <path class="edge-dash" d="M520 138 H 610 V 96" marker-end="url(#ac)"/>
-      <text class="lbl-s" x="530" y="132" style="fill:var(--warn)">hors des dépendances du résumé</text>
-      <text class="lbl-s" x="530" y="148" style="fill:var(--text-3)">tant que le 1er nocturne n'existe pas</text>
+      <text class="lbl-s" x="34" y="150">date + conclusion du dernier nocturne · tolère une panne AMONT si un vert existe dans les 3 j</text>
+      <path class="edge" d="M520 138 H 610 V 96" marker-end="url(#ac)"/>
+      <text class="lbl-s" x="530" y="132" style="fill:var(--ok)">dans le verdict global</text>
+      <text class="lbl-s" x="530" y="148" style="fill:var(--text-3)">depuis le 1er nocturne vert</text>
 
       <text class="lbl-t" x="20" y="196">nightly.yml — 03:17 chaque nuit · 90 min de plafond</text>
       <rect class="nb-core" x="20" y="206" width="330" height="66" rx="8"/>
@@ -388,7 +388,8 @@
 
   <div class="callout">
     <b>⚖️ Une décision d'arbitrage qui mérite d'être lue</b>
-    <p style="margin-bottom:0">Le job « nightly freshness » est <b>volontairement hors des dépendances du résumé de CI</b> tant que le premier nocturne n'existe pas. Motif : <b>un rouge attendu en permanence masque une régression réelle</b> — l'œil s'habitue, et la porte cesse de garder. La bascule en bloquant est une étape écrite, à faire juste après le premier passage nocturne réussi.</p>
+    <p>Le job « nightly freshness » a été livré <b>volontairement hors des dépendances du résumé de CI</b>, tant que le premier nocturne n'existait pas. Motif : <b>un rouge attendu en permanence masque une régression réelle</b> — l'œil s'habitue, et la porte cesse de garder. La bascule était une étape écrite ; elle a été faite le 2026-08-24, après le premier passage nocturne réussi.</p>
+    <p style="margin-bottom:0"><b>⚠️ Et la bascule seule aurait déplacé la panne au lieu de l'éviter.</b> Un passage nocturne avait rougi sur une erreur <code>504</code> d'un registre amont — étiquetée « installeur », faute de signature reconnue. Rendue bloquante en l'état, la porte aurait rougi sur <b>tous les envois suivants</b> après n'importe quelle panne de réseau. Trois correctifs, dans cet ordre : reconnaître les pannes amont, publier la cause sous un <b>nom d'artefact</b> lisible sans téléchargement, puis tolérer un rouge amont <b>à condition</b> qu'un passage vert existe dans les trois jours. Une panne durable finit par rougir : la tolérance n'est pas un interrupteur. Éprouvé par <a class="ref" href="../../src/tests/Unit/WorkflowInputSafetyTest.php">WorkflowInputSafetyTest</a>, qui <b>exécute</b> le job contre une API simulée au lieu d'en relire le texte. La commande <code>/bmad-code-review</code> a servi de dernière passe.</p>
   </div>
 
   <h3 class="sub">L'écart entre la CI décrite et la CI réelle</h3>

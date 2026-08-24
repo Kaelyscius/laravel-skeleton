@@ -723,8 +723,8 @@ PHP Fatal error: require(): Failed opening required vendor/autoload.php
 }
 
 @test "la BANNIÈRE elle-même ne porte aucune signature d'infrastructure" {
-    # 🔴 TÉMOIN : si le texte du repli contenait par mégarde l'une des treize
-    # signatures, TOUT échec d'installeur capturé par ce chemin serait étiqueté
+    # 🔴 TÉMOIN : si le texte du repli contenait par mégarde l'une des
+    # signatures d'infrastructure, TOUT échec d'installeur capturé par ce chemin serait étiqueté
     # INFRASTRUCTURE — et le nightly cesserait d'accuser l'installeur, pour de
     # bon. On mesure la bannière SEULE, sur un contenu de conteneur neutre.
     poser_docker_stub 1 '' 0 'installation ordinaire, rien de special
@@ -779,6 +779,99 @@ PHP Fatal error: require(): Failed opening required vendor/autoload.php
         printf 'phase: dial-up legacy check\n'
         printf 'protocole: tcp/ip ok\n'
     } > "$BATS_TEST_TMPDIR/install.log"
+    run e2e_log_looks_like_infrastructure_failure "$BATS_TEST_TMPDIR/install.log"
+    [ "$status" -ne 0 ]
+}
+
+# -----------------------------------------------------------------------------
+# Les 5xx de registre — clôture 2.4, run 32761876936
+# -----------------------------------------------------------------------------
+# 🔴 CE QUI S'EST RÉELLEMENT PASSÉ. Un nightly lancé avec
+# `mutate_module=20-database` — la procédure de validation du garde-fou — a
+# rougi AVANT d'atteindre la mutation : `api.github.com` a rendu un `504`
+# pendant `composer install`, au module 10. Les treize signatures d'alors ne
+# connaissaient aucun 5xx, donc le rapport a accusé l'INSTALLEUR. La mutation
+# n'a pas tiré, et l'étiquette a désigné le mauvais coupable.
+#
+# ⚖️ Ces trois tests vont ensemble : celui qui reconnaît la panne amont ne vaut
+# que par les deux témoins qui l'encadrent. Une heuristique qui étiquette TOUT
+# INFRASTRUCTURE serait pire que l'absence de signature — depuis la clôture 2.4,
+# `nightly-freshness` TOLÈRE un dernier run étiqueté infrastructure.
+# -----------------------------------------------------------------------------
+
+@test "un 504 de registre pendant composer n'accuse plus l'installeur" {
+    # 🔴 CE TEST NE GARDAIT PAS CE QU'IL ANNONÇAIT, ET C'EST MESURÉ.
+    # Sa fixture portait TROIS motifs à la fois (`HTTP/2 504`,
+    # `could not be downloaded`, `Failed to download`) et son assertion était
+    # `*504* || *download*`. Retirer les DIX signatures à contexte HTTP le
+    # laissait VERT : il restait `could not be downloaded` pour le satisfaire.
+    # Un test à plusieurs motifs ne mesure aucun d'eux.
+    #
+    # ⚖️ UN SEUL MOTIF DANS LA FIXTURE, ET LA SIGNATURE EXACTE EN SORTIE.
+    # `e2e_log_looks_like_infrastructure_failure` REND la signature qui a
+    # matché : c'est cette valeur qu'on asserte, pas une sous-chaîne complaisante.
+    {
+        printf '  - Downloading laravel/framework (v13.24.0)\n'
+        printf 'curl: (22) The requested URL returned error: HTTP/2 504\n'
+    } > "$BATS_TEST_TMPDIR/install-container.log"
+
+    run e2e_log_looks_like_infrastructure_failure "$BATS_TEST_TMPDIR/install-container.log"
+    [ "$status" -eq 0 ]
+    [ "$output" = "HTTP/2 504" ]
+}
+
+@test "TÉMOIN : un 404 de dist reste imputé à l'INSTALLEUR" {
+    # 🔴 MESURÉ EN REVUE : avec `could not be downloaded` dans la liste, cette
+    # fixture rendait INFRASTRUCTURE. Un paquet inexistant est un défaut de
+    # DÉPENDANCE — le nôtre — et il était absous, donc TOLÉRÉ par la bascule de
+    # `nightly-freshness`. C'est l'inversion refusée pour les codes nus,
+    # réintroduite par la porte de derrière.
+    printf 'Failed to download acme/nope from dist: The "https://repo.example/x.zip" file could not be downloaded (HTTP/2 404)\n' \
+        > "$BATS_TEST_TMPDIR/install.log"
+
+    run e2e_log_looks_like_infrastructure_failure "$BATS_TEST_TMPDIR/install.log"
+    [ "$status" -ne 0 ]
+}
+
+@test "TÉMOIN : le repli dist→source de composer n'absout PAS l'installeur" {
+    # 🔴 MESURÉ EN REVUE AUSSI. `Failed to download … trying the source instead`
+    # est le repli ORDINAIRE et bénin de composer : il apparaît dans des
+    # installations qui réussissent. Comme signature, il étiquetait
+    # INFRASTRUCTURE tout échec d'installeur survenu dans le même journal.
+    {
+        printf 'Failed to download acme/pkg from dist, trying the source instead\n'
+        printf 'Échec du module 20-database (code: 42)\n'
+    } > "$BATS_TEST_TMPDIR/install.log"
+
+    run e2e_log_looks_like_infrastructure_failure "$BATS_TEST_TMPDIR/install.log"
+    [ "$status" -ne 0 ]
+}
+
+@test "TÉMOIN : « Échec du module » SEUL reste imputé à l'INSTALLEUR" {
+    # ⛔ C'est la moitié qui donne sa valeur au test précédent. Sans elle,
+    # ajouter des signatures assez larges pour tout matcher passerait pour un
+    # progrès — et le nightly cesserait d'accuser l'installeur, pour de bon.
+    {
+        printf '▶ Module 20-database\n'
+        printf 'Échec du module 20-database (code: 42)\n'
+    } > "$BATS_TEST_TMPDIR/install.log"
+
+    run e2e_log_looks_like_infrastructure_failure "$BATS_TEST_TMPDIR/install.log"
+    [ "$status" -ne 0 ]
+}
+
+@test "TÉMOIN : une taille de paquet apt n'est pas une panne amont" {
+    # 🔴 LA MESURE QUI A FAIT REFUSER LES CODES NUS. `grep -F 504` matche
+    # `[504 kB]`, une ligne d'`apt` présente dans presque tout journal
+    # d'installation : le code nu aurait étiqueté INFRASTRUCTURE à peu près
+    # n'importe quel échec, et `nightly-freshness` l'aurait toléré. Les
+    # signatures portent donc le code AVEC son contexte HTTP.
+    {
+        printf 'Get:5 http://deb.debian.org/debian bookworm/main amd64 libxml2 amd64 2.9.14 [504 kB]\n'
+        printf 'Get:6 http://deb.debian.org/debian bookworm/main amd64 libzip4 amd64 1.7.3 [502 kB]\n'
+        printf 'Échec du module 10-laravel-core (code: 1)\n'
+    } > "$BATS_TEST_TMPDIR/install.log"
+
     run e2e_log_looks_like_infrastructure_failure "$BATS_TEST_TMPDIR/install.log"
     [ "$status" -ne 0 ]
 }

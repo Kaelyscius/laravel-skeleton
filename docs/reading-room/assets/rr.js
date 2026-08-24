@@ -396,6 +396,21 @@
       el.textContent = plan.generated + ' · ' + plan.commit +
         (plan.dirty ? ' · arbre modifié' : '');
     });
+    // 🔴 BRANCHE, COMMIT ET PROPRETÉ SONT DÉRIVÉS, PLUS ÉCRITS À LA MAIN.
+    // Mesuré en revue : la page affichait « commit 8b0a399 · branche main ·
+    // arbre propre » pendant que `plan.js` portait un autre commit, une branche
+    // de story et `dirty: true`. Quatre pastilles écrites à la main dans quatre
+    // pages, sans source unique : elles ne pouvaient que diverger. Ce qui a une
+    // source machine se lit désormais à la source.
+    $$('[data-plan-field]').forEach((el) => {
+      if (!plan) { el.textContent = '— données absentes'; return; }
+      const champ = el.dataset.planField;
+      if (champ === 'dirty') {
+        el.textContent = plan.dirty ? 'modifié au relevé' : 'propre au relevé';
+        return;
+      }
+      if (plan[champ] !== undefined) { el.textContent = plan[champ]; }
+    });
     $$('[data-plan-count]').forEach((el) => {
       if (plan && plan.counts[el.dataset.planCount] !== undefined) {
         el.textContent = plan.counts[el.dataset.planCount];
