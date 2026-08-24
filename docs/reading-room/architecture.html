@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture — comment c'est construit · Reading Room</title>
+<meta name="description" content="La pile, les modules, le multi-locataire, l'infrastructure Docker, les données, la sécurité et le pipeline d'installation — schématisés.">
+<link rel="stylesheet" href="assets/rr.css">
+</head>
+<body>
+<a class="skip" href="#vue">Aller au contenu</a>
+
+<nav class="top" aria-label="Sections de la reading room">
+  <div class="in">
+    <a class="brand" href="index.html"><i></i>Reading&nbsp;Room</a>
+    <div class="links">
+      <a href="index.html">Accueil</a>
+      <a href="produit.html">Produit</a>
+      <a href="epics.html">Plan</a>
+      <a href="exigences.html">Exigences</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="decisions.html">Décisions</a>
+      <a href="qualite.html">Qualité</a>
+      <a href="suivi.html">Où on en est</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">05 — Architecture</div>
+  <h1>Comment c'est construit,<br>et pourquoi comme ça.</h1>
+  <p class="sub">Sept schémas et le raisonnement dessous. Chaque décision structurante renvoie vers l'ADR qui la porte : cette page explique, elle ne tranche pas.</p>
+
+  <div class="authority">
+    <p><b>⚠️ Les schémas sont dessinés à la main, pas générés depuis le code.</b> Ils décrivent la <em>cible</em> décrite par <a class="ref" href="../architecture/README.md">docs/architecture/</a> et les ADR. Là où le code livré s'en écarte, la page le dit explicitement — c'est le cas pour les modules métier, qui n'existent aujourd'hui qu'à l'état de fournisseurs de services vides.</p>
+    <p style="margin-bottom:0"><b>Pourquoi du SVG écrit à la main et pas un moteur de diagrammes ?</b> Ces pages doivent s'ouvrir depuis le disque, sans réseau. Embarquer un moteur voudrait dire verser un fichier minifié de plusieurs mégaoctets sous <code>docs/</code>, que <a class="ref" href="../../scripts/assert-tracked-files.sh">scripts/assert-tracked-files.sh</a> oblige à versionner — un coût réel, pour une mise en page automatique qui contredirait la discipline visuelle du projet.</p>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="vue">
+  <div class="eyebrow">Vue d'ensemble</div>
+  <h2 class="sec">La pile, de la requête à la donnée</h2>
+  <p class="lede">Un seul conteneur est exposé à l'hôte. Tout le reste vit sur un réseau interne. Les intégrations externes sont peu nombreuses et toutes optionnelles — le site rend une page correcte quand chacune tombe.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 900 420" role="img" aria-labelledby="d-stack-t d-stack-d">
+      <title id="d-stack-t">Pile applicative et intégrations externes</title>
+      <desc id="d-stack-d">Apache expose 80 et 443, parle à PHP-FPM en FastCGI. PHP lit PostgreSQL applicatif et Redis, écrit dans un PostgreSQL dédié à Pulse, et appelle Twitch Helix, YouTube et Resend. Node ne sert qu'à la construction des assets.</desc>
+
+      <!-- frontière hôte -->
+      <rect class="nb-ext" x="8" y="30" width="884" height="378" rx="12"/>
+      <text class="lbl-t" x="24" y="50">réseau bridge interne — docker compose</text>
+
+      <!-- visiteur -->
+      <rect class="nb" x="30" y="86" width="132" height="54" rx="8"/>
+      <text class="lbl" x="46" y="110">Visiteur</text>
+      <text class="lbl-s" x="46" y="128">navigateur</text>
+      <path class="edge-lava" d="M162 113 H 216" marker-end="url(#ar)"/>
+      <text class="lbl-s" x="166" y="105">:443</text>
+
+      <!-- apache -->
+      <rect class="nb-core" x="220" y="80" width="140" height="66" rx="8"/>
+      <text class="lbl" x="236" y="104">apache 2.4</text>
+      <text class="lbl-s" x="236" y="121">HTTPS · HTTP/2</text>
+      <text class="lbl-s" x="236" y="136" style="fill:var(--text-3)">seul port exposé</text>
+
+      <path class="edge-lava" d="M360 113 H 414" marker-end="url(#ar)"/>
+      <text class="lbl-s" x="364" y="105">FastCGI</text>
+
+      <!-- php -->
+      <rect class="nb-core" x="418" y="72" width="156" height="82" rx="8"/>
+      <text class="lbl" x="434" y="96">php-fpm 8.5</text>
+      <text class="lbl-s" x="434" y="113">Laravel 13</text>
+      <text class="lbl-s" x="434" y="128">Livewire 4 · Filament 5</text>
+      <text class="lbl-s" x="434" y="143" style="fill:var(--text-3)">OPcache · Supervisor</text>
+
+      <!-- données -->
+      <rect class="nb" x="632" y="60" width="230" height="48" rx="8"/>
+      <text class="lbl" x="648" y="80">postgres 18</text>
+      <text class="lbl-s" x="648" y="97">données applicatives · sauvegardées</text>
+      <path class="edge" d="M574 100 H 628" marker-end="url(#ag)"/>
+
+      <rect class="nb" x="632" y="118" width="230" height="48" rx="8"/>
+      <text class="lbl" x="648" y="138">redis 8</text>
+      <text class="lbl-s" x="648" y="155">cache · files d'attente · sessions</text>
+      <path class="edge" d="M574 130 H 628" marker-end="url(#ag)"/>
+
+      <rect class="nb-mut" x="632" y="176" width="230" height="48" rx="8"/>
+      <text class="lbl" x="648" y="196">postgres-pulse</text>
+      <text class="lbl-s" x="648" y="213">métrologie · <tspan style="fill:var(--warn)">exclue des sauvegardes</tspan></text>
+      <path class="edge-dash" d="M500 154 V 200 H 628" marker-end="url(#ag)"/>
+
+      <!-- externes -->
+      <text class="lbl-t" x="30" y="196">appels sortants</text>
+      <rect class="nb-ext" x="30" y="210" width="176" height="44" rx="8"/>
+      <text class="lbl" x="44" y="230">Twitch Helix</text>
+      <text class="lbl-s" x="44" y="246">état LIVE · viewers</text>
+      <rect class="nb-ext" x="30" y="262" width="176" height="44" rx="8"/>
+      <text class="lbl" x="44" y="282">YouTube</text>
+      <text class="lbl-s" x="44" y="298">la VOD existe-t-elle ?</text>
+      <rect class="nb-ext" x="30" y="314" width="176" height="44" rx="8"/>
+      <text class="lbl" x="44" y="334">Resend</text>
+      <text class="lbl-s" x="44" y="350">courriel du formulaire</text>
+      <path class="edge-dash" d="M206 232 H 300 V 154" marker-end="url(#ag)"/>
+      <path class="edge-dash" d="M206 284 H 330 V 154" marker-end="url(#ag)"/>
+      <path class="edge-dash" d="M206 336 H 360 V 154" marker-end="url(#ag)"/>
+
+      <!-- profils -->
+      <rect class="nb-mut" x="418" y="248" width="444" height="60" rx="8"/>
+      <text class="lbl-t" x="434" y="268">profil « dev » — jamais en production</text>
+      <text class="lbl-s" x="434" y="288">node 24 (construction des assets) · mailpit · adminer</text>
+      <text class="lbl-s" x="434" y="302" style="fill:var(--text-3)">profil « tools » : dozzle, it-tools, watchtower — profil « test » : chromium</text>
+
+      <rect class="nb-ok" x="418" y="320" width="444" height="66" rx="8"/>
+      <text class="lbl-t" x="434" y="340">observabilité, dans l'application</text>
+      <text class="lbl-s" x="434" y="360">/health (sondes) · /horizon (files) · /pulse (temps réel) · /telescope (dev)</text>
+      <text class="lbl-s" x="434" y="376" style="fill:var(--text-3)">Sentry en externe — epic 3, pas encore posé</text>
+
+      <defs>
+        <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#FF5722"/></marker>
+        <marker id="ag" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#2c2c31"/></marker>
+      </defs>
+    </svg>
+    <figcaption>Trait plein = chemin de la requête. Trait pointillé = appel qui a le droit d'échouer sans casser la page.</figcaption>
+  </figure>
+
+  <h3 class="sub">Les versions, et ce qui les a bougées</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Couche</th><th>Choix</th><th class="mono">Version</th><th>Pourquoi celle-là</th></tr></thead>
+      <tbody>
+        <tr><td>Langage</td><td>PHP-FPM</td><td class="mono">8.5</td><td><code>composer.json</code> impose <code>^8.5</code> depuis la montée en Laravel 13. La matrice CI ne porte donc plus PHP 8.4.</td></tr>
+        <tr><td>Framework</td><td>Laravel</td><td class="mono">13</td><td>Le verrou « Laravel 12 + Filament v3 » a été <b>levé</b> : il protégeait une migration qui n'existait pas — Filament n'était pas installé. <a class="ref" href="../adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md">ADR-0010</a></td></tr>
+        <tr><td>Serveur web</td><td>Apache</td><td class="mono">2.4</td><td>Déjà en place et fonctionnel. Caddy coûterait 2 jours de reconstruction pour un gain imperceptible en v1. <a class="ref" href="../adr/ADR-0005-apache-stays-v1-caddy-deferred.md">ADR-0005</a></td></tr>
+        <tr><td>Base de données</td><td>PostgreSQL</td><td class="mono">18</td><td>Sécurité au niveau ligne native, <code>JSONB</code> + index GIN, recherche plein texte française. Migrer plus tard sur une base pleine coûterait 30 jours ; sur un <code>/src</code> vide, 10 heures. <a class="ref" href="../adr/ADR-0007-postgresql-17-over-mariadb.md">ADR-0007</a></td></tr>
+        <tr><td>Cache, files, sessions</td><td>Redis</td><td class="mono">8</td><td>Une seule instance, base 0. Pas de grappe — ce serait du zèle.</td></tr>
+        <tr><td>Interface</td><td>Blade + Livewire + Alpine + Tailwind</td><td class="mono">4 / 4</td><td>Filament tourne déjà sur Livewire + Alpine. Choisir Vue pour la partie publique, c'était deux modèles mentaux dans un dépôt tenu par une personne. <a class="ref" href="../adr/ADR-0008-frontend-stack-blade-livewire.md">ADR-0008</a></td></tr>
+        <tr><td>Administration</td><td>Filament</td><td class="mono">^5</td><td>La contrainte est <code>^5</code> dans <code>composer.json</code>, et un test gèle ce littéral — la prose ne fige plus de numéro de correctif.</td></tr>
+        <tr><td>Tests</td><td>Pest</td><td class="mono">4</td><td>Plus un module navigateur sur Chromium natif Alpine. <a class="ref" href="../adr/ADR-0013-runner-navigateur-pest-browser.md">ADR-0013</a></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="modules">
+  <div class="eyebrow">Modularité</div>
+  <h2 class="sec">Cinq modules, allumés par l'environnement</h2>
+  <p class="lede">Pas de bibliothèque de modularisation. Six espaces de noms PSR-4 déclarés dans <code>composer.json</code>, cinq fournisseurs de services enregistrés <b>conditionnellement</b>. C'est <a class="ref" href="../adr/ADR-0009-modular-app-modules-psr4.md">ADR-0009</a>.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 900 400" role="img" aria-labelledby="d-mod-t d-mod-d">
+      <title id="d-mod-t">Structure modulaire et activation conditionnelle</title>
+      <desc id="d-mod-d">AppServiceProvider lit config/modules.php, qui lit les variables MODULE_X_ENABLED, et n'enregistre que les fournisseurs des modules actifs. Core est toujours actif. Un module ne peut importer que Core.</desc>
+
+      <!-- config -->
+      <rect class="nb-ext" x="20" y="30" width="200" height="120" rx="8"/>
+      <text class="lbl-t" x="34" y="50">environnement</text>
+      <text class="lbl-s" x="34" y="72">MODULE_PUBLIC_ENABLED</text>
+      <text class="lbl-s" x="34" y="90">MODULE_LIVE_ENABLED</text>
+      <text class="lbl-s" x="34" y="108">MODULE_REVIEWS_ENABLED</text>
+      <text class="lbl-s" x="34" y="126">MODULE_PRESS_KIT_ENABLED</text>
+      <text class="lbl-s" x="34" y="144">MODULE_ADMIN_ENABLED</text>
+
+      <path class="edge-lava" d="M220 90 H 268" marker-end="url(#am)"/>
+      <rect class="nb" x="272" y="52" width="176" height="76" rx="8"/>
+      <text class="lbl" x="286" y="74">config/modules.php</text>
+      <text class="lbl-s" x="286" y="92">env() → booléen</text>
+      <text class="lbl-s" x="286" y="110" style="fill:var(--text-3)">lu une fois, cacheable</text>
+
+      <path class="edge-lava" d="M448 90 H 496" marker-end="url(#am)"/>
+      <rect class="nb-core" x="500" y="46" width="220" height="88" rx="8"/>
+      <text class="lbl" x="514" y="68">AppServiceProvider</text>
+      <text class="lbl-s" x="514" y="86">::register()</text>
+      <text class="lbl-s" x="514" y="106">collect(config('modules'))</text>
+      <text class="lbl-s" x="514" y="122">-&gt;filter()-&gt;each(register)</text>
+
+      <!-- Core -->
+      <rect class="nb-core" x="20" y="192" width="240" height="180" rx="8"/>
+      <text class="lbl-t" x="34" y="212">App\Core\ — toujours actif</text>
+      <text class="lbl-s" x="34" y="236">Models/Streamer</text>
+      <text class="lbl-s" x="34" y="254">Concerns/BelongsToStreamer</text>
+      <text class="lbl-s" x="34" y="272">Scopes/BelongsToStreamerScope</text>
+      <text class="lbl-s" x="34" y="290">Http/Middleware/SetCurrentStreamer</text>
+      <text class="lbl-s" x="34" y="308">Support/CurrentStreamer</text>
+      <text class="lbl-s" x="34" y="326">Support/TrustedProxies</text>
+      <text class="lbl-s" x="34" y="344">Console/TenancyAssertCommand</text>
+      <text class="lbl-s" x="34" y="362">Providers/CoreServiceProvider</text>
+
+      <!-- Modules -->
+      <text class="lbl-t" x="300" y="212">App\Modules\* — activables</text>
+      <rect class="nb" x="300" y="222" width="180" height="40" rx="7"/>
+      <text class="lbl" x="314" y="240">Public</text>
+      <text class="lbl-s" x="314" y="255">accueil · à propos · SEO</text>
+      <rect class="nb" x="300" y="268" width="180" height="40" rx="7"/>
+      <text class="lbl" x="314" y="286">Live</text>
+      <text class="lbl-s" x="314" y="301">Twitch · écran par défaut</text>
+      <rect class="nb" x="300" y="314" width="180" height="40" rx="7"/>
+      <text class="lbl" x="314" y="332">Reviews</text>
+      <text class="lbl-s" x="314" y="347">articles · commentaires</text>
+      <rect class="nb" x="496" y="222" width="180" height="40" rx="7"/>
+      <text class="lbl" x="510" y="240">PressKit</text>
+      <text class="lbl-s" x="510" y="255">/press · contact</text>
+      <rect class="nb" x="496" y="268" width="180" height="40" rx="7"/>
+      <text class="lbl" x="510" y="286">Admin</text>
+      <text class="lbl-s" x="510" y="301">panneau Filament</text>
+
+      <path class="edge-lava" d="M610 134 V 200 H 396 V 218" marker-end="url(#am)"/>
+      <path class="edge-lava" d="M610 134 V 200 H 586 V 218" marker-end="url(#am)"/>
+
+      <!-- règle -->
+      <rect class="nb-ok" x="700" y="222" width="180" height="132" rx="8"/>
+      <text class="lbl-t" x="714" y="242">la règle de couplage</text>
+      <text class="lbl-s" x="714" y="266">Un module n'importe</text>
+      <text class="lbl-s" x="714" y="282">QUE App\Core\.</text>
+      <text class="lbl-s" x="714" y="306" style="fill:var(--ok)">Vérifié en CI par un</text>
+      <text class="lbl-s" x="714" y="322" style="fill:var(--ok)">scan Pest des `use`.</text>
+      <text class="lbl-s" x="714" y="344" style="fill:var(--text-3)">CrossModuleCouplingTest</text>
+      <path class="edge-dash" d="M480 242 H 696" marker-end="url(#am)"/>
+      <path class="edge-dash" d="M260 282 H 296" marker-end="url(#am)"/>
+
+      <defs>
+        <marker id="am" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#FF5722"/></marker>
+      </defs>
+    </svg>
+    <figcaption>Conséquence directe : un fork qui pose <code>MODULE_REVIEWS_ENABLED=false</code> perd les routes, les migrations et les vues du module — sans qu'aucune interface ne le propose.</figcaption>
+  </figure>
+
+  <div class="two" style="margin-top:22px">
+    <div>
+      <h3 class="sub" style="margin-top:0">Ce qui est refusé, nommément</h3>
+      <p style="color:var(--text-2);font-size:14px">La liste est dans l'ADR pour qu'on ne la rediscute pas à chaque revue. Elle n'est pas une prise de position sur ces approches en général — elle dit qu'elles sont surdimensionnées <b>pour un dépôt tenu par une personne</b>.</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Anti-motif</th><th>Motif du refus</th></tr></thead>
+          <tbody>
+            <tr><td><code>nwidart/laravel-modules</code></td><td>Magie inutile — PSR-4 natif suffit.</td></tr>
+            <tr><td>Dépôts systématiques</td><td>Eloquent <em>est</em> le dépôt.</td></tr>
+            <tr><td>Façades sur mesure par module</td><td>Du volume sans bénéfice.</td></tr>
+            <tr><td>Bus d'événements inter-modules dès J1</td><td>L'appel direct suffit ; l'événement viendra quand le besoin sera là.</td></tr>
+            <tr><td>CQRS, bus de commandes</td><td>Surdimensionné.</td></tr>
+            <tr><td>Hexagonal, ports et adaptateurs</td><td>Surdimensionné.</td></tr>
+            <tr><td>DTO systématiques</td><td>Form Requests + Resources couvrent.</td></tr>
+            <tr><td><code>app/Domain/</code>, <code>app/UseCases/</code></td><td>DDD prématuré.</td></tr>
+            <tr><td>Découverte automatique des écrans Filament</td><td>Explicite &gt; magique, pour un dépôt qu'on forke.</td></tr>
+            <tr><td>Migrations mélangées à la racine</td><td>Casse la coupure de module.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h3 class="sub" style="margin-top:0">Où en est le code, vraiment</h3>
+      <div class="note warn">
+        <p><b>Les cinq modules existent, et ils sont vides.</b> Sur le disque, <code>app/Modules/*/Providers/</code> contient un fournisseur de services par module — et rien d'autre. Aucun contrôleur, aucun modèle métier, aucune route.</p>
+        <p style="margin-bottom:0">C'est conforme au plan : les modules métier sont les epics 4 à 9, qui n'ont pas commencé. Le mécanisme d'activation, lui, <b>est</b> livré et gardé — et il a d'ailleurs révélé un garde-fou silencieux : une mutation rendant <code>register()</code> sourd à la configuration laissait 58 tests sur 58 au vert. Trois tests ont été ajoutés, et vus rouges.</p>
+      </div>
+      <h4 class="min">Ce qui vit dans <code>Core/</code> aujourd'hui</h4>
+      <ul style="color:var(--text-2);font-size:13.5px">
+        <li><a class="ref" href="../../src/app/Core/Models/Streamer.php">Streamer.php</a> — le modèle et ses onze colonnes</li>
+        <li><a class="ref" href="../../src/app/Core/Concerns/BelongsToStreamer.php">BelongsToStreamer.php</a> — le trait à inclure</li>
+        <li><a class="ref" href="../../src/app/Core/Scopes/BelongsToStreamerScope.php">BelongsToStreamerScope.php</a> — la portée globale</li>
+        <li><a class="ref" href="../../src/app/Core/Http/Middleware/SetCurrentStreamer.php">SetCurrentStreamer.php</a> — le middleware qui lie</li>
+        <li><a class="ref" href="../../src/app/Core/Support/CurrentStreamer.php">CurrentStreamer.php</a> — le singleton qui échoue bruyamment</li>
+        <li><a class="ref" href="../../src/app/Core/Support/TrustedProxies.php">TrustedProxies.php</a> — né d'une faille, trois fois</li>
+        <li><a class="ref" href="../../src/app/Core/Console/Commands/TenancyAssertCommand.php">TenancyAssertCommand.php</a> — l'assertion bloquante en CI</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="tenancy">
+  <div class="eyebrow">Multi-locataire</div>
+  <h2 class="sec">Un seul streamer aujourd'hui, plusieurs sans rupture demain</h2>
+  <p class="lede">La colonne <code>streamer_id</code> est <b>obligatoire sur toutes les tables métier dès le premier jour</b>, alors qu'il n'y a qu'une seule ligne dans <code>streamers</code>. C'est une assurance payée d'avance : l'ajouter plus tard sur une base pleine coûterait un ordre de grandeur de plus.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 900 330" role="img" aria-labelledby="d-ten-t d-ten-d">
+      <title id="d-ten-t">Motif C — portée Eloquent globale</title>
+      <desc id="d-ten-d">Le middleware résout le streamer et le lie au conteneur. Le trait applique une portée globale qui lit le singleton et filtre chaque requête sur streamer_id. Si le singleton n'est pas lié, il échoue bruyamment.</desc>
+
+      <text class="lbl-t" x="20" y="26">Motif C — actif en v1</text>
+
+      <rect class="nb" x="20" y="42" width="190" height="58" rx="8"/>
+      <text class="lbl" x="34" y="64">Requête HTTP</text>
+      <text class="lbl-s" x="34" y="82">entre dans le noyau</text>
+
+      <path class="edge-lava" d="M210 71 H 258" marker-end="url(#at)"/>
+      <rect class="nb-core" x="262" y="34" width="228" height="74" rx="8"/>
+      <text class="lbl" x="276" y="56">SetCurrentStreamer</text>
+      <text class="lbl-s" x="276" y="74">Streamer::firstOrFail()</text>
+      <text class="lbl-s" x="276" y="92">app()-&gt;instance(CurrentStreamer)</text>
+
+      <path class="edge-lava" d="M490 71 H 538" marker-end="url(#at)"/>
+      <rect class="nb-core" x="542" y="34" width="200" height="74" rx="8"/>
+      <text class="lbl" x="556" y="56">CurrentStreamer</text>
+      <text class="lbl-s" x="556" y="74">singleton de conteneur</text>
+      <text class="lbl-s" x="556" y="92" style="fill:var(--err)">échoue si non lié</text>
+
+      <rect class="nb" x="20" y="150" width="190" height="70" rx="8"/>
+      <text class="lbl" x="34" y="172">Un modèle métier</text>
+      <text class="lbl-s" x="34" y="190">use BelongsToStreamer;</text>
+      <text class="lbl-s" x="34" y="208" style="fill:var(--text-3)">un trait, une ligne</text>
+
+      <path class="edge-lava" d="M210 185 H 258" marker-end="url(#at)"/>
+      <rect class="nb-core" x="262" y="142" width="228" height="86" rx="8"/>
+      <text class="lbl" x="276" y="164">BelongsToStreamerScope</text>
+      <text class="lbl-s" x="276" y="184">apply(Builder, Model)</text>
+      <text class="lbl-s" x="276" y="202">-&gt;where('…streamer_id', $id)</text>
+      <text class="lbl-s" x="276" y="220" style="fill:var(--text-3)">portée globale, jamais oubliée</text>
+
+      <path class="edge-dash" d="M642 108 V 185 H 494" marker-end="url(#at)"/>
+      <text class="lbl-s" x="656" y="150">lit l'identifiant</text>
+
+      <path class="edge-lava" d="M490 185 H 538" marker-end="url(#at)"/>
+      <rect class="nb-ok" x="542" y="150" width="200" height="70" rx="8"/>
+      <text class="lbl" x="556" y="172">SQL émis</text>
+      <text class="lbl-s" x="556" y="190">SELECT … WHERE streamer_id = 1</text>
+      <text class="lbl-s" x="556" y="208" style="fill:var(--ok)">isolation par défaut</text>
+
+      <!-- gardes -->
+      <rect class="nb-ok" x="20" y="252" width="722" height="62" rx="8"/>
+      <text class="lbl-t" x="34" y="272">deux gardes bloquants en intégration continue</text>
+      <text class="lbl-s" x="34" y="294">artisan tenancy:assert — refuse si Streamer::count() ≠ 1</text>
+      <text class="lbl-s" x="400" y="294">scan Pest des migrations — streamer_id NOT NULL exigé</text>
+
+      <!-- v2 -->
+      <rect class="nb-ext" x="762" y="34" width="120" height="280" rx="8"/>
+      <text class="lbl-t" x="774" y="54">v2+ — motif D</text>
+      <text class="lbl-s" x="774" y="80">Sécurité au</text>
+      <text class="lbl-s" x="774" y="96">niveau ligne</text>
+      <text class="lbl-s" x="774" y="112">PostgreSQL</text>
+      <text class="lbl-s" x="774" y="140" style="fill:var(--text-3)">migration</text>
+      <text class="lbl-s" x="774" y="156" style="fill:var(--text-3)">additive</text>
+      <text class="lbl-s" x="774" y="172" style="fill:var(--text-3)">~3-4 jours</text>
+      <text class="lbl-s" x="774" y="200" style="fill:var(--warn)">NON ACTIVÉE</text>
+      <text class="lbl-s" x="774" y="216" style="fill:var(--warn)">en v1</text>
+      <text class="lbl-s" x="774" y="244" style="fill:var(--text-3)">ADR-0002</text>
+
+      <defs>
+        <marker id="at" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#FF5722"/></marker>
+      </defs>
+    </svg>
+    <figcaption>Le singleton échoue bruyamment quand il n'est pas lié : une portée qui filtrerait sur <code>null</code> rendrait toutes les lignes, en silence.</figcaption>
+  </figure>
+
+  <div class="callout">
+    <b>Pourquoi la sécurité au niveau ligne est documentée mais éteinte</b>
+    <p>Elle est l'une des raisons du choix de PostgreSQL. Elle n'est pourtant <b>pas activée</b>, et <a class="ref" href="../adr/ADR-0002-rls-not-enabled-v1.md">ADR-0002</a> énumère cinq motifs mesurés — dont deux méritent d'être lus par quiconque a envie de l'allumer :</p>
+    <p>Laravel <b>n'ouvre pas de transaction par requête</b>. Un <code>SET LOCAL app.current_streamer_id</code> hors transaction est un no-op : la règle lit alors <code>NULL</code> et peut autoriser <em>toutes</em> les lignes. Et un mutualisateur de connexions en mode transaction réutilise les connexions d'une requête à l'autre — le réglage d'une requête fuit dans la suivante.</p>
+    <p style="margin-bottom:0">En mono-streamer, elle <b>n'apporte aucun bénéfice de sécurité</b> : il n'y a qu'un locataire. Le verrou est écrit en toutes lettres dans l'ADR : <em>« RLS NOT ENABLED. ENABLE BEFORE MULTI-TENANT PROD. »</em></p>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="donnees">
+  <div class="eyebrow">Données</div>
+  <h2 class="sec">Le schéma, et les conventions qui le tiennent</h2>
+
+  <div class="two">
+    <div>
+      <h4 class="min" style="margin-top:0">Conventions non négociables</h4>
+      <dl class="kv">
+        <dt>Isolation</dt><dd><code>streamer_id BIGINT NOT NULL</code>, indexé, sur toute table métier. Un scan Pest le vérifie et bloque la CI.</dd>
+        <dt>Listes</dt><dd>Index composite <code>(streamer_id, created_at DESC)</code> sur les tables souvent listées.</dd>
+        <dt>URL</dt><dd><code>slug VARCHAR(180) UNIQUE</code>, ASCII pur via <code>Str::slug()</code> — le format long éditorial <code>/reviews/{slug}</code>, jamais <code>/{année}/{mois}/{slug}</code> qui tue le contenu durable.</dd>
+        <dt>Cycle de vie</dt><dd><code>published_at</code> et <code>last_updated_at</code>, tous deux nullables : brouillon, publié, maintenu — trois états, pas un booléen.</dd>
+        <dt>Métadonnées</dt><dd>Type <code>JSONB</code> + index GIN pour les réglages et les charges utiles de webhooks.</dd>
+        <dt>Recherche</dt><dd><code>to_tsvector('french', body)</code> disponible dès maintenant, <b>non activé en v1</b>. Prêt pour v1.5.</dd>
+      </dl>
+    </div>
+    <div>
+      <h4 class="min" style="margin-top:0">Le modèle central : un seul <code>Article</code></h4>
+      <p style="color:var(--text-2);font-size:14px">La décision <code>OQ9</code> a écarté trois modèles au profit d'un seul, porteur d'une énumération <code>type</code>.</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th class="mono">type</th><th class="mono">note</th><th class="mono">game_id</th><th class="mono">vod_url</th></tr></thead>
+          <tbody>
+            <tr><td><code>review</code></td><td class="ok">requis</td><td class="ok">requis</td><td class="mut">optionnel</td></tr>
+            <tr><td><code>news</code></td><td class="mut">null</td><td class="mut">null</td><td class="mut">null</td></tr>
+            <tr><td><code>preview</code></td><td class="mut">null</td><td class="mut">optionnel</td><td class="mut">optionnel</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="color:var(--text-2);font-size:13.5px;margin-bottom:0">Un seul écran d'administration, un seul jeu de routes, un seul flux RSS. Le mix éditorial visé est 70 % de reviews / 30 % de news et previews.</p>
+    </div>
+  </div>
+
+  <div class="note err" style="margin-top:20px">
+    <p><b>🔴 Une clé de configuration qui ne servait à personne.</b> <code>CACHE_DRIVER</code> était déclarée partout ; Laravel 11+ lit <code>CACHE_STORE</code>. L'application annonçait Redis et tournait en réalité sur le pilote <code>database</code>. <b>Mesuré par la sonde <code>/health</code> du cache — restée verte avec Redis arrêté.</b> Corrigé le 2026-08-23. C'est la forme la plus pure du motif du dépôt : une affirmation exacte dans le document, un référent inexistant dans le code, et un garde-fou qui confirmait l'erreur.</p>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="install">
+  <div class="eyebrow">Installeur</div>
+  <h2 class="sec">Onze modules, des sentinelles, et une simulation qui ne ment pas</h2>
+  <p class="lede">C'est le produit destiné au fork-streamer, et c'est l'epic 2. Un installeur qui « marche généralement » n'est pas un produit — il faut qu'il soit <b>rejouable</b>, <b>reprenable</b>, et <b>inspectable avant de toucher au disque</b>.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 900 340" role="img" aria-labelledby="d-inst-t d-inst-d">
+      <title id="d-inst-t">Pipeline d'installation</title>
+      <desc id="d-inst-d">Onze modules numérotés de 00 à 99 s'enchaînent. Chaque module pose une sentinelle sur disque quand il réussit. Une relance saute ce qui porte une sentinelle. Le drapeau dry-run annonce sans exécuter, resume-from saute jusqu'à un module donné.</desc>
+
+      <text class="lbl-t" x="20" y="24">make install-laravel → scripts/install.sh</text>
+
+      <g>
+        <rect class="nb-ok" x="20" y="40" width="76" height="44" rx="7"/><text class="lbl-s" x="32" y="60">00</text><text class="lbl-s" x="32" y="76" style="fill:var(--text-3)">prérequis</text>
+        <rect class="nb-ok" x="102" y="40" width="76" height="44" rx="7"/><text class="lbl-s" x="114" y="60">05</text><text class="lbl-s" x="114" y="76" style="fill:var(--text-3)">composer</text>
+        <rect class="nb-core" x="184" y="40" width="76" height="44" rx="7"/><text class="lbl-s" x="196" y="60">10</text><text class="lbl-s" x="196" y="76" style="fill:var(--lava)">laravel</text>
+        <rect class="nb" x="266" y="40" width="76" height="44" rx="7"/><text class="lbl-s" x="278" y="60">20</text><text class="lbl-s" x="278" y="76" style="fill:var(--text-3)">bdd</text>
+        <rect class="nb" x="348" y="40" width="76" height="44" rx="7"/><text class="lbl-s" x="360" y="60">30</text><text class="lbl-s" x="360" y="76" style="fill:var(--text-3)">prod</text>
+        <rect class="nb" x="430" y="40" width="76" height="44" rx="7"/><text class="lbl-s" x="442" y="60">35</text><text class="lbl-s" x="442" y="76" style="fill:var(--text-3)">spatie</text>
+        <rect class="nb" x="512" y="40" width="76" height="44" rx="7"/><text class="lbl-s" x="524" y="60">40</text><text class="lbl-s" x="524" y="76" style="fill:var(--text-3)">dev</text>
+        <rect class="nb" x="594" y="40" width="76" height="44" rx="7"/><text class="lbl-s" x="606" y="60">45</text><text class="lbl-s" x="606" y="76" style="fill:var(--text-3)">pest</text>
+        <rect class="nb" x="676" y="40" width="76" height="44" rx="7"/><text class="lbl-s" x="688" y="60">50</text><text class="lbl-s" x="688" y="76" style="fill:var(--text-3)">qualité</text>
+        <rect class="nb" x="758" y="40" width="60" height="44" rx="7"/><text class="lbl-s" x="768" y="60">60</text><text class="lbl-s" x="768" y="76" style="fill:var(--text-3)">nightw.</text>
+        <rect class="nb" x="824" y="40" width="58" height="44" rx="7"/><text class="lbl-s" x="834" y="60">99</text><text class="lbl-s" x="834" y="76" style="fill:var(--text-3)">final</text>
+      </g>
+
+      <!-- sentinelles -->
+      <path class="edge-dash" d="M58 84 V 118" marker-end="url(#ai)"/>
+      <path class="edge-dash" d="M222 84 V 118" marker-end="url(#ai)"/>
+      <path class="edge-dash" d="M552 84 V 118" marker-end="url(#ai)"/>
+      <path class="edge-dash" d="M852 84 V 118" marker-end="url(#ai)"/>
+      <rect class="nb-ok" x="20" y="122" width="862" height="52" rx="8"/>
+      <text class="lbl-t" x="34" y="142">.install-state/ — côté conteneur</text>
+      <text class="lbl-s" x="34" y="163">une sentinelle par module réussi · une relance saute ce qui en porte une · l'état sur disque décide, pas l'opérateur</text>
+
+      <rect class="nb" x="20" y="186" width="424" height="60" rx="8"/>
+      <text class="lbl" x="34" y="208">--dry-run</text>
+      <text class="lbl-s" x="34" y="226">le module 10 tourne vraiment et annonce chaque commande à effet en [DRY]</text>
+      <text class="lbl-s" x="34" y="240" style="fill:var(--warn)">les autres sont annoncés puis sautés — leur contenu n'est PAS décrit</text>
+
+      <rect class="nb" x="458" y="186" width="424" height="60" rx="8"/>
+      <text class="lbl" x="472" y="208">--resume-from=&lt;module&gt;</text>
+      <text class="lbl-s" x="472" y="226">saute ce qui précède · la valeur est validée contre la liste réelle des modules</text>
+      <text class="lbl-s" x="472" y="240" style="fill:var(--warn)">ne FORCE rien — seul --force rejoue un module déjà franchi</text>
+
+      <rect class="nb-mut" x="20" y="258" width="862" height="66" rx="8"/>
+      <text class="lbl-t" x="34" y="278">lockfile — côté hôte, et cette séparation est imposée par la mesure</text>
+      <text class="lbl-s" x="34" y="298">sha256(composer.lock) · php -v · node -v · horodatage</text>
+      <text class="lbl-s" x="34" y="314" style="fill:var(--text-3)">le conteneur php n'a ni CLI docker ni socket : il ne peut pas lire la version du conteneur node, seul producteur de node_modules/</text>
+
+      <defs>
+        <marker id="ai" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#2c2c31"/></marker>
+      </defs>
+    </svg>
+    <figcaption>En orange : le seul module conscient de la simulation. Les dix autres sont annoncés, puis sautés — et la page le dit plutôt que de laisser croire à un plan complet.</figcaption>
+  </figure>
+
+  <div class="grid g2" style="margin-top:20px">
+    <div class="note err">
+      <p><b>🔴 Le défaut de tête de la story 2.2 n'était pas dans le code — il était dans une fixture.</b> La racine d'état vivait dans le répertoire qu'une étape de nettoyage efface. Sur le chemin <b>nominal</b> d'un fork-streamer, les sentinelles étaient détruites après les modules 00 et 05, <b>code retour 0</b>, et l'installation échouait plus tard sur une installation pourtant réussie.</p>
+      <p style="margin-bottom:0"><b>25 mutations ne l'avaient pas vu</b> : aucune fixture ne posait la racine d'état dans la cible, et la ligne de matrice « cible vraiment vide » décrivait un état <em>qui n'existe jamais en production</em>.</p>
+    </div>
+    <div class="note warn">
+      <p><b>Et il a été corrigé faux deux fois.</b> <code>-prune</code> est inopérant sous <code>-depth</code>, que <code>-delete</code> implique. Son remplaçant <code>-not -path</code> prend un <b>motif glob</b> : mesuré, un crochet dans le chemin du dépôt faisait repartir la protection à zéro.</p>
+      <p style="margin-bottom:0">C'est le <b>même mécanisme, en sens inverse</b>, qu'un <code>grep</code> appliquant une expression régulière à un littéral, corrigé à la passe précédente. Un moteur de motif là où un littéral était voulu — <b>deux fois dans la même story</b>. La parade finale n'en emploie aucun : comparaison littérale, suppression une par une, vérifiée sur six chemins piégés.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="securite">
+  <div class="eyebrow">Sécurité</div>
+  <h2 class="sec">Quatre bloquants de mise en production</h2>
+  <p class="lede">Quatre conditions, verrouillées en séance, sans lesquelles rien ne part en production. Elles ne sont pas une checklist de bonnes intentions : chacune est un travail chiffré dans le plan.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th class="mono">#</th><th>Bloquant</th><th>Comment</th><th>Où</th><th>État</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td><b>Gitleaks</b></td><td>Crochet avant commit + étape CI. Un dépôt public rend une fuite de secret irréversible.</td><td><a class="plain" href="epics.html?epic=2">epic 2</a></td><td><span class="chip">à faire</span></td></tr>
+        <tr><td class="num">2</td><td><b>Suite Pest OWASP A01-A04</b></td><td>Authentification, contrôle d'accès, injection, cryptographie. Déplacée en phase 3 : A01 <em>est</em> la politique Filament, elle n'existe pas avant.</td><td>epics 4, 5, 9</td><td><span class="chip">à faire</span></td></tr>
+        <tr><td class="num">3</td><td><b>Consentement avant intégration</b></td><td>Aucune iframe Twitch ou YouTube chargée avant accord. <b>Remonté de l'epic 9 à l'epic 4</b> : quatre sprints d'exposition auraient été un risque juridique rétroactif.</td><td><a class="plain" href="epics.html?epic=4">epic 4</a></td><td><span class="chip">à faire</span></td></tr>
+        <tr><td class="num">4</td><td><b>Test d'installation de bout en bout</b></td><td>Une suite Bats jouée chaque nuit, sur une machine vierge, jusqu'à <code>/health</code> 200.</td><td><a class="plain" href="epics.html?epic=2">epic 2</a></td><td><span class="chip info">en revue</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <b>🔴 Le trou de sécurité réel de ce dépôt n'a jamais fait rougir un scanner</b>
+    <p><code>TRUSTED_PROXIES</code> a connu <b>trois itérations du même défaut, sur trois passes de revue différentes, en trois mois</b> — et il rendait inopérante la limitation de débit sur la connexion à l'administration.</p>
+    <p><b>Itération 1 :</b> la valeur était <code>*</code> — n'importe qui est un proxy de confiance, donc n'importe qui forge son adresse IP. <b>Itération 2 :</b> corrigée en <code>REMOTE_ADDR</code>… qui, sous FastCGI, vaut <em>l'adresse du client</em>. Le client devenait son propre proxy de confiance : la même faille, sous un autre nom. <b>Itération 3 :</b> le correctif avait déplacé l'appel <code>env()</code> de fichier — <b>pas de moment</b>. Mesuré : <code>app()-&gt;bound('config')</code> vaut <code>false</code> dans ce rappel ; sous configuration mise en cache, la liste de l'opérateur était remplacée en silence.</p>
+    <p style="margin-bottom:0"><b>Deux couches de revue recommandaient une correction qui était fausse</b> et aurait fermé la confiance aux proxys en silence. Le défaut n'a été fermé qu'en le <b>mesurant en HTTP réel depuis un conteneur voisin</b> : en-tête forgé → adresse forgée. La leçon est écrite : <em>un correctif de revue est du code à relire, pas une conclusion.</em></p>
+  </div>
+
+  <div class="two" style="margin-top:22px">
+    <div>
+      <h4 class="min" style="margin-top:0">En-têtes HTTP, en global</h4>
+      <ul style="color:var(--text-2);font-size:13.5px">
+        <li><code>Strict-Transport-Security</code> avec <code>preload</code></li>
+        <li><code>Content-Security-Policy</code> — présente, mais <b>éteinte</b> (<code>CSP_ENABLED=false</code>), arbitrage écrit</li>
+        <li><code>X-Frame-Options: DENY</code></li>
+        <li><code>X-Content-Type-Options: nosniff</code></li>
+        <li><code>Referrer-Policy: strict-origin-when-cross-origin</code></li>
+      </ul>
+      <h4 class="min">Limitation de débit</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Route</th><th class="mono">Limite</th></tr></thead>
+          <tbody>
+            <tr><td><code>api/*</code></td><td class="num">60 / min / IP</td></tr>
+            <tr><td><code>login</code></td><td class="num">5 / min / IP</td></tr>
+            <tr><td><code>register</code></td><td class="num">3 / min / IP</td></tr>
+            <tr><td><code>contact</code></td><td class="num">3 / h / IP</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h4 class="min" style="margin-top:0">Secrets</h4>
+      <p style="color:var(--text-2);font-size:13.5px"><code>php artisan env:encrypt</code> natif. Pas de Doppler, pas de Vault : pour une personne seule à budget nul, c'est du surdimensionnement à 4-8 h d'intégration. Le fichier chiffré est <b>versionnable</b> ; la clé vit en variable d'environnement serveur. <a class="ref" href="../adr/ADR-0006-secrets-env-encrypt-native.md">ADR-0006</a></p>
+      <h4 class="min">Sauvegardes</h4>
+      <p style="color:var(--text-2);font-size:13.5px">Trois couches. <b>Locale</b> — <code>pg_dump</code> quotidien à 3 h, rotation 14 jours, <em>activée</em>. <b>Distante gratuite</b> — <code>rclone</code> vers un service gratuit, <em>désactivée par défaut</em>, 5 min pour l'allumer, avec une sonde de santé qui <b>avertit</b> tant qu'elle est éteinte en production. <b>Payante</b> — reportée, avec un verrou en toutes lettres : <em>« mettre à niveau AVANT d'héberger la donnée d'un tiers »</em>. <a class="ref" href="../adr/ADR-0003-backup-local-only-v1.md">ADR-0003</a></p>
+      <h4 class="min">Files d'attente</h4>
+      <p style="color:var(--text-2);font-size:13.5px;margin-bottom:0">Tout travail transportant un jeton, un mot de passe ou une donnée personnelle implémente <code>ShouldBeEncrypted</code> : la charge utile est chiffrée dans Redis, ce qui réduit le rayon d'impact si la file est compromise.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="og">
+  <div class="eyebrow">Un flux qui mérite son schéma</div>
+  <h2 class="sec">Les images sociales : pré-générées, jamais à la volée</h2>
+  <p class="lede">Chaque article partagé devient une petite affiche identifiable hors du site. C'est un système d'identité gratuit — à condition que sa génération ne bloque jamais la publication.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 900 250" role="img" aria-labelledby="d-og-t d-og-d">
+      <title id="d-og-t">Génération des images de partage</title>
+      <desc id="d-og-d">La publication d'un article déclenche un travail asynchrone qui choisit un gabarit selon la note, rend une capture 1200 par 630 et l'écrit sur disque. En cas d'échec après trois essais, une image statique de repli est servie et une alerte remonte.</desc>
+
+      <rect class="nb" x="20" y="40" width="150" height="52" rx="8"/>
+      <text class="lbl" x="34" y="62">Publication</text>
+      <text class="lbl-s" x="34" y="80">observateur Article</text>
+      <path class="edge-lava" d="M170 66 H 214" marker-end="url(#ao)"/>
+
+      <rect class="nb-core" x="218" y="34" width="176" height="64" rx="8"/>
+      <text class="lbl" x="232" y="56">GenerateOgImage</text>
+      <text class="lbl-s" x="232" y="74">travail asynchrone</text>
+      <text class="lbl-s" x="232" y="90" style="fill:var(--text-3)">3 essais · délai 30 s</text>
+
+      <path class="edge-lava" d="M394 66 H 438" marker-end="url(#ao)"/>
+      <rect class="nb" x="442" y="20" width="200" height="112" rx="8"/>
+      <text class="lbl-t" x="456" y="40">choix du gabarit</text>
+      <text class="lbl-s" x="456" y="60">note ≥ 9 → stellar <tspan style="fill:var(--lava)">▌barre lava</tspan></text>
+      <text class="lbl-s" x="456" y="78">note 7-8 → solid <tspan style="fill:var(--ok)">▌succès discret</tspan></text>
+      <text class="lbl-s" x="456" y="96">note ≤ 6 → light <tspan style="fill:var(--text-3)">▌sobre</tspan></text>
+      <text class="lbl-s" x="456" y="118">type ≠ review → news</text>
+
+      <path class="edge-lava" d="M642 66 H 686" marker-end="url(#ao)"/>
+      <rect class="nb-ok" x="690" y="34" width="190" height="64" rx="8"/>
+      <text class="lbl" x="704" y="56">public/og/{slug}.png</text>
+      <text class="lbl-s" x="704" y="74">1200 × 630 · fond plat</text>
+      <text class="lbl-s" x="704" y="90" style="fill:var(--ok)">écrit une fois, servi mille</text>
+
+      <!-- repli -->
+      <path class="edge-dash" d="M306 98 V 160" marker-end="url(#ao)"/>
+      <rect class="nb-mut" x="218" y="164" width="424" height="66" rx="8"/>
+      <text class="lbl-t" x="232" y="184">après 3 échecs</text>
+      <text class="lbl-s" x="232" y="204">image statique de repli servie — la publication n'est jamais bloquée</text>
+      <text class="lbl-s" x="232" y="220" style="fill:var(--warn)">alerte Pulse sur les travaux en échec — le silence serait pire que l'image manquante</text>
+
+      <rect class="nb-ext" x="690" y="120" width="190" height="110" rx="8"/>
+      <text class="lbl-t" x="704" y="140">les règles de composition</text>
+      <text class="lbl-s" x="704" y="162">fond #0A0A0B plat</text>
+      <text class="lbl-s" x="704" y="180" style="fill:var(--text-3)">jamais de dégradé</text>
+      <text class="lbl-s" x="704" y="200">jaquette à gauche, 40 %</text>
+      <text class="lbl-s" x="704" y="220" style="fill:var(--text-3)">jamais de photo d'Alex</text>
+
+      <defs>
+        <marker id="ao" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#FF5722"/></marker>
+      </defs>
+    </svg>
+    <figcaption>Les quatre gabarits partagent 80 % de leur composition — un seul agencement, quatre jeux de couleurs. Sans cette contrainte, le coût de maintenance aurait fait sauter deux des quatre.</figcaption>
+  </figure>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="deps">
+  <div class="eyebrow">Ordonnancement</div>
+  <h2 class="sec">Le graphe des dépendances entre epics</h2>
+  <p class="lede">L'epic 1 débloque tout. Ensuite, presque tout est parallélisable — ce qui compte, parce qu'un plan séquentiel de 11 blocs n'a aucune marge de manœuvre quand un bloc glisse.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 900 330" role="img" aria-labelledby="d-dep-t d-dep-d">
+      <title id="d-dep-t">Dépendances entre les onze epics</title>
+      <desc id="d-dep-d">L'epic 1 précède tout. Les epics 2, 3, 4, 5 et 8 en dépendent directement. L'epic 7 dépend de l'epic 5, l'epic 6 aussi, l'epic 9 dépend des epics 4 et 5. Tous convergent vers l'epic 10 puis l'epic 11.</desc>
+
+      <rect class="nb-ok" x="20" y="130" width="130" height="66" rx="8"/>
+      <text class="lbl" x="34" y="152">Epic 1</text>
+      <text class="lbl-s" x="34" y="170">Fondations</text>
+      <text class="lbl-s" x="34" y="188" style="fill:var(--ok)">13 / 13 livrées</text>
+
+      <path class="edge" d="M150 163 H 186 V 44 H 216" marker-end="url(#ad)"/>
+      <path class="edge" d="M150 163 H 186 V 104 H 216" marker-end="url(#ad)"/>
+      <path class="edge" d="M150 163 H 186 V 164 H 216" marker-end="url(#ad)"/>
+      <path class="edge" d="M150 163 H 186 V 224 H 216" marker-end="url(#ad)"/>
+      <path class="edge" d="M150 163 H 186 V 284 H 216" marker-end="url(#ad)"/>
+
+      <rect class="nb-core" x="220" y="22" width="150" height="44" rx="7"/>
+      <text class="lbl" x="234" y="42">Epic 2 · Installeur</text>
+      <text class="lbl-s" x="234" y="58" style="fill:var(--lava)">4 / 13 · en cours</text>
+
+      <rect class="nb" x="220" y="82" width="150" height="44" rx="7"/>
+      <text class="lbl" x="234" y="102">Epic 3 · Exploitation</text>
+      <text class="lbl-s" x="234" y="118" style="fill:var(--text-3)">0 / 12</text>
+
+      <rect class="nb" x="220" y="142" width="150" height="44" rx="7"/>
+      <text class="lbl" x="234" y="162">Epic 4 · Live</text>
+      <text class="lbl-s" x="234" y="178" style="fill:var(--text-3)">0 / 12</text>
+
+      <rect class="nb" x="220" y="202" width="150" height="44" rx="7"/>
+      <text class="lbl" x="234" y="222">Epic 5 · Reviews</text>
+      <text class="lbl-s" x="234" y="238" style="fill:var(--text-3)">0 / 16</text>
+
+      <rect class="nb" x="220" y="262" width="150" height="44" rx="7"/>
+      <text class="lbl" x="234" y="282">Epic 8 · Press kit</text>
+      <text class="lbl-s" x="234" y="298" style="fill:var(--text-3)">0 / 12</text>
+
+      <path class="edge" d="M370 224 H 400 V 104 H 434" marker-end="url(#ad)"/>
+      <path class="edge" d="M370 224 H 400 V 164 H 434" marker-end="url(#ad)"/>
+      <path class="edge" d="M370 164 H 400 V 224 H 434" marker-end="url(#ad)"/>
+      <path class="edge" d="M370 224 H 400 V 224 H 434" marker-end="url(#ad)"/>
+
+      <rect class="nb" x="438" y="82" width="150" height="44" rx="7"/>
+      <text class="lbl" x="452" y="102">Epic 7 · Images</text>
+      <text class="lbl-s" x="452" y="118" style="fill:var(--text-3)">fixture de l'epic 5</text>
+
+      <rect class="nb" x="438" y="142" width="150" height="44" rx="7"/>
+      <text class="lbl" x="452" y="162">Epic 6 · Archive</text>
+      <text class="lbl-s" x="452" y="178" style="fill:var(--text-3)">SEO durable</text>
+
+      <rect class="nb" x="438" y="202" width="150" height="44" rx="7"/>
+      <text class="lbl" x="452" y="222">Epic 9 · Atelier</text>
+      <text class="lbl-s" x="452" y="238" style="fill:var(--text-3)">epics 4 + 5</text>
+
+      <path class="edge" d="M588 104 H 616 V 164 H 650" marker-end="url(#ad)"/>
+      <path class="edge" d="M588 164 H 650" marker-end="url(#ad)"/>
+      <path class="edge" d="M588 224 H 616 V 164 H 650" marker-end="url(#ad)"/>
+      <path class="edge" d="M370 44 H 616 V 164 H 650" marker-end="url(#ad)"/>
+      <path class="edge" d="M370 284 H 616 V 164 H 650" marker-end="url(#ad)"/>
+
+      <rect class="nb" x="654" y="130" width="106" height="66" rx="8"/>
+      <text class="lbl" x="666" y="152">Epic 10</text>
+      <text class="lbl-s" x="666" y="170">Audit final</text>
+      <text class="lbl-s" x="666" y="188" style="fill:var(--text-3)">non automatisable</text>
+
+      <path class="edge-lava" d="M760 163 H 792" marker-end="url(#ad2)"/>
+      <rect class="nb-core" x="796" y="130" width="86" height="66" rx="8"/>
+      <text class="lbl" x="808" y="152">Epic 11</text>
+      <text class="lbl-s" x="808" y="170">Publication</text>
+      <text class="lbl-s" x="808" y="188" style="fill:var(--lava)">MIT</text>
+
+      <defs>
+        <marker id="ad" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#2c2c31"/></marker>
+        <marker id="ad2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#FF5722"/></marker>
+      </defs>
+    </svg>
+    <figcaption>Chaque epic reste néanmoins autonome : la dépendance dit « ça se construit dessus », pas « ça ne peut pas commencer ».</figcaption>
+  </figure>
+</section>
+
+<hr class="sep">
+
+<section id="risques-archi">
+  <div class="eyebrow">Ce qu'on surveille</div>
+  <h2 class="sec">Huit risques architecturaux, chacun avec son détecteur</h2>
+  <p class="lede">Un risque sans détecteur est une inquiétude. La colonne du milieu est donc la seule qui compte vraiment.</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Risque</th><th>Détecté par</th><th>Ce qu'on fait alors</th></tr></thead>
+      <tbody>
+        <tr><td>Couplage direct entre modules</td><td>Scan Pest des <code>use</code>, bloquant</td><td>Acceptable en v1 ; bascule en événements si plus de 3 cas.</td></tr>
+        <tr><td><code>streamer_id</code> oublié dans une migration</td><td>Scan Pest des migrations, bloquant</td><td>La CI refuse le commit.</td></tr>
+        <tr><td>Sécurité au niveau ligne activée trop tôt</td><td>Documentation + ADR-0002</td><td>Ne pas activer avant audit du multi-locataire Filament.</td></tr>
+        <tr><td>La base de métrologie sature le disque</td><td>Sonde d'espace disque</td><td>Rotation à 7 jours + alerte Discord à 80 %.</td></tr>
+        <tr><td>La génération d'image bloque la publication</td><td>Alerte sur travaux en échec</td><td>Travail asynchrone, 3 essais, repli statique en place dès l'epic 7.</td></tr>
+        <tr><td>La sauvegarde distante n'est jamais activée</td><td class="err">rien pour l'instant</td><td>Une sonde de santé qui avertit en production — epic 3, story 3.8.</td></tr>
+        <tr><td>Prolifération des drapeaux de fonctionnalité</td><td>Audit à l'epic 10 si plus de 20</td><td>Moins de 10 sont prévus.</td></tr>
+        <tr><td>PostgreSQL trop récent chez l'hébergeur</td><td>Vérification de l'image Alpine</td><td>Repli documenté sur la version précédente.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer class="rr">
+  <span>Reading Room — écrite à la main, sans autorité. La hiérarchie du projet reste <b>ADR &gt; epics.md + sprint-status.yaml &gt; ETAT.md</b>.</span>
+  <span class="mono" data-plan-stamp>—</span>
+</footer>
+</main>
+
+<script src="data/plan.js"></script>
+<script src="assets/rr.js"></script>
+</body>
+</html>

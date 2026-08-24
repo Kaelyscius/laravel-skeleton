@@ -73,11 +73,19 @@ use Tests\Support\RepoFile;
 const PROCESS_DOCS = [
     'docs/process/02-bmad-workflow.md',
     'docs/process/03-boucle-qualite.md',
-    // La reading room PRESCRIT elle aussi des commandes — sa carte « plafond »
+    // La reading room PRESCRIT elle aussi des commandes — son « résumé
+    // exécutable » nomme la boucle étape par étape, et sa carte « plafond »
     // nomme celles qui comptent dans le quota. Un document qui prescrit entre
     // dans ce garde-fou, quel que soit son format : l'extraction est textuelle
     // et les blocs `bmad-referents:ignore` sont déjà des commentaires HTML.
-    'docs/reading-room/index.html',
+    //
+    // 🔄 RE-POINTÉ le 2026-08-24, d'`index.html` vers `qualite.html`. La reading
+    // room est passée d'une page à huit et la prescription a suivi la doctrine.
+    // ⚠️ C'est CE TEST qui l'a signalé, en rougissant sur son anti-vacuité :
+    // `index.html` ne nommait plus aucune commande, donc les deux assertions
+    // suivantes auraient été vertes en ne vérifiant RIEN. Le préalable a fait
+    // exactement le travail pour lequel il est écrit.
+    'docs/reading-room/qualite.html',
 ];
 
 /**

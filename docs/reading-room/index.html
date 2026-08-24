@@ -4,1163 +4,303 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reading Room — myLaravelSkeleton</title>
-<style>
-/* ───────────────────────────────────────────────────────────────────────────
-   Palette reprise de src/resources/css/tokens.css (RÈGLE 3 : dark-only).
-   Le lava (#FF5722) est tenu à la même discipline que dans l'app : il ne
-   marque QUE l'endroit où on en est. Le reste est monochrome + états.
-   Pas de fonte distante, pas de CDN : ce fichier s'ouvre hors ligne.
-   ─────────────────────────────────────────────────────────────────────── */
-:root{
-  --bg:#0A0A0B; --surface:#141416; --surface-2:#1a1a1d; --border:#1F1F22;
-  --border-hi:#2c2c31;
-  --text:rgba(255,255,255,.92); --text-2:rgba(255,255,255,.60);
-  --text-3:rgba(255,255,255,.38);
-  --lava:#FF5722; --ok:#22C55E; --warn:#F59E0B; --err:#EF4444;
-  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
-  --r:10px;
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:78px}
-body{
-  margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
-  font-size:15px;line-height:1.62;-webkit-font-smoothing:antialiased;
-}
-h1,h2,h3,h4{line-height:1.25;margin:0;font-weight:600;letter-spacing:-.01em}
-a{color:inherit}
-p{margin:0 0 .85em}
-code,.mono{font-family:var(--mono);font-size:.88em}
-
-/* ── Liens-référents : toute citation de fichier est un lien cliquable,
-      et c'est précisément ce que le garde-fou Pest vérifie. ───────────── */
-a.ref{
-  font-family:var(--mono);font-size:.86em;color:var(--text);
-  text-decoration:none;border-bottom:1px dashed var(--border-hi);
-  padding-bottom:1px;white-space:nowrap;
-}
-a.ref:hover{border-bottom-color:var(--lava);color:#fff}
-a.ref::after{content:"↗";font-size:.8em;opacity:.35;margin-left:.25em}
-
-/* ── Chrome ─────────────────────────────────────────────────────────────── */
-.skip{position:absolute;left:-9999px}
-.skip:focus{left:12px;top:12px;z-index:99;background:var(--lava);color:#000;
-  padding:8px 14px;border-radius:6px;font-weight:600}
-nav.top{
-  position:sticky;top:0;z-index:40;background:rgba(10,10,11,.86);
-  backdrop-filter:blur(12px);border-bottom:1px solid var(--border);
-}
-nav.top .in{max-width:1160px;margin:0 auto;padding:0 24px;display:flex;
-  align-items:center;gap:22px;height:56px;overflow-x:auto}
-nav.top .brand{font-weight:600;font-size:14px;white-space:nowrap;
-  display:flex;align-items:center;gap:9px}
-nav.top .brand i{width:7px;height:7px;border-radius:50%;background:var(--lava);
-  display:block;flex:0 0 auto}
-nav.top a{color:var(--text-2);text-decoration:none;font-size:13px;
-  white-space:nowrap;padding:4px 0;border-bottom:2px solid transparent}
-nav.top a:hover{color:var(--text)}
-nav.top a.on{color:var(--text);border-bottom-color:var(--lava)}
-
-main{max-width:1160px;margin:0 auto;padding:0 24px 120px}
-section{padding-top:64px}
-.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--text-3);margin-bottom:10px}
-.lede{color:var(--text-2);max-width:74ch;margin-bottom:26px}
-hr.sep{border:0;border-top:1px solid var(--border);margin:0}
-
-/* ── En-tête ────────────────────────────────────────────────────────────── */
-header.hero{padding:60px 0 8px}
-header.hero h1{font-size:clamp(30px,4.6vw,46px);letter-spacing:-.025em}
-header.hero .sub{color:var(--text-2);font-size:17px;margin-top:14px;max-width:70ch}
-
-.authority{
-  margin:30px 0 4px;border:1px solid var(--border-hi);border-left:3px solid var(--warn);
-  border-radius:var(--r);background:linear-gradient(180deg,rgba(245,158,11,.055),transparent);
-  padding:18px 20px;
-}
-.authority b{color:var(--warn)}
-.authority p:last-child{margin-bottom:0}
-.stamp{
-  display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px;
-  font-family:var(--mono);font-size:11.5px;color:var(--text-3);
-}
-.stamp span b{color:var(--text-2);font-weight:400}
-
-/* ── Cartes ─────────────────────────────────────────────────────────────── */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}
-.grid{display:grid;gap:14px}
-.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
-.g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
-.g4{grid-template-columns:repeat(auto-fit,minmax(178px,1fr))}
-
-/* ── Dashboard ──────────────────────────────────────────────────────────── */
-.dash{display:grid;gap:14px;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}
-@media(max-width:900px){.dash{grid-template-columns:1fr}}
-.panel{padding:22px}
-.panel > h3{font-size:12px;font-family:var(--mono);letter-spacing:.13em;
-  text-transform:uppercase;color:var(--text-3);margin-bottom:18px;font-weight:500}
-
-.bigbar{margin-bottom:22px}
-.bigbar .row{display:flex;align-items:baseline;justify-content:space-between;
-  margin-bottom:9px}
-.bigbar .lab{font-size:13px;color:var(--text-2)}
-.bigbar .pct{font-size:26px;font-weight:600;font-family:var(--mono);
-  letter-spacing:-.02em}
-.track{height:9px;border-radius:99px;background:var(--surface-2);
-  border:1px solid var(--border);overflow:hidden;display:flex}
-.track i{display:block;height:100%}
-.fill-done{background:var(--text-2)}
-.fill-now{background:var(--lava)}
-
-.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-  gap:1px;background:var(--border);border:1px solid var(--border);
-  border-radius:8px;overflow:hidden}
-.metric{background:var(--surface);padding:13px 14px;text-align:left;border:0;
-  cursor:pointer;font:inherit;color:inherit;display:block;width:100%;
-  transition:background .12s}
-.metric:hover,.metric:focus-visible{background:var(--surface-2);outline:none}
-.metric:focus-visible{box-shadow:inset 0 0 0 2px rgba(255,87,34,.4)}
-.metric .k{font-size:11px;color:var(--text-3);font-family:var(--mono);
-  letter-spacing:.06em;display:flex;align-items:center;gap:6px}
-.metric .k::after{content:"+";opacity:.35;margin-left:auto;font-size:13px}
-.metric[aria-expanded="true"] .k::after{content:"−"}
-.metric .v{font-size:20px;font-weight:600;font-family:var(--mono);
-  margin-top:3px;letter-spacing:-.02em}
-.metric .v small{font-size:12px;color:var(--text-3);font-weight:400;
-  letter-spacing:0}
-.prov{
-  grid-column:1/-1;background:var(--surface-2);padding:0 16px;
-  font-size:13px;color:var(--text-2);overflow:hidden;max-height:0;
-  transition:max-height .22s ease,padding .22s ease;
-}
-.prov.open{max-height:340px;padding:14px 16px}
-.prov p:last-child{margin-bottom:0}
-
-.dot{width:8px;height:8px;border-radius:50%;display:inline-block;
-  flex:0 0 auto;vertical-align:baseline}
-.d-ok{background:var(--ok)} .d-warn{background:var(--warn)}
-.d-err{background:var(--err)} .d-idle{background:var(--text-3)}
-.d-now{background:var(--lava)}
-
-/* ── Listes de risques / questions ──────────────────────────────────────── */
-.items{display:flex;flex-direction:column;gap:1px;background:var(--border);
-  border:1px solid var(--border);border-radius:8px;overflow:hidden}
-.item{background:var(--surface)}
-.item > button{
-  width:100%;background:none;border:0;font:inherit;color:inherit;cursor:pointer;
-  text-align:left;padding:13px 15px;display:flex;gap:11px;align-items:flex-start;
-  transition:background .12s;
-}
-.item > button:hover,.item > button:focus-visible{background:var(--surface-2);outline:none}
-.item > button:focus-visible{box-shadow:inset 0 0 0 2px rgba(255,87,34,.4)}
-.item .dot{margin-top:7px}
-.item .ttl{flex:1;font-size:14px}
-.item .ttl em{display:block;font-style:normal;color:var(--text-3);
-  font-size:12px;margin-top:2px;font-family:var(--mono)}
-.item .chev{color:var(--text-3);font-size:12px;margin-top:3px;
-  transition:transform .18s}
-.item > button[aria-expanded="true"] .chev{transform:rotate(90deg)}
-.body{max-height:0;overflow:hidden;transition:max-height .25s ease}
-.body.open{max-height:1400px}
-.body .in{padding:2px 15px 18px 34px;color:var(--text-2);font-size:14px}
-.body .in p:last-child{margin-bottom:0}
-.body .in ul{margin:.4em 0 .8em;padding-left:1.1em}
-.body .in li{margin-bottom:.3em}
-
-/* ── Tableaux ───────────────────────────────────────────────────────────── */
-.tw{overflow-x:auto;border:1px solid var(--border);border-radius:8px}
-table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
-th,td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--border);
-  vertical-align:top}
-th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--text-3);font-weight:500;
-  background:var(--surface-2);position:sticky;top:0}
-tr:last-child td{border-bottom:0}
-tbody tr:hover{background:var(--surface-2)}
-td.num{font-family:var(--mono);text-align:right;white-space:nowrap}
-.hi{color:var(--lava);font-weight:600}
-.mut{color:var(--text-3)}
-
-/* ── Onglets ────────────────────────────────────────────────────────────── */
-.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
-.tab{background:var(--surface);border:1px solid var(--border);color:var(--text-2);
-  padding:6px 13px;border-radius:99px;font:inherit;font-size:13px;cursor:pointer;
-  transition:.12s}
-.tab:hover{color:var(--text);border-color:var(--border-hi)}
-.tab[aria-selected="true"]{background:var(--text);color:var(--bg);
-  border-color:var(--text);font-weight:500}
-.tab:focus-visible{outline:2px solid rgba(255,87,34,.5);outline-offset:2px}
-.pane[hidden]{display:none}
-
-/* ── Encadrés ───────────────────────────────────────────────────────────── */
-.note{border-left:2px solid var(--border-hi);padding:2px 0 2px 15px;
-  color:var(--text-2);font-size:13.5px;margin:16px 0}
-.note.lava{border-left-color:var(--lava)}
-.note.warn{border-left-color:var(--warn)}
-.note.err{border-left-color:var(--err)}
-.note.ok{border-left-color:var(--ok)}
-.note b{color:var(--text)}
-
-.tagrow{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
-.tag{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:5px;
-  background:var(--surface-2);border:1px solid var(--border);color:var(--text-2)}
-.tag.on{border-color:rgba(34,197,94,.4);color:var(--ok)}
-.tag.off{color:var(--text-3)}
-.tag.hot{border-color:rgba(255,87,34,.45);color:var(--lava)}
-
-figure{margin:22px 0}
-figure svg{display:block;width:100%;height:auto;border:1px solid var(--border);
-  border-radius:var(--r);background:var(--surface)}
-figcaption{color:var(--text-3);font-size:12.5px;margin-top:10px;max-width:76ch}
-svg text{font-family:var(--sans)}
-svg .m{font-family:var(--mono)}
-
-footer{border-top:1px solid var(--border);margin-top:80px;padding:30px 0 0;
-  color:var(--text-3);font-size:13px}
-@media print{nav.top{display:none}.body{max-height:none!important}.prov{max-height:none!important;padding:14px 16px!important}}
-</style>
+<meta name="description" content="Comprendre ce projet sans ouvrir le code : le produit, le plan, l'architecture, les décisions, la qualité et l'état réel.">
+<link rel="stylesheet" href="assets/rr.css">
 </head>
 <body>
-<a class="skip" href="#overview">Aller au tableau de bord</a>
+<a class="skip" href="#carte">Aller à la carte du document</a>
 
-<nav class="top" aria-label="Sections">
+<nav class="top" aria-label="Sections de la reading room">
   <div class="in">
-    <span class="brand"><i></i>Reading Room</span>
-    <a href="#overview">Vue d'ensemble</a>
-    <a href="#stage">Où on en est</a>
-    <a href="#risks">Risques</a>
-    <a href="#open">Non tranché</a>
-    <a href="#design">Conception</a>
-    <a href="#delivered">Livré</a>
-    <a href="#reviews">Revues</a>
-    <a href="#pattern">Le motif</a>
-    <a href="#decisions">Décisions</a>
+    <a class="brand" href="index.html"><i></i>Reading&nbsp;Room</a>
+    <div class="links">
+      <a href="index.html">Accueil</a>
+      <a href="produit.html">Produit</a>
+      <a href="epics.html">Plan</a>
+      <a href="exigences.html">Exigences</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="decisions.html">Décisions</a>
+      <a href="qualite.html">Qualité</a>
+      <a href="suivi.html">Où on en est</a>
+    </div>
   </div>
 </nav>
 
 <main>
 <header class="hero">
   <div class="eyebrow">myLaravelSkeleton · squelette Laravel pour streamers</div>
-  <h1>Ce que ce projet est,<br>et où il en est vraiment.</h1>
-  <p class="sub">Un squelette Laravel 13 modulaire, mono-tenant aujourd'hui et multi-streamer par construction, dont un fork peut éteindre des pans entiers par variable d'environnement. Cette page réunit la conception, l'avancée, les risques et ce qui n'est pas tranché — en une seule lecture.</p>
+  <h1>Comprendre ce projet<br>sans ouvrir le code.</h1>
+  <p class="sub">Un squelette Laravel 13 modulaire — mono-streamer aujourd'hui, multi-streamer par construction — dont un fork peut éteindre des pans entiers par variable d'environnement. Ces huit pages réunissent la conception, le plan complet, l'architecture, les décisions, la doctrine de qualité et l'état réel. <b>En une seule lecture, et hors ligne.</b></p>
 
   <div class="authority">
-    <p><b>⚠️ Ce document n'a aucune autorité.</b> La hiérarchie du projet est fixée et ne change pas : <b>ADR &gt; epics.md + sprint-status.yaml &gt; ETAT.md</b>. Cette page se range <b>sous</b> tout cela. Elle ne se cite pas dans une story, elle ne tranche rien, elle ne sert pas de preuve. Elle est écrite à la main et elle dérivera — comme tout ce qui est écrit à la main.</p>
+    <p><b>⚠️ Ce document n'a aucune autorité.</b> La hiérarchie du projet est fixée et ne change pas : <b>ADR &gt; epics.md + sprint-status.yaml &gt; ETAT.md</b>. Cette reading room se range <b>sous</b> tout cela. Elle ne se cite pas dans une story, elle ne tranche rien, elle ne sert pas de preuve.</p>
     <p style="margin-bottom:0">Ce qu'elle garantit, en revanche : <b>chaque fichier qu'elle cite existe.</b> Toute citation est un lien cliquable, et un test Pest vérifie que chacun résout sur disque — <a class="ref" href="../../src/tests/Unit/ReadingRoomReferentsTest.php">src/tests/Unit/ReadingRoomReferentsTest.php</a>. C'est le seul axe sur lequel une page statique peut être tenue honnête ; sur les <em>nombres</em>, elle ne peut rien, et c'est pourquoi chacun affiche d'où il vient.</p>
     <div class="stamp">
-      <span><b>lu le</b> 2026-08-20</span>
+      <span><b>relu le</b> 2026-08-24</span>
+      <span><b>plan extrait le</b> <span data-plan-stamp>—</span></span>
       <span><b>branche</b> main</span>
-      <span><b>commit</b> c00f3d6</span>
-      <span><b>arbre de travail</b> propre</span>
-      <span><b>CI</b> 3 / 3 verts sur ce commit, poussé</span>
+      <span class="err"><b>nightly</b> rouge — <a class="plain" href="suivi.html#dash">voir pourquoi</a></span>
     </div>
   </div>
 </header>
 
-<section id="overview">
-  <div class="eyebrow">01 — Vue d'ensemble</div>
-  <h2 style="font-size:24px;margin-bottom:10px">Tableau de bord</h2>
-  <p class="lede">Chaque compteur est cliquable : il montre <b>d'où il vient</b> et ce qu'il ne dit pas. Un nombre sans provenance, dans ce dépôt, s'appelle une affirmation sans référent — et il y en a déjà eu dix-huit.</p>
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="quoi">
+  <div class="eyebrow">01 — En trois minutes</div>
+  <h2 class="sec">Deux produits, un seul dépôt</h2>
 
-  <div class="dash">
-    <div class="card panel">
-      <h3>Avancement</h3>
-
-      <div class="bigbar">
-        <div class="row">
-          <span class="lab">Plan complet — 11 epics, 131 stories</span>
-          <span class="pct">10<small style="font-size:15px;color:var(--text-3)">%</small></span>
-        </div>
-        <div class="track"><i class="fill-done" style="width:9.9%"></i></div>
-      </div>
-
-      <div class="bigbar" style="margin-bottom:8px">
-        <div class="row">
-          <span class="lab">Epic 1 — Foundations</span>
-          <span class="pct" style="font-size:20px;color:var(--ok)">100<small style="font-size:13px;color:var(--text-3)">%</small></span>
-        </div>
-        <div class="track"><i class="fill-done" style="width:100%;background:var(--ok);opacity:.75"></i></div>
-        <p class="mut" style="font-size:12px;margin:9px 0 0"><b style="color:var(--ok)">13 / 13 stories <span style="color:var(--text-2)">done</span></b> — la 1.10a close le 2026-08-20. La 1.10b a été déplacée en Epic 5. L'epic bascule à <span class="mono">done</span> <b>à la rétrospective</b>, qui est en cours.</p>
-      </div>
-
-      <div class="metrics" style="margin-top:20px">
-        <button class="metric" aria-expanded="false" data-prov="p-epics">
-          <span class="k">Epics</span><span class="v">0 <small>/ 11</small></span></button>
-        <button class="metric" aria-expanded="false" data-prov="p-stories">
-          <span class="k">Stories</span><span class="v">13 <small>/ 131</small></span></button>
-        <button class="metric" aria-expanded="false" data-prov="p-tests">
-          <span class="k">Tests</span><span class="v">250 <small>déclarés</small></span></button>
-        <button class="metric" aria-expanded="false" data-prov="p-browser">
-          <span class="k">Navigateur</span><span class="v">34</span></button>
-        <div class="prov" id="p-epics">
-          <p><b>Source :</b> <span class="mono">_bmad-output/implementation-artifacts/sprint-status.yaml</span> — <span class="mono">epic-1: in-progress</span>, epics 2 à 11 <span class="mono">backlog</span>.</p>
-          <p><b>⚠️ Ce compteur est en retard sur la réalité, et c'est réglementaire :</b> les 13 stories d'Epic 1 sont <span class="mono">done</span> depuis le 2026-08-20, mais un epic ne bascule qu'à <b>la rétrospective</b>. Elle est en cours. « 0/11 » est donc juste au sens du fichier et faux au sens du travail — raison de plus pour ne rien fonder sur cette page.</p>
-          <p>Le fichier source est dans <span class="mono">_bmad-output/</span>, qui est <b>gitignoré</b> : il n'apparaît dans aucun diff et n'existe que sur cette machine.</p>
-        </div>
-        <div class="prov" id="p-stories">
-          <p><b>Source :</b> 131 titres <span class="mono">### Story</span> comptés dans <span class="mono">epics.md</span> ; 13 clés à <span class="mono">done</span> dans <span class="mono">sprint-status.yaml</span>.</p>
-          <p><b>Ce que ça ne dit pas :</b> cinq stories de processus (spike runner, observation module éteint, écrans de référence, relecture d'AC, déclaration Livewire) sont <span class="mono">done</span> mais <b>absentes du plan</b> — elles ne comptent nulle part. Le rythme réel n'est donc pas lisible sur ce ratio.</p>
-        </div>
-        <div class="prov" id="p-tests">
-          <p><b>Source :</b> 250 = déclarations <span class="mono">it(</span> / <span class="mono">test(</span> comptées le 2026-08-20 dans <span class="mono">src/tests/Unit</span> (19) et <span class="mono">src/tests/Feature</span> (231).</p>
-          <p><b>⚠️ Écart non expliqué, et il persiste :</b> la story 1.10a rapporte <b>240 exécutions</b> et 1 366 assertions. L'écart de 10 entre les déclarations et les exécutions n'a jamais été instruit — il était de 7 le matin même. Un compte statique n'est pas un compte d'exécution, et cette page ne sait pas lequel a raison. Le seul chiffre qui engage est celui que <span class="mono">make test</span> imprime.</p>
-        </div>
-        <div class="prov" id="p-browser">
-          <p><b>Source :</b> 34 déclarations dans <span class="mono">src/tests/Browser</span> (5 fichiers), inchangé depuis la 1.9.</p>
-          <p><b>À savoir :</b> <span class="mono">tests/Browser</span> n'est <b>pas</b> une testsuite de <span class="mono">phpunit.xml</span>, délibérément — sinon <span class="mono">php artisan test</span> exigerait un Chromium en CI et en production. Elle se lance par <span class="mono">make test-browser</span>, et son verdict se lit dans le rapport JUnit, pas dans le code de sortie (<a class="ref" href="../adr/ADR-0013-runner-navigateur-pest-browser.md">docs/adr/ADR-0013…</a>).</p>
-        </div>
-
-        <button class="metric" aria-expanded="false" data-prov="p-ratchet">
-          <span class="k">Ratchet</span><span class="v" style="color:var(--ok)">0/0/0</span></button>
-        <button class="metric" aria-expanded="false" data-prov="p-phpstan">
-          <span class="k">PHPStan</span><span class="v">niv. 10</span></button>
-        <button class="metric" aria-expanded="false" data-prov="p-sec">
-          <span class="k">Sécurité</span><span class="v" style="color:var(--ok)">0 <small>advisory</small></span></button>
-        <button class="metric" aria-expanded="false" data-prov="p-ci">
-          <span class="k">CI</span><span class="v" style="color:var(--ok)">3 <small>/ 3</small></span></button>
-        <div class="prov" id="p-ratchet">
-          <p><b>Source :</b> <a class="ref" href="../../src/quality-baseline.json">src/quality-baseline.json</a> — ECS 0 erreur / 0 diff, PHPStan 0 erreur de fichier, mis à jour le 2026-08-08. Appliqué par <a class="ref" href="../../scripts/quality-ratchet.sh">scripts/quality-ratchet.sh</a>.</p>
-          <p>Le ratchet est <b>monotone</b> : les compteurs ne remontent jamais. Toute hausse est un échec, pas une négociation ; faire monter un compteur exige de modifier ce fichier <b>dans le même commit</b>, pour que ce soit visible en revue.</p>
-        </div>
-        <div class="prov" id="p-phpstan">
-          <p><b>Source :</b> <span class="mono">level: 10</span> dans <span class="mono">src/phpstan.neon</span>. Monté de 8 à 10 le 2026-08-07, dette ramenée à zéro dans le même passage.</p>
-          <p>Effet de bord observé en 1.10a : dans une closure Pest, PHPStan résout <span class="mono">$this</span> en <span class="mono">TestCall</span> — 49 erreurs de ce seul motif, résorbées en extrayant <span class="mono">Tests\Support\HttpProbe</span>.</p>
-        </div>
-        <div class="prov" id="p-sec">
-          <p><b>Source :</b> <span class="mono">composer audit</span> et <span class="mono">npm audit</span> à 0 sur la 1.10a, plus le workflow <em>Security Audit</em> vert sur <span class="mono">c00f3d6</span> et sa passe nocturne planifiée.</p>
-          <p><b>Ce que ça ne dit pas :</b> zéro advisory n'est pas zéro défaut. Le trou de sécurité réel de ce dépôt — <span class="mono">TRUSTED_PROXIES=*</span> rendant inopérant le rate limiting du login — n'a jamais fait rougir un scanner. Il a été trouvé en <b>mesurant</b>, et il avait été <b>introduit par une revue de code</b> (voir §07).</p>
-        </div>
-        <div class="prov" id="p-ci">
-          <p><b>Source :</b> <span class="mono">gh run list</span> le 2026-08-20 — trois workflows <b>verts</b> sur <span class="mono">c00f3d6</span>, poussé : <em>Laravel CI/CD Pipeline</em> (2 min 04), <em>Security Audit</em> (1 min 22), <em>Docker Build &amp; Validation</em> (10 min 49).</p>
-          <p>✅ <b>Le vert parle bien du code de la 1.10a</b> — ce qui n'était pas le cas ce matin, où 2 774 insertions attendaient dans l'arbre de travail sans qu'aucune CI ne les ait vues.</p>
-        </div>
+  <div class="two">
+    <div>
+      <p style="font-size:15.5px;color:var(--text-2)">D'un côté, <b>le site personnel d'un streamer</b> : savoir en un coup d'œil s'il est en direct, lire des analyses de jeux longues et honnêtes, et donner à un studio de quoi juger sa légitimité en trente secondes.</p>
+      <p style="font-size:15.5px;color:var(--text-2)">De l'autre, <b>le squelette libre sous licence MIT</b> qu'un autre streamer forke pour obtenir le sien — installé sur un VPS vierge en moins de quinze minutes, avec ses modules activables par variable d'environnement.</p>
+      <p style="font-size:15.5px;color:var(--text-2)">Les deux sortent du même code, et <b>cette contrainte explique la moitié des décisions du projet</b> : la colonne <code>streamer_id</code> posée dès le premier jour alors qu'il n'y a qu'une ligne, les modules qu'on éteint sans toucher au code, un installeur traité comme un produit à part entière.</p>
+      <div class="callout">
+        <b>Le pari, formulé sans précaution</b>
+        <p style="margin-bottom:0">Un <b>préréglage fort</b> — opinion tranchée, refus explicite du modèle « personnalisable à l'exécution » — battra un panneau d'administration, à la fois pour la maintenabilité et pour la crédibilité du dépôt public. Conséquence assumée : <b>on ne personnalise pas par une interface, on forke.</b></p>
       </div>
     </div>
-
-    <div class="card panel">
-      <h3>Épilogue d'Epic 1 — et la prochaine story</h3>
-      <p style="font-size:13.5px;color:var(--text-2);margin-bottom:16px">
-        <b style="color:var(--ok)">La 1.10a est <span class="mono">done</span> depuis le 2026-08-20</b>, après <b>deux passes de revue</b> — le plafond, atteint et respecté. Il n'y a pas eu de troisième.
-      </p>
-
-      <div class="bigbar">
-        <div class="row"><span class="lab">Clôture d'Epic 1</span><span class="pct" style="font-size:20px">88<small style="font-size:13px;color:var(--text-3)">%</small></span></div>
-        <div class="track"><i class="fill-done" style="width:82%"></i><i class="fill-now" style="width:6%"></i></div>
+    <div class="stack">
+      <div class="card pad">
+        <h4 class="min" style="margin-top:0">La pile effective</h4>
+        <dl class="kv">
+          <dt>Langage</dt><dd>PHP 8.5</dd>
+          <dt>Framework</dt><dd>Laravel 13</dd>
+          <dt>Données</dt><dd>PostgreSQL 18 · Redis 8</dd>
+          <dt>Interface</dt><dd>Blade · Livewire 4 · Alpine · Tailwind 4</dd>
+          <dt>Admin</dt><dd>Filament v5</dd>
+          <dt>Tests</dt><dd>Pest 4 · Chromium · Bats</dd>
+          <dt>Serveur</dt><dd>Apache 2.4 · Docker Compose</dd>
+        </dl>
       </div>
-
-      <div class="items" style="margin-top:18px">
-        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Revue — passe 1<em>2026-08-10 · 3 décisions + 10 correctifs</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Trois couches, 25 fichiers / 2 640 lignes, les constats de tête <b>reproduits sur la pile qui tourne</b>. Puis ses conclusions sont largement restées lettre morte — voir ci-dessous.</p></div></div></div>
-
-        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Revue — passe 2<em>2026-08-20 · 5 décisions + 23 correctifs + 5 reports</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in">
-            <p>Quatre couches parallèles en fenêtres neuves. Son <b>premier constat porte sur la passe 1</b> : des 13 constats du 10/08, <b>1 résolu</b> (P9), <b>2 traités sans atteindre leur but</b>, <b>10 intacts</b>. Les quatre couches, <b>qui ne connaissaient pas cette liste</b>, en ont retrouvé huit indépendamment — c'est-à-dire payés deux fois.</p>
-            <p>Trois autres faits mesurés : la CSP <b>est</b> portée par le trafic du panel (<span class="mono">POST /livewire-*/update</span>), la conclusion inverse ayant été tirée de la seule route qui ne la porte pas ; <b>aucun test n'ouvrait la porte</b> — tous injectaient l'utilisateur en processus, donc la seule surface authentifiée du produit pouvait être livrée <em>inouvrable</em> ; et deux routes Filament survivent à <span class="mono">MODULE_ADMIN_ENABLED=false</span>, parce qu'elles appartiennent au paquet et non au panel.</p>
-          </div></div></div>
-
-        <div class="item"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">🔴 <span class="mono">TRUSTED_PROXIES</span>, troisième itération<em>le correctif de la passe 1 était inopérant en production</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in">
-            <p>Le correctif du 10/08 avait déplacé l'<span class="mono">env()</span> de <span class="mono">bootstrap/app.php</span> vers <span class="mono">config/proxies.php</span>… puis <span class="mono">require</span> ce fichier <b>depuis le même callback</b>. L'<span class="mono">env()</span> avait changé de <b>fichier</b>, pas de <b>moment</b> : sous <span class="mono">config:cache</span>, la liste de proxys de l'opérateur était remplacée en silence par <span class="mono">REMOTE_ADDR</span>.</p>
-            <p><b>Mesuré :</b> <span class="mono">app()->bound('config')</span> vaut <b>false</b> dans le callback <span class="mono">withMiddleware()</span> — ni <span class="mono">env()</span> ni <span class="mono">config()</span> n'y sont lisibles. La valeur est désormais posée par <span class="mono">CoreServiceProvider::boot()</span>.</p>
-            <p>⚠️ <b>Deux couches de revue recommandaient d'y lire <span class="mono">config('proxies.at')</span>.</b> La recommandation était <b>fausse</b> et aurait fermé la confiance aux proxys en silence. Une revue peut se tromper avec assurance — c'est pour ça qu'un correctif de revue est du code à relire, pas une conclusion.</p>
-            <p class="mut">Troisième itération du même défaut, sur trois passes différentes, en trois mois. Un en-tête <span class="mono">Host</span> forgé suffisait encore à rendre le joker à l'itération précédente (<span class="mono">dc03611</span>).</p>
-          </div></div></div>
-
-        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Campagne de mutation rejouée<em>7 mutations · 2 survivantes traitées · 1 assumée</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Dont le correctif d'un garde-fou silencieux qui était <b>lui-même livré sans garde</b>. Une 3ᵉ survivante est <b>assumée et écrite</b> : aucune mutation atteignable ne la démontre, et l'écrire vaut mieux que fabriquer un vert.</p></div></div></div>
-
-        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Un constat NON corrigé, délibérément<em>W9 — reporté avec sa mesure</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Le 3ᵉ Given de l'AC5 n'est pas composable sous <span class="mono">Livewire::test()</span> : <span class="mono">RequestBroker</span> désactive les middlewares et <span class="mono">REMOTE_ADDR</span> n'y est pas pilotable. <b>Établi par un contre-test qui a rougi</b>, puis reporté avec sa mesure — plutôt que fabriquer un vert.</p></div></div></div>
-
-        <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Commit, push, CI<em>3 workflows verts sur <span class="mono">c00f3d6</span></em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Le vert parle enfin du code de la story. Arbre de travail propre.</p></div></div></div>
-
-        <div class="item"><button aria-expanded="false"><span class="dot d-now"></span><span class="ttl">Rétrospective d'Epic 1<em>en cours — c'est elle qui bascule l'epic</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Elle était marquée <span class="mono">optional</span>. Elle ne l'est plus en pratique : l'Epic 1 est le seul epic dont l'exécution a produit une <b>doctrine</b> — la boucle qualité, la règle du rouge observé, le catalogue des garde-fous silencieux, le plafond de revues et son amendement. Les dix epics suivants en héritent ou la réinventent.</p></div></div></div>
-
-        <div class="item"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">Prochaine story<em>Epic 2 — Installer &amp; Quality Gates</em></span><span class="chev">›</span></button>
-          <div class="body"><div class="in"><p>Dix jours au budget, et il porte deux dettes déjà nommées ici : le <b>Lot E</b> de la supply chain (<span class="mono">vite@latest</span>, <span class="mono">webpack@latest</span>, <span class="mono">pnpm@latest</span> — des cibles mouvantes dans une image figée) et le binaire Node de 52,5 Mo embarqué dans l'image PHP de production.</p><p>⚠️ Première story sous le nouveau régime : <b>appliquer les constats de la passe 1 avant d'ouvrir la passe 2</b>. C'est le corollaire qui a coûté le plus cher à la 1.10a.</p></div></div></div>
+      <div class="card pad">
+        <h4 class="min" style="margin-top:0">Les chiffres du plan</h4>
+        <div class="metrics">
+          <button class="metric" aria-expanded="false" data-prov="p-plan">
+            <span class="k">Epics</span><span class="v"><span data-plan-count="epics">11</span></span></button>
+          <button class="metric" aria-expanded="false" data-prov="p-plan2">
+            <span class="k">Stories</span><span class="v"><span data-plan-count="stories">131</span></span></button>
+          <div class="prov" id="p-plan">
+            <p style="margin-bottom:0"><b>Source :</b> extraction automatique de <code>epics.md</code> par <a class="ref" href="tools/build-plan.py">docs/reading-room/tools/build-plan.py</a>. Aucun titre n'est saisi à la main dans ces pages.</p>
+          </div>
+          <div class="prov" id="p-plan2">
+            <p style="margin-bottom:0"><b>Dont <span data-plan-count="done">16</span> livrées</b>, plus cinq travaux de processus absents du plan — donc invisibles dans ce ratio. Détail sur <a class="plain" href="suivi.html">la page d'état</a>.</p>
+          </div>
+          <button class="metric" aria-expanded="false" data-prov="p-req">
+            <span class="k">Exigences</span><span class="v"><span data-plan-count="requirements">333</span></span></button>
+          <button class="metric" aria-expanded="false" data-prov="p-adr">
+            <span class="k">ADR</span><span class="v">13</span></button>
+          <div class="prov" id="p-req">
+            <p style="margin-bottom:0">Fonctionnelles, non fonctionnelles, architecturales et UX confondues. <a class="plain" href="exigences.html">Toutes cherchables</a>.</p>
+          </div>
+          <div class="prov" id="p-adr">
+            <p style="margin-bottom:0">Neuf décisions de conception prises le 2026-05-08, avant d'écrire du code. Quatre décisions de correction depuis, chacune née d'un fait mesuré qui contredisait un document.</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<section id="stage">
-  <div class="eyebrow">02 — Où on en est</div>
-  <h2 style="font-size:24px;margin-bottom:10px">Le stade exact, dans le cycle</h2>
-  <p class="lede">« En cours » ne veut rien dire. Le projet a un cycle nommé, avec des étapes qui ont chacune leur sortie. Voici laquelle est allumée.</p>
+<hr class="sep">
 
-  <figure>
-  <svg viewBox="0 0 1120 268" role="img" aria-label="Cycle de vie d'une story : les huit étapes de la 1.10a sont franchies, le curseur est sur la rétrospective d'Epic 1">
-    <defs>
-      <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
-        <path d="M0,0 L7,3 L0,6" fill="none" stroke="#2c2c31" stroke-width="1.4"/>
-      </marker>
-    </defs>
-    <text x="28" y="34" fill="rgba(255,255,255,.38)" font-size="11" letter-spacing="1.6" class="m">CYCLE DE VIE D'UNE STORY — 1.10a, TERMINÉE LE 2026-08-20</text>
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="carte">
+  <div class="eyebrow">02 — La carte</div>
+  <h2 class="sec">Sept portes d'entrée</h2>
+  <p class="lede">Chaque page répond à une question, et une seule. Il n'y a pas d'ordre imposé — mais si vous découvrez le projet, <b>Produit</b> puis <b>Architecture</b> donnent l'essentiel en vingt minutes.</p>
 
-    <line x1="60" y1="112" x2="1060" y2="112" stroke="#1F1F22" stroke-width="2"/>
-    <line x1="60" y1="112" x2="1060" y2="112" stroke="rgba(255,255,255,.28)" stroke-width="2"/>
+  <div class="navcards">
+    <a class="navcard" href="produit.html">
+      <span class="n">02</span>
+      <h3>Produit</h3>
+      <p>Qu'est-ce que ça fait, et pour qui ? Le pari, les quatre personas et leurs gestes, les cinq modules détaillés, les métriques de succès, et une longue liste de ce qui <em>n'arrivera pas</em>.</p>
+      <div class="tags"><span class="chip">vision</span><span class="chip">personas</span><span class="chip">périmètre</span><span class="chip">UX</span></div>
+    </a>
 
-    <g><circle cx="60" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M55.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="60" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Plan</text>
-      <text x="60" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">epics.md</text></g>
-    <g><circle cx="203" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M198.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="203" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Story écrite</text>
-      <text x="203" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">19 référents /19</text></g>
-    <g><circle cx="346" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M341.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="346" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Développement</text>
-      <text x="346" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">+38 tests</text></g>
-    <g><circle cx="489" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M484.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="489" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Portes auto</text>
-      <text x="489" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">0/0/0 · niv.10</text></g>
-    <g><circle cx="632" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M627.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="632" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Revue — passe 1</text>
-      <text x="632" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">10 constats intacts</text></g>
-    <g><circle cx="775" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M770.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="775" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Revue — passe 2</text>
-      <text x="775" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">23 correctifs · PLAFOND</text></g>
-    <g><circle cx="918" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M913.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="918" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Sécurité</text>
-      <text x="918" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">hors quota</text></g>
-    <g><circle cx="1060" cy="112" r="9" fill="#141416" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
-      <path d="M1055.5,112 l3.2,3.4 l6,-7" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="1060" y="88" fill="rgba(255,255,255,.6)" font-size="12" text-anchor="middle">Commit</text>
-      <text x="1060" y="140" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">CI 3/3 verte</text></g>
+    <a class="navcard" href="epics.html">
+      <span class="n">03</span>
+      <h3>Le plan</h3>
+      <p>Les <span data-plan-count="epics">11</span> epics et <span data-plan-count="stories">131</span> stories, avec leurs critères d'acceptation tels qu'ils ont été écrits. Cherchez un mot, la page déplie ce qui le contient.</p>
+      <div class="tags"><span class="chip now">interactif</span><span class="chip">critères</span><span class="chip">statuts</span></div>
+    </a>
 
-    <line x1="60" y1="206" x2="1010" y2="206" stroke="#1F1F22" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="60" y="192" fill="rgba(255,255,255,.38)" font-size="11" class="m">CLÔTURE D'EPIC — OÙ NOUS SOMMES EXACTEMENT</text>
-    <g>
-      <circle cx="70" cy="206" r="4" fill="#2c2c31"/>
-      <text x="86" y="211" fill="rgba(255,255,255,.6)" font-size="12">1.10a → done ✓</text>
-      <line x1="212" y1="206" x2="258" y2="206" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-      <circle cx="278" cy="206" r="10" fill="#FF5722"/>
-      <circle cx="278" cy="206" r="16" fill="none" stroke="#FF5722" stroke-width="1" opacity=".28"/>
-      <text x="298" y="211" fill="#FF5722" font-size="12.5" font-weight="600">rétrospective Epic 1 — EN COURS</text>
-      <line x1="546" y1="206" x2="592" y2="206" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-      <circle cx="606" cy="206" r="4" fill="#2c2c31"/>
-      <text x="622" y="211" fill="rgba(255,255,255,.38)" font-size="12">epic-1 → done</text>
-      <line x1="740" y1="206" x2="786" y2="206" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-      <circle cx="800" cy="206" r="4" fill="#2c2c31"/>
-      <text x="816" y="211" fill="rgba(255,255,255,.38)" font-size="12">Epic 2 — Installer &amp; CI</text>
-    </g>
-  </svg>
-  <figcaption>Les huit étapes de la boucle sont franchies : la 1.10a a eu <b>deux</b> passes de revue et pas une de plus. Ce qui reste n'est plus du développement — c'est la rétrospective, seul acte qui bascule <span class="mono">epic-1</span> à <span class="mono">done</span>. La règle de cadrage du 2026-07-31 (<em>plus aucun roundtable jusqu'à ce que l'Epic 1 soit clos</em>) tombe avec elle. Détail des étapes : <a class="ref" href="../process/03-boucle-qualite.md">docs/process/03-boucle-qualite.md</a>.</figcaption>
-  </figure>
+    <a class="navcard" href="exigences.html">
+      <span class="n">04</span>
+      <h3>Exigences</h3>
+      <p>Le contrat au grain de la phrase : <span data-plan-count="requirements">333</span> exigences numérotées, filtrables par famille. C'est le vocabulaire commun du projet.</p>
+      <div class="tags"><span class="chip now">interactif</span><span class="chip">FR</span><span class="chip">NFR</span><span class="chip">UX-DR</span></div>
+    </a>
+
+    <a class="navcard" href="architecture.html">
+      <span class="n">05</span>
+      <h3>Architecture</h3>
+      <p>Sept schémas et le raisonnement dessous : la pile, les modules activables, le multi-locataire, l'installeur, les images sociales, la sécurité, le graphe des dépendances.</p>
+      <div class="tags"><span class="chip">schémas</span><span class="chip">technique</span><span class="chip">sécurité</span></div>
+    </a>
+
+    <a class="navcard" href="decisions.html">
+      <span class="n">06</span>
+      <h3>Décisions</h3>
+      <p>Les treize ADR, chacun avec son contexte, sa décision et ce qu'elle coûte. Plus les dix questions produit tranchées — dont deux ne le sont toujours pas.</p>
+      <div class="tags"><span class="chip">ADR</span><span class="chip">verrous</span><span class="chip">arbitrages</span></div>
+    </a>
+
+    <a class="navcard" href="qualite.html">
+      <span class="n">07</span>
+      <h3>Qualité</h3>
+      <p>Comment ce projet décide qu'une story est finie. La boucle, les portes automatiques, la campagne de mutation à la main, et le catalogue des garde-fous silencieux.</p>
+      <div class="tags"><span class="chip">tests</span><span class="chip">mutation</span><span class="chip">CI</span><span class="chip">revue</span></div>
+    </a>
+
+    <a class="navcard" href="suivi.html">
+      <span class="n">08</span>
+      <h3>Où on en est</h3>
+      <p>L'état réel, sans arrondi favorable. Ce qui est livré, ce qui est rouge, les écarts connus entre les documents et le code, et ce qui attend une décision.</p>
+      <div class="tags"><span class="chip err">1 point rouge</span><span class="chip">écarts</span><span class="chip">reports</span></div>
+    </a>
+  </div>
 </section>
 
 <hr class="sep">
 
-<section id="risks">
-  <div class="eyebrow">03 — Risques</div>
-  <h2 style="font-size:24px;margin-bottom:10px">Ce qui peut faire mal, classé</h2>
-  <p class="lede">Deux sources mêlées : les risques d'architecture prévus (<a class="ref" href="../architecture/12-risques-architecturaux-flaggs-monitorer.md">docs/architecture/12-risques…</a>) et ceux que l'exécution a effectivement produits. Les seconds sont les plus intéressants — personne ne les avait écrits.</p>
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="etat">
+  <div class="eyebrow">03 — En un coup d'œil</div>
+  <h2 class="sec">Où en est le projet, ce matin</h2>
 
-  <div class="items">
-    <div class="item"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">La confiance aux proxys s'est cassée trois fois, sur trois revues<em>🔴 corrigé le 2026-08-20 — mais c'est la 3ᵉ itération</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p>Le même défaut, sous trois formes, en trois mois :</p>
-        <ul>
-          <li><b>Mai</b> — la passe 2 de la story 1.1 <b>introduit</b> <span class="mono">env('TRUSTED_PROXIES','*')</span> avec une justification fausse. Toute adresse d'Internet devient proxy de confiance ; le rate limiting du login donne un seau neuf par tentative.</li>
-          <li><b>10 août</b> — corrigé en apparence : l'<span class="mono">env()</span> est déplacé vers <span class="mono">config/proxies.php</span>, puis <span class="mono">require</span> depuis le même callback. Il a changé de <b>fichier</b>, pas de <b>moment</b> — sous <span class="mono">config:cache</span>, la liste de l'opérateur est remplacée en silence par <span class="mono">REMOTE_ADDR</span>. <b>Mesuré :</b> <span class="mono">app()-&gt;bound('config')</span> vaut <b>false</b> dans <span class="mono">withMiddleware()</span>.</li>
-          <li><b>20 août</b> — un en-tête <span class="mono">Host</span> forgé suffisait encore à rendre le joker. La valeur est désormais posée par <span class="mono">CoreServiceProvider::boot()</span>.</li>
+  <div class="two">
+    <div class="card pad">
+      <h4 class="min" style="margin-top:0">Deux epics engagés sur onze</h4>
+      <div class="bigbar">
+        <div class="row"><span class="lab">Epic 1 — Fondations</span><span class="pct" style="font-size:19px;color:var(--ok)">13 / 13</span></div>
+        <div class="track"><i class="fill-ok" style="width:100%"></i></div>
+      </div>
+      <div class="bigbar">
+        <div class="row"><span class="lab">Epic 2 — Installeur &amp; portes de qualité</span><span class="pct" style="font-size:19px;color:var(--lava)">4 / 13</span></div>
+        <div class="track"><i class="fill-done" style="width:23%"></i><i class="fill-now" style="width:8%"></i></div>
+      </div>
+      <div class="bigbar" style="margin-bottom:4px">
+        <div class="row"><span class="lab">Epics 3 à 11 — le produit et la sortie</span><span class="pct mut" style="font-size:19px">0 / 105</span></div>
+        <div class="track"><i class="fill-done" style="width:0%"></i></div>
+      </div>
+      <p class="mut" style="font-size:12.5px;margin:14px 0 0"><b>Ce qui n'existe pas encore :</b> aucune page publique, aucun modèle métier, aucune intégration externe. Les cinq modules métier existent et sont <b>vides</b> — un fournisseur de services chacun. C'est conforme au plan : ils sont les epics 4 à 9.</p>
+    </div>
+
+    <div class="stack">
+      <div class="card pad" style="border-left:3px solid var(--err)">
+        <h4 class="min" style="margin-top:0">🔴 Le point rouge</h4>
+        <p style="font-size:13.5px;color:var(--text-2)">Le test d'installation nocturne a tourné <b>deux fois</b> et échoué les deux fois, après ~4 minutes, sur « l'installation complète aboutit sur un clone neuf ». Le workflow impute lui-même la cause : <b>l'installeur</b>, pas l'infrastructure.</p>
+        <p style="font-size:13.5px;color:var(--text-2);margin-bottom:0">C'est le 4ᵉ bloquant de mise en production, et c'est aussi la première fois que l'installeur tourne pour de vrai. <b>Un garde-fou qui rougit à son premier vrai passage fait son travail.</b> → <a class="plain" href="suivi.html#dash">le détail</a></p>
+      </div>
+      <div class="card pad">
+        <h4 class="min" style="margin-top:0">Ce qui est vert</h4>
+        <ul style="color:var(--text-2);font-size:13.5px;margin-bottom:0">
+          <li>Ratchet de dette qualité à <b class="ok">0 / 0 / 0</b>, monotone</li>
+          <li>Analyse statique au <b>niveau 10</b>, zéro erreur</li>
+          <li><b>424</b> tests Pest — mesurés, pas cités —, <b>40</b> tests shell, <b>34</b> navigateur</li>
+          <li>Audit de sécurité <b class="ok">vert</b> sur le commit de tête</li>
+          <li>Construction Docker <b class="ok">verte</b></li>
         </ul>
-        <p>⚠️ <b>Deux couches de la revue recommandaient d'y lire <span class="mono">config('proxies.at')</span> — recommandation fausse</b>, qui aurait fermé la confiance aux proxys en silence. Le risque résiduel n'est pas le code : c'est que <b>cette pièce a une histoire de corrections qui n'en étaient pas</b>. Toute modification future s'y mesure, elle ne s'y raisonne pas.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-err"></span><span class="ttl">Les constats de revue ne sont pas consommés<em>🔴 actif · 10 des 13 constats de la passe 1 étaient intacts</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p>C'est le risque que la clôture d'Epic 1 a rendu visible, et il pèse plus que n'importe quel défaut technique de cette page.</p>
-        <p>La passe 2 de la 1.10a a établi que, des 13 constats du 2026-08-10 : <b>1 résolu</b>, <b>2 traités sans atteindre leur but</b>, <b>10 intacts</b>. Et ses quatre couches, <b>qui ne connaissaient pas la liste</b>, en ont retrouvé huit indépendamment.</p>
-        <p><b>Coût :</b> huit constats payés deux fois. C'est aussi ce qui a rendu la 2ᵉ passe indispensable là où la règle écrite le matin même l'aurait déclarée inutile — d'où son amendement (§07).</p>
-        <p><b>Mitigation, à tenir dès l'Epic 2 :</b> appliquer les constats de la passe 1 <em>avant</em> d'ouvrir la passe 2. Le plafond de deux passes n'est tenable qu'à cette condition.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">Deux routes Filament survivent à <span class="mono">MODULE_ADMIN_ENABLED=false</span><em>🟠 elles appartiennent au paquet, pas au panel</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in"><p>Le gate éteint le <span class="mono">PanelProvider</span>, donc les routes <em>du panel</em>. Deux routes enregistrées par le paquet lui-même y échappent. ADR-0009 promet qu'un module désactivé ne charge « ni ses routes, ni ses migrations, ni ses Filament resources » : la promesse est tenue pour le panel, pas pour le paquet qui le porte.</p></div></div></div>
-    <div class="item"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">Le blocage du runner navigateur n'est pas prouvé résolu<em>🟠 le bras témoin manque</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p>Le plugin ne rendait pas la main ~1 fois sur 2 (mesuré : 6 blocages / 10 runs). Après la montée de <span class="mono">playwright</span> 1.59.1 → 1.62.1 : <b>0 blocage sur 10</b>.</p>
-        <p><b>Mais ce n'est pas une comparaison contrôlée</b> — et la story le dit elle-même. Le 6/10 portait sur <b>8</b> tests et une autre image ; le 0/10 porte sur <b>29</b>. Charge, durée et ordonnancement diffèrent. Il manque 10 runs à <span class="mono">playwright@1.59.1</span> <em>aujourd'hui</em>, même image, même suite.</p>
-        <p>Conséquence assumée : <b>la mitigation JUnit reste en place</b> (le verdict est lu dans le rapport, pas dans le code de sortie). <a class="ref" href="../adr/ADR-0013-runner-navigateur-pest-browser.md">ADR-0013</a>.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">La CSP est éteinte, donc jamais éprouvée<em>🟠 CSP_ENABLED=false depuis la story 1.1</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><span class="mono">spatie/laravel-csp</span> est installé, câblé sur le groupe <span class="mono">web</span>, et <b>désactivé</b> — le preset par défaut bloquait la page d'accueil de Laravel (styles inline, fontes distantes). Elle a donc traversé treize stories sans jamais s'appliquer à du vrai balisage.</p>
-        <p>La mesure de la 1.10a a en plus montré que la conclusion « le panel ne traverse pas la CSP » était <b>tirée de la mauvaise route</b> : <span class="mono">GET /admin/login</span> ne porte pas l'en-tête, mais l'endpoint Livewire qui exécute la connexion, lui, le porte. La mise en garde qu'on croyait levée ne l'est pas.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">Le rythme ne clôt pas le plan<em>🟠 12 stories livrées sur 131</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p>Le budget prévoyait ~54 jours pour 11 epics. Douze stories sont <span class="mono">done</span>, toutes dans l'Epic 1, et le plan en compte 131.</p>
-        <p><b>Le mécanisme est identifié, écrit, et daté</b> — c'est ce qui rend ce risque différent des autres : convoquer des agents qui font correctement leur métier produit nécessairement plus de décisions que de code. L'ADR-0012 a conçu en détail l'écran offline (job, hiérarchie, sources, module <span class="mono">Media</span>, table <span class="mono">media_items</span>) — du travail d'<b>Epic 4</b>, fait pendant l'Epic 1, alors qu'il restait cinq stories à livrer.</p>
-        <p>D'où la règle de cadrage, et d'où le plafond de revues de §07 : les deux traitent la même maladie.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">Lot E supply chain — un <span class="mono">@latest</span> dans le Dockerfile node<em>🟠 reporté en Epic 2</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p>Les lots A à D du plan du 2026-08-08 sont faits : images épinglées par digest, 10 paquets composer montés en ciblé, npm un par un, refus revérifiés. <a class="ref" href="../supply-chain-2026-08-08.md">docs/supply-chain-2026-08-08.md</a>.</p>
-        <p><b>Ce que le rapport lui-même avait manqué :</b> il affirmait que le Dockerfile node était le <b>seul</b> <span class="mono">FROM</span> non épinglé. <span class="mono">docker/php/Dockerfile:101</span> portait <span class="mono">FROM composer:2</span> — une majeure flottante. Le binaire qui résout toutes les dépendances PHP pouvait changer entre deux builds sans qu'un fichier du dépôt ne bouge. <em>Le rapport qui recense les affirmations sans référent en avait produit une.</em></p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">Sauvegarde hors-site jamais activée<em>🟡 prévu · hard-stop à M+6</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in"><p>Risque prévu au plan, sans surveillance automatique aujourd'hui. La mitigation retenue est un <span class="mono">BackupOffsiteCheck</span> en WARN si <span class="mono">BACKUP_OFFSITE_ENABLED=false</span> en production — <b>Epic 3</b>, non démarré. <a class="ref" href="../adr/ADR-0003-backup-local-only-v1.md">ADR-0003</a>.</p></div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">RLS Postgres activé trop tôt<em>🟡 prévu · verrouillé par ADR-0002</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in"><p>Le tenancy v1 est le <b>Pattern C</b> : un scope global sur <span class="mono">streamer_id</span>, pas de Row-Level Security. La migration multi-streamer est <b>additive</b> par construction — rien en v1 ne doit la bloquer. <a class="ref" href="../adr/ADR-0002-rls-not-enabled-v1.md">ADR-0002</a>.</p></div></div></div>
+      </div>
+    </div>
   </div>
 </section>
 
 <hr class="sep">
 
-<section id="open">
-  <div class="eyebrow">04 — Non tranché</div>
-  <h2 style="font-size:24px;margin-bottom:10px">Ce qui attend une décision</h2>
-  <p class="lede">Un refus instruit n'est pas une question ouverte : il a une raison et une condition de réouverture. Les deux sont distingués ici, parce que les confondre fait rejouer indéfiniment les mêmes débats.</p>
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="motif">
+  <div class="eyebrow">04 — Ce qu'il faut savoir avant de lire le reste</div>
+  <h2 class="sec">Le projet a un motif de défaut, et il est nommé</h2>
 
-  <div class="tabs" role="tablist" aria-label="Filtrer les questions">
-    <button class="tab" role="tab" aria-selected="true" aria-controls="pane-all" id="t-all">Tout</button>
-    <button class="tab" role="tab" aria-selected="false" aria-controls="pane-now" id="t-now">Bloquant maintenant</button>
-    <button class="tab" role="tab" aria-selected="false" aria-controls="pane-ref" id="t-ref">Refusé, avec condition</button>
-    <button class="tab" role="tab" aria-selected="false" aria-controls="pane-later" id="t-later">Plus tard</button>
-  </div>
-
-  <div class="items" id="pane-all" role="tabpanel" aria-labelledby="t-all">
-    <div class="item" data-k="now"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">✅ <span class="mono">filament:upgrade</span> en <span class="mono">post-autoload-dump</span><em>tranché le 2026-08-20 — et appliqué</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><b>Décision :</b> remplacé par <span class="mono">filament:assets --no-interaction</span>. La commande d'origine enchaînait <span class="mono">config:clear</span>, <span class="mono">route:clear</span>, <span class="mono">view:clear</span> — tout <span class="mono">composer install</span> sur un hôte ayant fait <span class="mono">config:cache</span> effaçait ses caches de production.</p>
-        <p><b>Et le garde a changé d'objet :</b> il vérifie désormais que <b>les assets existent après déploiement</b>, plus qu'une ligne existe dans <span class="mono">composer.json</span>. L'ancien test était vert sous <span class="mono">--no-scripts</span> — exactement le mode que son message d'échec décrivait comme le désastre à éviter.</p>
-      </div></div></div>
-
-    <div class="item" data-k="now"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">✅ Le chemin <span class="mono">config:cache</span> / <span class="mono">route:cache</span><em>tranché le 2026-08-20 — trois correctifs distincts</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <ul>
-          <li><b>Proxys</b> — la valeur n'est plus lue dans <span class="mono">withMiddleware()</span>, où ni <span class="mono">env()</span> ni <span class="mono">config()</span> ne sont lisibles, mais posée par <span class="mono">CoreServiceProvider::boot()</span>.</li>
-          <li><b>Gate de module</b> — l'entrypoint invalide le cache de routes quand la configuration des modules a changé, ou refuse de démarrer sur un cache incohérent. Sans ça, éteindre le module rendait <b>500</b> au lieu de 404.</li>
-          <li><b>Validation</b> — <span class="mono">config/proxies.php</span> levait une <span class="mono">RuntimeException</span> <em>pendant le chargement de la configuration</em> : une faute de frappe rendait l'application non bootable, <b>commandes de récupération comprises</b>. La validation est sortie vers une commande de contrôle appelée avant <span class="mono">config:cache</span> — refus toujours dur, application réparable, contrôle testable.</li>
-        </ul>
-      </div></div></div>
-
-    <div class="item" data-k="now"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">W9 — un Given de l'AC5 n'est pas composable, et c'est écrit<em>reporté avec sa mesure, pas contourné</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in"><p>Le 3ᵉ Given de l'AC5 — une tentative refusée survit-elle à un <span class="mono">X-Forwarded-For</span> forgé ? — n'est pas composable sous <span class="mono">Livewire::test()</span> : <span class="mono">RequestBroker</span> désactive les middlewares et <span class="mono">REMOTE_ADDR</span> n'y est pas pilotable. <b>Établi par un contre-test qui a rougi</b>, puis reporté avec sa mesure plutôt que fabriquer un vert. C'est la forme correcte d'un aveu.</p></div></div></div>
-    <div class="item" data-k="now"><button aria-expanded="false"><span class="dot d-warn"></span><span class="ttl">La rétrospective d'Epic 1 : <span class="mono">optional</span> ou due ?<em>marquée optionnelle dans sprint-status.yaml</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in"><p>L'Epic 1 est le seul epic dont l'exécution a produit une doctrine (la boucle qualité, la règle du rouge observé, le catalogue des garde-fous silencieux, et maintenant le plafond de revues). Le marquer <span class="mono">optional</span> et passer à l'Epic 2 revient à jeter la seule matière première dont les dix epics suivants pourraient hériter.</p></div></div></div>
-
-    <div class="item" data-k="ref"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">Pest 5<em>refusé le 31/07, revérifié le 09/08 · condition nommée</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p>La montée ne résout pas sur cette pile :</p>
-        <p class="mono" style="font-size:12px;color:var(--text-3);background:var(--surface-2);padding:10px 12px;border-radius:6px">pest 5 → paratest ^7.23 → php-file-iterator ^7<br>phpinsights → cmgmyr/phploc 8.0.7 → php-file-iterator ^3|^4|^5|^6</p>
-        <p>Vérifié en copie jetable hors du projet : <b>en retirant phpinsights, Pest 5.0.2 + PHPUnit 13.2.6 résolvent proprement</b>. Décision : on reste en Pest 4 et on garde PHP Insights.</p>
-        <p><b>Condition de réouverture, unique et vérifiable :</b> quand <span class="mono">nunomaduro/phpinsights</span> aura monté <span class="mono">phploc</span>. C'est le seul verrou.</p>
-        <p class="mut">⚠️ Piège rencontré en instruisant ce point : <span class="mono">composer remove --no-update</span> lancé dans le conteneur <b>modifie le vrai <span class="mono">src/composer.json</span></b> (bind mount). Tout test de résolution se fait dans un conteneur jetable, hors projet.</p>
-      </div></div></div>
-
-    <div class="item" data-k="ref"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">Node 26<em>refusé · condition datée : 2026-10-28</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in"><p>v24 est Active LTS jusqu'au <b>2026-10-20</b> ; v26 ne devient LTS que le <b>2026-10-28</b>. Le raisonnement complet vit en tête de <span class="mono">docker/node/Dockerfile</span>, pas dans un ticket.</p></div></div></div>
-
-    <div class="item" data-k="ref"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">guzzle 8<em>refusé · condition : que l'amont élargisse</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in"><p>7.15.3 installée en transitif. Forcer la 8, c'est sortir du périmètre testé par <span class="mono">laravel/framework</span>. Un refus qui s'est levé tout seul dans le même passage montre que le mécanisme fonctionne : <span class="mono">laravel/roster</span> est passé en v1.0.0 sans qu'on le force, parce que <span class="mono">laravel/boost</span> 2.5.3 l'a exigé.</p></div></div></div>
-
-    <div class="item" data-k="later"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">Retirer la mitigation JUnit du runner navigateur<em>chantier à part entière · commence par le bras témoin</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in"><p><a class="ref" href="../adr/ADR-0013-runner-navigateur-pest-browser.md">ADR-0013</a> dit déjà que c'est un chantier séparé. Sa première étape n'est pas du code : c'est <b>la mesure manquante</b> — 10 runs à <span class="mono">playwright@1.59.1</span> sur l'image et la suite d'aujourd'hui.</p></div></div></div>
-
-    <div class="item" data-k="later"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">Activer les commentaires<em>code dormant · 3 signaux mesurables exigés</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in"><p>OFF au jour 1, activable à M+1 sur trois signaux <b>et pas sur une envie</b> : ≥ 3 demandes de lecteurs prouvées · Akismet pré-câblé · budget de modération &lt; 30 min/semaine. Epic 9.</p></div></div></div>
-
-    <div class="item" data-k="later"><button aria-expanded="false"><span class="dot d-idle"></span><span class="ttl">Le maillage interne : algorithme naïf ou TF-IDF ?<em>tranché naïf en v1 — à rouvrir sur mesure d'audience</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in"><p>Tags ≥ 2 en commun, 0,5 jour. Le TF-IDF coûtait 5 jours et a été repoussé en v1.1. Epic 6 — le seul epic dont la valeur est <em>compounding</em> : l'archive comme autorité topique.</p></div></div></div>
+  <div class="two">
+    <div>
+      <p style="font-size:15.5px;color:var(--text-2)">Ce dépôt a produit une famille de défauts si régulière qu'elle a fini par recevoir un nom : <b>l'affirmation précède son référent</b>. Quelqu'un écrit une phrase vraie au moment où il l'écrit, et rien ne la recalcule ensuite.</p>
+      <p style="font-size:15.5px;color:var(--text-2)">Plus de trente instances ont été recensées. Une CI qui tournait sur le mauvais moteur. Un crochet jamais exécuté. Un critère d'acceptation nommant un composant qui n'existait pas encore. Une sonde de santé qui répondait <code>ok</code> la base à terre. Une clé de configuration que plus personne ne lisait. Une commande décrite comme un outil d'analyse alors qu'elle réécrivait les tests.</p>
+      <p style="font-size:15.5px;color:var(--text-2)">Le remède tient en une question, et il n'a pas d'exception : <b>« est-ce que je l'ai vu rougir ? »</b> Pas « est-ce qu'il pourrait ». <b>Vu.</b></p>
+      <p style="font-size:15.5px;color:var(--text-2);margin-bottom:0">C'est pourquoi vous trouverez, dans ces pages, beaucoup de choses qu'un document de projet ne dit pas d'habitude : les mesures qui ont contredit les documents, les correctifs qui étaient faux, les garde-fous qui ne gardaient rien. <b>Ce n'est pas de l'autoflagellation — ce sont les données à partir desquelles le processus a été écrit.</b> → <a class="plain" href="qualite.html">la doctrine complète</a></p>
+    </div>
+    <div class="stack">
+      <div class="note err" style="margin-top:0">
+        <p><b>L'exemple qui résume tout.</b> <code>TRUSTED_PROXIES</code> a connu <b>trois itérations du même défaut, sur trois passes de revue, en trois mois</b>. Il rendait inopérante la limitation de débit sur la connexion à l'administration.</p>
+        <p style="margin-bottom:0"><b>Il n'a jamais fait rougir un scanner</b>, il a été trouvé en mesurant en HTTP réel — et il avait été <b>introduit par une revue de code</b>, avec une justification fausse. C'est cette histoire qui a fixé le plafond de deux passes de revue par story.</p>
+      </div>
+      <div class="note lava">
+        <p style="margin-bottom:0"><b>La règle qui en découle, appliquée depuis :</b> une story ne démarre que si <em>chaque nom cité dans ses critères d'acceptation résout</em> — vers un fichier existant, ou vers une story déjà livrée. Un critère sans référent est invérifiable, donc vert par accident.</p>
+      </div>
+    </div>
   </div>
 </section>
 
 <hr class="sep">
 
-<section id="design">
-  <div class="eyebrow">05 — Conception</div>
-  <h2 style="font-size:24px;margin-bottom:10px">Comment le projet est fait</h2>
-  <p class="lede">Trois choix structurent tout le reste : une modularité PSR-4 écrite à la main plutôt qu'un paquet ; un tenant unique aujourd'hui mais présent dans le schéma dès le premier jour ; et des modules qu'on éteint par variable d'environnement plutôt qu'on ne désinstalle.</p>
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="sources">
+  <div class="eyebrow">05 — Sous cette page</div>
+  <h2 class="sec">Les documents qui font foi</h2>
+  <p class="lede">Cette reading room est un rendu. Quand elle contredit l'une de ces sources, <b>c'est elle qui a tort</b>. La hiérarchie est stricte, et le principe qui la fonde est simple : <em>plus un document est difficile à changer, plus il fait autorité.</em></p>
 
-  <figure>
-  <svg viewBox="0 0 1120 400" role="img" aria-label="Architecture modulaire : un noyau Core toujours actif et cinq modules activables par variable d'environnement">
-    <text x="28" y="34" fill="rgba(255,255,255,.38)" font-size="11" letter-spacing="1.6" class="m">ARCHITECTURE APPLICATIVE — ADR-0009</text>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Rang</th><th>Document</th><th>Ce qu'il porte</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="chip now">1</span></td>
+          <td><a class="ref" href="../adr/README.md">docs/adr/</a></td>
+          <td>Les treize décisions structurantes. Une clôture de débat, pas de la documentation.</td>
+        </tr>
+        <tr>
+          <td><span class="chip">2</span></td>
+          <td><code>_bmad-output/planning-artifacts/epics.md</code><br><code>_bmad-output/implementation-artifacts/sprint-status.yaml</code></td>
+          <td>Le plan et les statuts. <b>Gitignorés</b> — d'où le rendu figé dans <a class="ref" href="data/plan.js">docs/reading-room/data/plan.js</a>.</td>
+        </tr>
+        <tr>
+          <td><span class="chip">3</span></td>
+          <td><a class="ref" href="../ETAT.md">docs/ETAT.md</a></td>
+          <td>Le journal de bord détaillé, story par story, avec ses mesures.</td>
+        </tr>
+        <tr>
+          <td><span class="chip mut">—</span></td>
+          <td><a class="ref" href="../prd.md">docs/prd.md</a> · <a class="ref" href="../architecture/README.md">docs/architecture/</a> · <a class="ref" href="../process/03-boucle-qualite.md">docs/process/</a></td>
+          <td>Le produit, l'architecture, le processus. Amendés par les ADR là où ils ont vieilli.</td>
+        </tr>
+        <tr>
+          <td><span class="chip mut">—</span></td>
+          <td><a class="ref" href="../roundtable-decisions.md">docs/roundtable-decisions.md</a></td>
+          <td>Le débat d'origine. <b>Aucune autorité</b> — il est là pour comprendre le pourquoi, pas pour trancher.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
-    <!-- Core -->
-    <rect x="28" y="58" width="256" height="300" rx="10" fill="#141416" stroke="#2c2c31" stroke-width="1.5"/>
-    <text x="48" y="88" fill="rgba(255,255,255,.92)" font-size="15" font-weight="600">App\Core\</text>
-    <text x="48" y="108" fill="#22C55E" font-size="11" class="m">TOUJOURS ACTIF</text>
-    <line x1="48" y1="122" x2="264" y2="122" stroke="#1F1F22"/>
-    <g fill="rgba(255,255,255,.6)" font-size="12" class="m">
-      <text x="48" y="146">Models/Streamer</text>
-      <text x="48" y="170">Concerns/BelongsToStreamer</text>
-      <text x="48" y="194">Scopes/BelongsToStreamerScope</text>
-      <text x="48" y="218">Http/Middleware/SetCurrentStreamer</text>
-      <text x="48" y="242">Support/CurrentStreamer</text>
-      <text x="48" y="266">Providers/CoreServiceProvider</text>
-      <text x="48" y="290">Console/tenancy:assert</text>
-      <text x="48" y="314">Exceptions/NoStreamerConfigured</text>
-    </g>
-    <text x="48" y="342" fill="rgba(255,255,255,.38)" font-size="11">le tenant, et tout ce qui le porte</text>
-
-    <!-- flèche interdiction -->
-    <line x1="284" y1="200" x2="352" y2="200" stroke="#2c2c31" stroke-width="1.5" marker-end="url(#ar)"/>
-    <text x="318" y="190" fill="rgba(255,255,255,.38)" font-size="11" text-anchor="middle">autorisé</text>
-
-    <!-- Modules -->
-    <rect x="368" y="58" width="724" height="300" rx="10" fill="none" stroke="#1F1F22" stroke-width="1.5" stroke-dasharray="4 5"/>
-    <text x="390" y="88" fill="rgba(255,255,255,.92)" font-size="15" font-weight="600">App\Modules\</text>
-    <text x="390" y="108" fill="rgba(255,255,255,.38)" font-size="11" class="m">MODULE_&lt;NOM&gt;_ENABLED=true|false</text>
-
-    <g>
-      <rect x="390" y="128" width="150" height="94" rx="8" fill="#141416" stroke="#2c2c31"/>
-      <text x="406" y="154" fill="rgba(255,255,255,.92)" font-size="13" font-weight="600">Public</text>
-      <text x="406" y="174" fill="rgba(255,255,255,.6)" font-size="11">accueil, SEO</text>
-      <text x="406" y="190" fill="rgba(255,255,255,.6)" font-size="11">sitemap</text>
-      <circle cx="518" cy="148" r="4" fill="#22C55E"/>
-    </g>
-    <g>
-      <rect x="556" y="128" width="150" height="94" rx="8" fill="#141416" stroke="#2c2c31"/>
-      <text x="572" y="154" fill="rgba(255,255,255,.92)" font-size="13" font-weight="600">Live</text>
-      <text x="572" y="174" fill="rgba(255,255,255,.6)" font-size="11">embed Twitch</text>
-      <text x="572" y="190" fill="rgba(255,255,255,.6)" font-size="11">badge LIVE, chat</text>
-      <circle cx="684" cy="148" r="4" fill="#22C55E"/>
-    </g>
-    <g>
-      <rect x="722" y="128" width="150" height="94" rx="8" fill="#141416" stroke="#2c2c31"/>
-      <text x="738" y="154" fill="rgba(255,255,255,.92)" font-size="13" font-weight="600">Reviews</text>
-      <text x="738" y="174" fill="rgba(255,255,255,.6)" font-size="11">articles, archive</text>
-      <text x="738" y="190" fill="rgba(255,255,255,.6)" font-size="11">commentaires OFF</text>
-      <circle cx="850" cy="148" r="4" fill="#22C55E"/>
-    </g>
-    <g>
-      <rect x="888" y="128" width="150" height="94" rx="8" fill="#141416" stroke="#2c2c31"/>
-      <text x="904" y="154" fill="rgba(255,255,255,.92)" font-size="13" font-weight="600">PressKit</text>
-      <text x="904" y="174" fill="rgba(255,255,255,.6)" font-size="11">page presse</text>
-      <text x="904" y="190" fill="rgba(255,255,255,.6)" font-size="11">bio FR + EN</text>
-      <circle cx="1016" cy="148" r="4" fill="#22C55E"/>
-    </g>
-    <g>
-      <rect x="390" y="240" width="316" height="94" rx="8" fill="#141416" stroke="#FF5722" stroke-width="1.5"/>
-      <text x="406" y="266" fill="#FF5722" font-size="13" font-weight="600">Admin</text>
-      <text x="406" y="286" fill="rgba(255,255,255,.6)" font-size="11">panel Filament v5 · rôle super-admin exigé · 404 si éteint</text>
-      <text x="406" y="306" fill="rgba(255,255,255,.38)" font-size="11" class="m">le PanelProvider vit ICI, pas dans bootstrap/providers.php</text>
-      <text x="406" y="324" fill="rgba(255,255,255,.38)" font-size="11" class="m">— sinon le drapeau n'éteint rien</text>
-      <circle cx="684" cy="260" r="4" fill="#FF5722"/>
-    </g>
-
-    <!-- interdiction croisée -->
-    <g>
-      <rect x="722" y="240" width="316" height="94" rx="8" fill="none" stroke="#2c2c31" stroke-dasharray="3 4"/>
-      <text x="738" y="266" fill="#EF4444" font-size="13" font-weight="600">✕ module → module</text>
-      <text x="738" y="288" fill="rgba(255,255,255,.6)" font-size="11.5">Un module ne peut PAS en importer un autre.</text>
-      <text x="738" y="306" fill="rgba(255,255,255,.6)" font-size="11.5">Le passage obligé est App\Core\.</text>
-      <text x="738" y="324" fill="rgba(255,255,255,.38)" font-size="11" class="m">gardé en CI : CrossModuleCouplingTest</text>
-    </g>
-  </svg>
-  <figcaption>Pas de <span class="mono">nwidart/laravel-modules</span>, pas de DDD, pas de repositories : PSR-4 natif déclaré dans <a class="ref" href="../../src/composer.json">src/composer.json</a>, activation par <a class="ref" href="../../src/config/modules.php">src/config/modules.php</a>, frontière tenue par <a class="ref" href="../../src/tests/Unit/CrossModuleCouplingTest.php">CrossModuleCouplingTest</a> — pas par une convention humaine. Décision : <a class="ref" href="../adr/ADR-0009-modular-app-modules-psr4.md">ADR-0009</a>, frontières : <a class="ref" href="../process/05-module-boundaries.md">docs/process/05-module-boundaries.md</a>.</figcaption>
-  </figure>
-</section>
-
-<section style="padding-top:34px">
-  <h3 style="font-size:17px;margin-bottom:8px">Le chemin d'une requête — et le piège que la revue a trouvé</h3>
-  <p class="lede" style="margin-bottom:18px">Ce schéma vaut plus que sa jolie forme : il montre pourquoi une affirmation vraie de <b>deux</b> routes sur trois a failli laisser passer une impasse de déploiement.</p>
-
-  <figure>
-  <svg viewBox="0 0 1120 372" role="img" aria-label="Trois chemins de requête : le site public, la page de connexion du panel, et l'endpoint Livewire qui exécute la connexion">
-    <text x="28" y="30" fill="rgba(255,255,255,.38)" font-size="11" letter-spacing="1.6" class="m">CHEMIN D'UNE REQUÊTE — MESURÉ, PAS DÉDUIT</text>
-
-    <rect x="28" y="52" width="120" height="52" rx="8" fill="#141416" stroke="#2c2c31"/>
-    <text x="88" y="76" fill="rgba(255,255,255,.92)" font-size="12.5" text-anchor="middle">Apache 2.4</text>
-    <text x="88" y="93" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">HTTPS / HTTP2</text>
-    <line x1="148" y1="78" x2="196" y2="78" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-    <rect x="204" y="52" width="120" height="52" rx="8" fill="#141416" stroke="#2c2c31"/>
-    <text x="264" y="76" fill="rgba(255,255,255,.92)" font-size="12.5" text-anchor="middle">PHP-FPM 8.5</text>
-    <text x="264" y="93" fill="rgba(255,255,255,.38)" font-size="10.5" text-anchor="middle" class="m">Laravel 13</text>
-
-    <!-- séparation en 3 chemins -->
-    <path d="M324,78 L360,78 L360,152 L400,152" fill="none" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-    <path d="M360,152 L360,236 L400,236" fill="none" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-    <path d="M360,236 L360,318 L400,318" fill="none" stroke="#FF5722" stroke-width="1.6" marker-end="url(#ar)"/>
-
-    <!-- chemin 1 : site public -->
-    <g>
-      <text x="408" y="134" fill="rgba(255,255,255,.38)" font-size="10.5" class="m">GET /</text>
-      <rect x="408" y="142" width="232" height="42" rx="7" fill="#1a1a1d" stroke="#2c2c31"/>
-      <text x="424" y="168" fill="rgba(255,255,255,.85)" font-size="12">groupe <tspan class="m">web</tspan> → SetCurrentStreamer</text>
-      <line x1="640" y1="163" x2="686" y2="163" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-      <rect x="694" y="142" width="180" height="42" rx="7" fill="#141416" stroke="#2c2c31"/>
-      <text x="710" y="168" fill="rgba(255,255,255,.6)" font-size="12">module Public</text>
-      <text x="890" y="168" fill="#22C55E" font-size="12" class="m">200</text>
-    </g>
-
-    <!-- chemin 2 : /admin/login -->
-    <g>
-      <text x="408" y="218" fill="rgba(255,255,255,.38)" font-size="10.5" class="m">GET /admin/login</text>
-      <rect x="408" y="226" width="232" height="42" rx="7" fill="#1a1a1d" stroke="#2c2c31"/>
-      <text x="424" y="252" fill="rgba(255,255,255,.85)" font-size="12">pile propre de Filament</text>
-      <line x1="640" y1="247" x2="686" y2="247" stroke="#2c2c31" stroke-width="1.4" marker-end="url(#ar)"/>
-      <rect x="694" y="226" width="180" height="42" rx="7" fill="#141416" stroke="#2c2c31"/>
-      <text x="710" y="245" fill="rgba(255,255,255,.6)" font-size="12">page de connexion</text>
-      <text x="710" y="261" fill="rgba(255,255,255,.38)" font-size="10.5" class="m">ni web, ni CSP</text>
-      <text x="890" y="252" fill="#22C55E" font-size="12" class="m">200</text>
-    </g>
-
-    <!-- chemin 3 : livewire update -->
-    <g>
-      <text x="408" y="300" fill="#FF5722" font-size="10.5" class="m">POST /livewire-…/update — LA CONNEXION S'EXÉCUTE ICI</text>
-      <rect x="408" y="308" width="232" height="42" rx="7" fill="#1a1a1d" stroke="#FF5722" stroke-width="1.5"/>
-      <text x="424" y="334" fill="#FF5722" font-size="12">groupe <tspan class="m">web</tspan> → SetCurrentStreamer</text>
-      <line x1="640" y1="329" x2="686" y2="329" stroke="#FF5722" stroke-width="1.4" marker-end="url(#ar)"/>
-      <rect x="694" y="308" width="180" height="42" rx="7" fill="#141416" stroke="#EF4444"/>
-      <text x="710" y="327" fill="#EF4444" font-size="12">table streamers vide</text>
-      <text x="710" y="343" fill="rgba(255,255,255,.38)" font-size="10.5" class="m">firstOrFail()</text>
-      <text x="890" y="329" fill="#EF4444" font-size="12" class="m">404</text>
-      <text x="930" y="329" fill="rgba(255,255,255,.38)" font-size="11">→ corrigé en 500 nommé</text>
-    </g>
-
-    <text x="28" y="368" fill="rgba(255,255,255,.38)" font-size="11">« Filament ne traverse pas le groupe web » était vrai des routes du panel, et faux de l'endpoint qui exécute réellement la connexion.</text>
-  </svg>
-  <figcaption>Résultat observable avant correction : sur une base migrée mais non semée — <b>le chemin de déploiement normal</b> — la page de connexion s'affichait en 200 et sa soumission rendait 404. Le panel étant la seule interface capable de créer le streamer manquant, c'était une impasse. Le correctif remplace <span class="mono">firstOrFail()</span> par <a class="ref" href="../../src/app/Core/Http/Middleware/SetCurrentStreamer.php">une exception de domaine</a> rendue en 500 <b>dont le message nomme la commande qui répare</b> — et un test garde ce message, parce qu'un 500 anonyme ne vaut guère mieux qu'un 404.</figcaption>
-  </figure>
-
-  <div class="note lava"><b>Ce que ce cas enseigne, et qui dépasse Filament :</b> l'affirmation « X ne traverse pas Y » avait été <em>mesurée</em> — sur <span class="mono">GET /admin/login</span>. Elle était exacte. Elle était aussi généralisée depuis une seule route, dans un docblock, dans un commentaire de <span class="mono">bootstrap/app.php</span> et dans un test. Trois copies d'une vérité partielle, écrites au moment où elle était vraie.</div>
-</section>
-
-<section style="padding-top:46px">
-  <h3 style="font-size:17px;margin-bottom:8px">Le tenant est là depuis le premier jour, même s'il n'y en a qu'un</h3>
-  <p class="lede" style="margin-bottom:14px">Le produit est mono-streamer en v1. Le <b>schéma</b> ne l'est pas : chaque table métier porte un <span class="mono">streamer_id NOT NULL</span>, et un scope global le filtre sans qu'aucune requête applicative n'ait à y penser. C'est le <b>Pattern C</b>.</p>
-
+  <h3 class="sub">Comment ces pages sont fabriquées, et tenues</h3>
   <div class="grid g3">
-    <div class="card" style="padding:17px">
-      <div class="eyebrow" style="margin-bottom:6px">Le porteur</div>
-      <p style="font-size:13.5px;margin:0"><a class="ref" href="../../src/app/Core/Concerns/BelongsToStreamer.php">BelongsToStreamer</a> — le trait qu'un modèle métier utilise. Il pose la relation et attache le scope.</p>
+    <div class="card pad">
+      <h4 class="min" style="margin-top:0">Le plan est extrait, pas recopié</h4>
+      <p class="mut" style="font-size:13.5px;margin:0"><a class="ref" href="tools/build-plan.py">build-plan.py</a> lit les sources et produit <a class="ref" href="data/plan.js">plan.js</a>. Transcrire 131 stories à la main aurait fabriqué une deuxième source de vérité — c'est-à-dire exactement le motif que ce projet traque. <b>Régénérer : <code>make reading-room</code>.</b></p>
     </div>
-    <div class="card" style="padding:17px">
-      <div class="eyebrow" style="margin-bottom:6px">Le filtre</div>
-      <p style="font-size:13.5px;margin:0"><a class="ref" href="../../src/app/Core/Scopes/BelongsToStreamerScope.php">BelongsToStreamerScope</a> — appliqué globalement. Oublier le <span class="mono">where</span> devient impossible, plutôt que déconseillé.</p>
+    <div class="card pad">
+      <h4 class="min" style="margin-top:0">Les liens sont gardés</h4>
+      <p class="mut" style="font-size:13.5px;margin:0">Trois assertions Pest : <b>tout lien de fichier résout</b>, <b>la page en porte des dizaines</b> (anti-vacuité), et <b>la table des ADR est exhaustive</b> — son côté attendu étant le disque, pas la page. Les trois ont été <b>vues rouges</b> avant d'être déclarées opérantes.</p>
     </div>
-    <div class="card" style="padding:17px">
-      <div class="eyebrow" style="margin-bottom:6px">Le garde-fou</div>
-      <p style="font-size:13.5px;margin:0"><span class="mono">php artisan tenancy:assert</span> — vérifie l'invariant « exactement un streamer » en v1, et le dit fort s'il est rompu.</p>
+    <div class="card pad">
+      <h4 class="min" style="margin-top:0">Rien ne vient du réseau</h4>
+      <p class="mut" style="font-size:13.5px;margin:0">Aucun CDN, aucune fonte distante, aucun moteur de diagrammes embarqué. Les schémas sont du SVG écrit à la main. <b>Ces pages s'ouvrent depuis le disque, dans un avion, sur un clone frais.</b></p>
     </div>
   </div>
 
-  <div class="note"><b>Pourquoi pas de Row-Level Security tout de suite ?</b> Parce qu'un RLS naïf posé avant d'avoir audité la tenancy de Filament coûterait plus cher à défaire qu'à ne pas faire. La migration v2 est <b>additive</b> : rien en v1 ne doit la bloquer. <a class="ref" href="../adr/ADR-0002-rls-not-enabled-v1.md">ADR-0002</a>.</div>
-</section>
-
-<section style="padding-top:46px">
-  <h3 style="font-size:17px;margin-bottom:8px">L'infrastructure : des profils, pas un bloc</h3>
-  <p class="lede" style="margin-bottom:14px">Un fork qui déploie en production ne doit pas hériter d'Adminer et de Mailpit. Les services sont découpés en profils Docker Compose ; sans profil, on obtient exactement la production.</p>
-
-  <figure>
-  <svg viewBox="0 0 1120 232" role="img" aria-label="Quatre profils Docker Compose et les services de chacun">
-    <text x="28" y="30" fill="rgba(255,255,255,.38)" font-size="11" letter-spacing="1.6" class="m">PROFILS DOCKER COMPOSE</text>
-    <g>
-      <rect x="28" y="48" width="256" height="160" rx="9" fill="#141416" stroke="#22C55E" stroke-width="1.4"/>
-      <text x="48" y="76" fill="#22C55E" font-size="13" font-weight="600">(aucun profil)</text>
-      <text x="48" y="94" fill="rgba(255,255,255,.38)" font-size="11" class="m">= PRODUCTION</text>
-      <g fill="rgba(255,255,255,.75)" font-size="12" class="m">
-        <text x="48" y="122">apache</text><text x="48" y="142">php</text>
-        <text x="48" y="162">postgres</text><text x="48" y="182">redis</text>
-        <text x="160" y="122">postgres-pulse</text>
-      </g>
-      <text x="160" y="142" fill="rgba(255,255,255,.38)" font-size="10.5">base dédiée au</text>
-      <text x="160" y="157" fill="rgba(255,255,255,.38)" font-size="10.5">monitoring (ADR-0004)</text>
-    </g>
-    <g>
-      <rect x="300" y="48" width="256" height="160" rx="9" fill="#141416" stroke="#2c2c31"/>
-      <text x="320" y="76" fill="rgba(255,255,255,.92)" font-size="13" font-weight="600">dev</text>
-      <text x="320" y="94" fill="rgba(255,255,255,.38)" font-size="11" class="m">DÉVELOPPEMENT</text>
-      <g fill="rgba(255,255,255,.6)" font-size="12" class="m">
-        <text x="320" y="122">node 24</text><text x="320" y="142">mailpit :8025</text>
-        <text x="320" y="162">adminer :8080</text>
-      </g>
-    </g>
-    <g>
-      <rect x="572" y="48" width="256" height="160" rx="9" fill="#141416" stroke="#2c2c31"/>
-      <text x="592" y="76" fill="rgba(255,255,255,.92)" font-size="13" font-weight="600">tools</text>
-      <text x="592" y="94" fill="rgba(255,255,255,.38)" font-size="11" class="m">MONITORING</text>
-      <g fill="rgba(255,255,255,.6)" font-size="12" class="m">
-        <text x="592" y="122">dozzle :9999</text><text x="592" y="142">it-tools :8081</text>
-        <text x="592" y="162">watchtower</text>
-      </g>
-      <text x="592" y="186" fill="rgba(255,255,255,.38)" font-size="10.5">les images maison sont exclues</text>
-    </g>
-    <g>
-      <rect x="844" y="48" width="248" height="160" rx="9" fill="#141416" stroke="#2c2c31"/>
-      <text x="864" y="76" fill="rgba(255,255,255,.92)" font-size="13" font-weight="600">dev-extra</text>
-      <text x="864" y="94" fill="rgba(255,255,255,.38)" font-size="11" class="m">EN PLUS</text>
-      <text x="864" y="122" fill="rgba(255,255,255,.6)" font-size="12" class="m">redis-commander :8082</text>
-      <text x="864" y="160" fill="rgba(255,255,255,.38)" font-size="11">make up-local</text>
-      <text x="864" y="177" fill="rgba(255,255,255,.38)" font-size="11">allume tout ce qui précède</text>
-    </g>
-  </svg>
-  <figcaption>Toutes les images de base sont épinglées <b>par digest</b>, pas par tag — un tag est mutable. Sept branches distantes ouvertes ont été fermées le 2026-08-09 sans être fusionnées : leur intention était juste, mais les fusionner aurait remplacé un digest par un tag. Source de vérité : <a class="ref" href="../../docker-compose.yml">docker-compose.yml</a>, commandes : <a class="ref" href="../../Makefile">Makefile</a>.</figcaption>
-  </figure>
-</section>
-
-<hr class="sep">
-
-<section id="delivered">
-  <div class="eyebrow">06 — Livré</div>
-  <h2 style="font-size:24px;margin-bottom:10px">Ce qui existe, et comment c'est fait</h2>
-  <p class="lede">Chaque capacité livrée est dépliable : ce qu'elle fait, comment elle est implémentée, et — le plus important dans ce projet — <b>ce qui la garde</b>. Un mécanisme sans lecteur ne garde rien.</p>
-
-  <div class="items">
-    <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Fondation modulaire PSR-4<em>stories 1.1 · 1.6 · 1.7</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><b>Ce que ça fait —</b> six espaces de noms (<span class="mono">App\Core\</span> + cinq modules) déclarés en PSR-4 natif. Un fork peut éteindre <span class="mono">MODULE_REVIEWS_ENABLED</span> sans toucher au code.</p>
-        <p><b>Comment —</b> déclaration dans <a class="ref" href="../../src/composer.json">composer.json</a>, table d'activation dans <a class="ref" href="../../src/config/modules.php">config/modules.php</a>, bootstrap conditionnel dans les providers de module. Aucun paquet de modularité : la « magie » d'un <span class="mono">nwidart/laravel-modules</span> a été refusée explicitement.</p>
-        <p><b>Ce qui le garde —</b> <span class="mono">PsrAutoloadTest</span> vérifie que les six espaces de noms sont déclarés <em>et</em> que les six dossiers existent. <a class="ref" href="../../src/tests/Unit/CrossModuleCouplingTest.php">CrossModuleCouplingTest</a> scanne les <span class="mono">use</span> et refuse un import module → module.</p>
-        <p class="mut">⚠️ Le mécanisme d'activation a été trouvé <b>non gardé</b> par la story 0b : une mutation rendant <span class="mono">register()</span> sourd à la configuration laissait <b>58 tests sur 58 verts</b>. Trois tests ajoutés, rouge observé.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Tenancy Pattern C<em>stories 1.3 · 1.4 · 1.5</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><b>Ce que ça fait —</b> un modèle <a class="ref" href="../../src/app/Core/Models/Streamer.php">Streamer</a> à 12 colonnes (nom, accroche, bio FR + EN, photo, CTA) qui est la source unique configurable du produit : zéro donnée d'Alex codée en dur.</p>
-        <p><b>Comment —</b> trait + scope global + middleware de résolution sur le groupe <span class="mono">web</span> + commande <span class="mono">tenancy:assert</span>.</p>
-        <p><b>Ce qui le garde —</b> un scan Pest des migrations exigeant <span class="mono">streamer_id NOT NULL</span>, et <span class="mono">TenancyPatternCTest</span> — désormais y compris <b>le chemin « base vide »</b>, qui n'était parcouru par aucun test pendant deux mois et demi.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Design system — les tokens gouvernent réellement le rendu<em>story 1.8</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><b>Ce que ça fait —</b> <a class="ref" href="../../src/resources/css/tokens.css">tokens.css</a> est la source unique : surfaces, texte, accent, états, typographie, et une règle de discipline chromatique <b>90 / 8 / 2</b>. Le lava <span class="mono">#FF5722</span> est réservé à exactement quatre usages — badge LIVE, CTA primaires, notes ≥ 9/10, actions destructives. <em>Un orange partout n'est plus un signal.</em></p>
-        <p><b>Comment —</b> Tailwind 4 en CSS-first ; les utilitaires sont générés <em>depuis</em> les tokens via <span class="mono">@theme inline</span>, jamais l'inverse.</p>
-        <p><b>Ce qui le garde —</b> <a class="ref" href="../../src/tests/Feature/DesignTokensTest.php">DesignTokensTest</a>, et surtout une assertion de navigateur : <b>muter le token à chaud</b> doit déplacer la valeur calculée. C'est la seule assertion qui distingue « c'est orange » de « c'est lava » — un <span class="mono">#FF5722</span> écrit en dur passe tout le reste.</p>
-        <p class="mut">Une exemption unique est inscrite dans le fichier plutôt que redébattue à chaque story : l'anneau de <span class="mono">:focus-visible</span> s'applique à tout élément focusable. Ce n'est pas une 5ᵉ surface, c'est un état.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Composants Blade de base<em>story 1.11 · 6 composants · 21 garde-fous vus rouges</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><b>Ce que ça fait —</b> <span class="mono">button</span>, <span class="mono">card</span>, <span class="mono">badge</span>, <span class="mono">icon-button</span>, <span class="mono">divider</span>, <span class="mono">toast</span>, plus une galerie de démonstration gardée par l'environnement.</p>
-        <p><b>Trois choses apprises, qui resserviront :</b></p>
-        <ul>
-          <li><span class="mono">:active</span> s'observe sans bidouille — focaliser puis <b>maintenir</b> la barre d'espace. Chromium applique alors l'état comme sur un vrai appui ; un <span class="mono">dispatchEvent</span> ne l'aurait jamais fait.</li>
-          <li><span class="mono">outline-offset</span> sur un <span class="mono">outline-none</span> ne décale rien : en Tailwind 4 l'anneau visible est une <span class="mono">box-shadow</span>. Le décalage réel vient de <span class="mono">ring-offset-*</span>. <b>Trouvé par la revue, pas par les tests</b> — l'assertion, elle, était verte.</li>
-          <li>Le comportement du toast a été <b>scindé</b> vers la story 1.13 : Alpine n'entre dans le DOM qu'avec <span class="mono">@livewireScripts</span>, câblé par les layouts. Un critère d'acceptation sans référent est un faux-vert garanti.</li>
-        </ul>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Layouts public et minimal<em>story 1.13 · Alpine sans expression inline</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><b>Ce que ça fait —</b> deux layouts, un lien de saut au contenu, et le comportement du toast écrit en Alpine <b>sans une seule expression JS dans le balisage</b> — pour ne pas creuser le trou avant l'allumage de la CSP.</p>
-        <p><b>Ce qui le garde, et la démonstration qui compte —</b> le scanner d'AC8 a été muté : un <span class="mono">@click='close()'</span> bien réel a été ajouté au balisage, et le test « ne laisse aucune expression JS » est resté <b>VERT</b>. L'angle mort n'était pas théorique. Seul le scanner corrigé rougit.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Le temps comme texture<em>story 1.12 · 33 mutations · 4 composants</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><b>Ce que ça fait —</b> quatre composants <span class="mono">&lt;x-time-*&gt;</span> qui rendent le temps lisible (« il y a 14 h », « streaming depuis 4 ans ») avec rafraîchissement client, <b>observé dans un vrai navigateur</b>.</p>
-        <p><b>Trois défauts de fond, tous trouvés en revue :</b> une dérive calendaire entre Carbon et Intl aux changements d'heure (verrouillée par un test sur <span class="mono">APP_TIMEZONE=UTC</span>) ; un <span class="mono">datetime=""</span> qui retombait silencieusement sur <span class="mono">now()</span> ; et le compteur de la campagne de mutation qui <b>comptait 18 au lieu de 33</b>.</p>
-        <p class="mut">Le rafraîchissement client impose une <b>seconde</b> implémentation du formatage français. La dérive serveur/client que rien n'aurait attrapée est verrouillée par une table de cas partagée entre les deux.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Typographie self-hostée<em>story 1.9 · 4 faces IBM Plex · seule story revue deux fois</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><b>Ce que ça fait —</b> quatre faces servies depuis le domaine de l'application, trois préchargées, et <b>un navigateur a constaté qu'elles sont chargées</b> — pas déclarées.</p>
-        <p><b>Comment —</b> une table unique <a class="ref" href="../../src/resources/fonts.json">resources/fonts.json</a> lue par quatre consommateurs. Les <span class="mono">@font-face</span> sont rendus par un composant Blade et non par une feuille statique : <span class="mono">asset()</span> doit s'appliquer <em>à la fois</em> au <span class="mono">href</span> du preload et à l'<span class="mono">url()</span> de la règle, sinon un déploiement en sous-chemin donne quatre 404 silencieux — ou un double téléchargement.</p>
-        <p><b>⛔ La trouvaille de la rédaction —</b> le critère de preuve d'origine (« <span class="mono">getComputedStyle(body).fontFamily</span> contient IBM Plex Sans ») était <b>déjà vert depuis trois jours</b>, sans qu'aucun woff2 n'existe : <span class="mono">getComputedStyle</span> rend la <em>pile déclarée</em>, pas la fonte employée. Douzième garde-fou silencieux — cette fois dans l'énoncé de la story censée le produire.</p>
-        <p><b>🔴 Et une mutation survivante —</b> basculer un <span class="mono">preload</span> à <span class="mono">false</span> ne faisait rougir personne : le composant dérivait son rendu de la table, et le test dérivait ses attentes de <b>la même table</b>. Les deux côtés se calculaient l'un l'autre. Correctif : un test écrit <b>en dur</b> le jeu servi (4) et le jeu préchargé (3) — il décrit la <em>décision</em>, pas la table.</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">Un runner navigateur qui rougit vraiment<em>spike · ADR-0013</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><b>Ce que ça fait —</b> <span class="mono">make test-browser</span>, 34 tests, câblé en CI comme job bloquant. Le doute qui avait fait réordonner tout le reliquat d'Epic 1 est levé : le token <span class="mono">--font-sans</span> gouverne bien la cascade réelle.</p>
-        <p><b>Trois choses à savoir avant d'y retoucher —</b> le verdict ne vient <b>pas</b> du code de sortie de Pest (rapport JUnit) ; Chromium ne peut pas être celui de Playwright (images Alpine en musl, builds Playwright en glibc) ; et <span class="mono">tests/Browser</span> n'est délibérément pas une testsuite de <span class="mono">phpunit.xml</span>.</p>
-        <p class="mut">Un garde-fou a prouvé sa valeur au passage : la révision Chromium attendue est passée de 1217 à 1234. Le script la <b>dérive</b> de <span class="mono">browsers.json</span> au lieu de la coder en dur — la suite serait rouge à l'instant si le spike avait écrit « 1217 ».</p>
-      </div></div></div>
-
-    <div class="item"><button aria-expanded="false"><span class="dot d-ok"></span><span class="ttl">La porte : <span class="mono">/admin</span> authentifié<em>story 1.10a · <span style="color:var(--ok)">done</span> le 2026-08-20 · 2 passes de revue</em></span><span class="chev">›</span></button>
-      <div class="body"><div class="in">
-        <p><b>Ce que ça fait —</b> un panel Filament v5 <b>vide</b>, monté dans le module Admin, refusé par défaut : <span class="mono">canAccessPanel()</span> exige le rôle <span class="mono">super-admin</span>. Le rôle est semé ; <b>aucun compte ne l'est</b> — l'administrateur se crée avec <span class="mono">php artisan make:filament-user</span>.</p>
-        <p><b>Ce qu'elle n'a délibérément pas fait —</b> aucune ressource Filament, aucun thème, Sanctum laissé <b>inerte</b> (sa table n'existe pas), CSP toujours éteinte.</p>
-      </div></div></div>
+  <div class="note warn">
+    <p style="margin-bottom:0"><b>⚠️ Ce que le garde-fou ne couvre pas, et qu'il faut savoir avant de s'y fier :</b> les <b>nombres</b> — « 423 tests », « 78,8 % », « 4 / 13 » — ne sont vérifiés par rien et dériveront. C'est pourquoi chacun s'affiche avec sa provenance et sa date de lecture, et pourquoi cette page répète qu'elle ne vaut pas preuve. Les chemins écrits en prose sans être des liens ne sont pas gardés non plus, volontairement : ils désignent ce qui n'est pas un fichier versionné.</p>
   </div>
 </section>
 
-<hr class="sep">
-
-<section id="reviews">
-  <div class="eyebrow">07 — Performance des revues</div>
-  <h2 style="font-size:24px;margin-bottom:10px">Une revue de code coûte. Est-ce qu'elle paie ?</h2>
-  <p class="lede">La question a été posée pour de vrai, et instruite sur les <b>16 passes de revue</b> qu'ont subies les 13 stories de l'Epic 1. La réponse n'est pas « oui » ni « non » : elle dépend du <b>rang</b> de la passe, et l'effondrement est net. <b>La 16ᵉ passe — celle du 2026-08-20 — a en partie démenti la règle tirée des 15 premières</b>, et c'est écrit plus bas plutôt que corrigé en silence.</p>
-
-  <div class="grid g3" style="margin-bottom:24px">
-    <div class="card panel" style="padding:20px">
-      <div class="eyebrow" style="margin-bottom:8px">Passe 1 · 13 passes</div>
-      <div style="font-size:30px;font-weight:600;font-family:var(--mono);letter-spacing:-.02em">108</div>
-      <p style="font-size:13px;color:var(--text-2);margin:6px 0 0">correctifs <b>appliqués</b>. Aucun ne répare une revue précédente — par construction, il n'y en a pas.</p>
-    </div>
-    <div class="card panel" style="padding:20px;border-color:var(--border-hi)">
-      <div class="eyebrow" style="margin-bottom:8px">Passe 2 · 4 passes</div>
-      <div style="font-size:30px;font-weight:600;font-family:var(--mono);letter-spacing:-.02em">50 <span style="font-size:15px;color:var(--warn)">· 18 % de réparation</span></div>
-      <p style="font-size:13px;color:var(--text-2);margin:6px 0 0"><b>Bimodal, pas moyen</b> : de <b>0</b> correctif (1.3) à <b>23</b> (1.10a). Plus <b>8 constats simplement retrouvés</b>, faute d'avoir été appliqués.</p>
-    </div>
-    <div class="card panel" style="padding:20px;border-color:rgba(239,68,68,.4)">
-      <div class="eyebrow" style="margin-bottom:8px">Passe 3 · 1 passe</div>
-      <div style="font-size:30px;font-weight:600;font-family:var(--mono);letter-spacing:-.02em;color:var(--err)">5 <span style="font-size:15px">· 80 % de réparation</span></div>
-      <p style="font-size:13px;color:var(--text-2);margin:6px 0 0">Quatre correctifs sur cinq ne font que réparer la passe 2. Dont <b>un revert pur</b>.</p>
-    </div>
-  </div>
-
-  <figure>
-  <svg viewBox="0 0 1120 250" role="img" aria-label="Part des correctifs qui réparent la passe précédente : 0 % en passe 1, 18 % en passe 2, 80 % en passe 3">
-    <text x="28" y="30" fill="rgba(255,255,255,.38)" font-size="11" letter-spacing="1.6" class="m">PART DES CORRECTIFS QUI RÉPARENT LA PASSE PRÉCÉDENTE</text>
-    <line x1="150" y1="196" x2="1080" y2="196" stroke="#1F1F22"/>
-
-    <text x="132" y="86" fill="rgba(255,255,255,.6)" font-size="12.5" text-anchor="end">Passe 1</text>
-    <rect x="150" y="66" width="800" height="28" rx="4" fill="rgba(255,255,255,.26)"/>
-    <text x="966" y="86" fill="rgba(255,255,255,.6)" font-size="12" class="m">108 correctifs · 0 % réparation</text>
-
-    <text x="132" y="136" fill="rgba(255,255,255,.6)" font-size="12.5" text-anchor="end">Passe 2</text>
-    <rect x="150" y="116" width="303" height="28" rx="4" fill="rgba(255,255,255,.26)"/>
-    <rect x="453" y="116" width="67" height="28" fill="#F59E0B"/>
-    <text x="536" y="136" fill="rgba(255,255,255,.6)" font-size="12" class="m">50 correctifs · 18 % réparation · + 8 constats retrouvés</text>
-
-    <text x="132" y="186" fill="rgba(255,255,255,.6)" font-size="12.5" text-anchor="end">Passe 3</text>
-    <rect x="150" y="166" width="7" height="28" rx="2" fill="rgba(255,255,255,.26)"/>
-    <rect x="157" y="166" width="30" height="28" fill="#EF4444"/>
-    <text x="203" y="186" fill="#EF4444" font-size="12" class="m">5 correctifs · 80 % réparation · dont 1 revert pur</text>
-
-    <text x="150" y="228" fill="rgba(255,255,255,.38)" font-size="11.5">Largeur ∝ nombre de correctifs. Segment coloré = correctifs dont l'objet est une régression, ou un correctif défaillant, de la passe précédente.</text>
-  </svg>
-  <figcaption>Une seule story a subi trois passes : la <b>1.1</b>. Le titre de sa section round 2, écrit à l'époque par le développement lui-même, est <em>« fixes des régressions introduites par P1-P20 »</em>. Celui du round 3 : <em>« fixes des régressions introduites par F1-F6 »</em>. Le document contient même la phrase — <em>« F3 et F6 ont chacun introduit une régression de sévérité comparable à ce qu'ils fixaient »</em>.</figcaption>
-  </figure>
-
-  <div class="note err" style="margin:26px 0">
-    <p><b>🔴 Et le pire n'est pas dans les chiffres.</b> <span class="mono">F3</span>, correctif de la <b>passe 2</b> de la story 1.1, a introduit <span class="mono">env('TRUSTED_PROXIES', '*')</span> — avec, en commentaire, la justification « défaut <span class="mono">*</span> documenté safe pour un déploiement derrière Apache ».</p>
-    <p>C'est <b>exactement</b> le trou de sécurité trouvé le 2026-08-09, deux mois et demi plus tard : Laravel traduit <span class="mono">*</span> en <span class="mono">setTrustedProxies(['0.0.0.0/0','::/0'])</span>, donc toute adresse d'Internet devient un proxy de confiance, donc <span class="mono">request()->ip()</span> rend le <span class="mono">X-Forwarded-For</span> <b>forgé par le client</b>, donc la clé de seau du rate limiting de connexion en dérive — <b>un seau neuf par tentative</b>.</p>
-    <p style="margin-bottom:0">La revue adversariale ne l'a pas trouvé. <b>Elle l'a posé.</b> Et la passe 3 est repassée dessus sans le voir, parce qu'elle regardait le <em>parsing</em> de la variable, pas ce que sa valeur par défaut autorisait. La justification, elle, était fausse dès la première ligne : Apache <b>ajoute</b> à <span class="mono">X-Forwarded-For</span>, il ne le remplace pas.</p>
-  </div>
-
-  <h3 style="font-size:17px;margin:34px 0 12px">Les 15 passes, story par story</h3>
-  <div class="tw">
-  <table>
-    <thead><tr>
-      <th>Story</th><th class="num">Passes</th><th class="num">Passe 1</th><th class="num">Passe 2</th><th class="num">Passe 3</th><th>Ce que la mesure dit</th>
-    </tr></thead>
-    <tbody>
-      <tr><td><b>1.1</b> initialisation</td><td class="num hi">3</td><td class="num">20</td><td class="num" style="color:var(--warn)">6</td><td class="num" style="color:var(--err)">5</td><td>46 constats bruts en passe 1. Les passes 2 et 3 ne réparent qu'elles-mêmes — et laissent passer le défaut de sécurité qu'elles ont créé.</td></tr>
-      <tr><td><b>1.2</b> profils Docker</td><td class="num">1</td><td class="num">4</td><td class="num mut">—</td><td class="num mut">—</td><td class="mut">1 décision, 2 reports, 6 écartés.</td></tr>
-      <tr><td><b>1.3</b> modèle Streamer</td><td class="num">2</td><td class="num">4</td><td class="num" style="color:var(--err)">0</td><td class="num mut">—</td><td><b>La passe 2 la plus stérile du dépôt :</b> 0 correctif, 2 reports, <b>13 constats écartés</b> — des thèmes de la passe 1 re-soulevés sans contexte.</td></tr>
-      <tr><td><b>1.4</b> tenancy Pattern C</td><td class="num">1</td><td class="num">1</td><td class="num mut">—</td><td class="num mut">—</td><td class="mut">5 reports, dont celui du <span class="mono">firstOrFail()</span> — resté ouvert 2 mois ½.</td></tr>
-      <tr><td><b>1.5</b> <span class="mono">tenancy:assert</span></td><td class="num">1</td><td class="num">1</td><td class="num mut">—</td><td class="num mut">—</td><td class="mut">3 reports.</td></tr>
-      <tr><td><b>1.6</b> garde de couplage</td><td class="num">1</td><td class="num">1</td><td class="num mut">—</td><td class="num mut">—</td><td class="mut">10 écartés sur 13 constats.</td></tr>
-      <tr><td><b>1.7</b> activation modules</td><td class="num">1</td><td class="num">0</td><td class="num mut">—</td><td class="num mut">—</td><td><b>0 correctif</b> — et pourtant le mécanisme n'était gardé par <em>aucun</em> test. C'est la story 0b, deux mois plus tard, qui l'a mesuré par mutation.</td></tr>
-      <tr><td><b>1.8</b> tokens CSS</td><td class="num">1</td><td class="num">7</td><td class="num mut">—</td><td class="num mut">—</td><td class="mut">7 constats, tous traités.</td></tr>
-      <tr><td><b>1.9</b> fontes self-hostées</td><td class="num hi">2</td><td class="num">21</td><td class="num" style="color:var(--ok)">21</td><td class="num mut">—</td><td><b>La seule passe 2 qui paie</b> — et elle ne relisait <em>pas</em> le même code : elle portait sur les 3 changements structurels écrits <b>pendant</b> la passe 1, donc jamais relus. Elle a trouvé que <span class="mono">welcome.blade.php</span>, seule route atteignable en production, n'était gardée dans aucun sens.</td></tr>
-      <tr><td><b>1.11</b> composants Blade</td><td class="num">1</td><td class="num">22</td><td class="num mut">—</td><td class="num mut">—</td><td>30 constats, 22 correctifs, tous dans le même commit, aucun report.</td></tr>
-      <tr><td><b>1.12</b> time-as-texture</td><td class="num">1</td><td class="num">22</td><td class="num mut">—</td><td class="num mut">—</td><td>4 décisions, 8 reports. Trois défauts de fond trouvés — la dérive Carbon ↔ Intl aux changements d'heure n'était atteignable par aucun test existant.</td></tr>
-      <tr><td><b>1.13</b> layouts</td><td class="num">1</td><td class="num">4</td><td class="num mut">—</td><td class="num mut">—</td><td>Aucun constat <span class="mono">high</span>. 4 mutations rejouées, 4 rouges.</td></tr>
-      <tr><td><b>1.10a</b> panel admin</td><td class="num hi">2</td><td class="num" style="color:var(--warn)">1 <span class="mut">/10</span></td><td class="num" style="color:var(--ok)">23</td><td class="num mut">—</td><td><b>Le contre-exemple.</b> La passe 1 a proposé 10 correctifs ; <b>1 seul a été appliqué</b>, 2 ont manqué leur but, 10 sont restés intacts. La passe 2 — 4 couches, sans connaître la liste — en a <b>retrouvé 8</b> et produit 23 correctifs. La règle écrite le matin aurait dit « pas de passe 2 ». Elle aurait eu tort.</td></tr>
-    </tbody>
-  </table>
-  </div>
-
-  <h3 style="font-size:17px;margin:38px 0 12px">La règle qui en découle</h3>
-
-  <div class="card" style="padding:24px;border-color:var(--lava)">
-    <p style="font-size:16px;margin-bottom:14px"><b>Plafond : deux passes de revue de code par story. La seconde relit ce que la première a écrit.</b></p>
-    <div class="tagrow">
-      <span class="tag hot">compte dans le quota : /bmad-code-review</span>
-      <span class="tag hot">compte : /bmad-review <span class="mut">(lentille adversariale)</span></span>
-      <span class="tag on">hors quota : /security-review</span>
-      <span class="tag on">hors quota : composer audit · npm audit</span>
-      <span class="tag on">hors quota : make security-scan</span>
-    </div>
-    <p style="font-size:13.5px;color:var(--text-2)">La sécurité est <b>hors quota</b> parce qu'un scanner ne fabrique pas de la confiance : il constate. Deux revues d'opinion qui disent la même chose ne valent pas mieux qu'une ; deux audits de dépendances à deux dates différentes, si — <span class="mono">composer audit</span> a rapporté <b>7 advisories en une seule session</b> le 2026-08-06, toutes publiées dans les 48 h.</p>
-    <p style="font-size:13.5px;color:var(--text-2);margin-bottom:0"><b>Ce qui distingue une passe 2 utile d'une passe 2 stérile</b> n'est pas le zèle du relecteur, c'est <b>le périmètre</b>. La 1.9 a relu du code neuf jamais lu ; la 1.3 a relu du code déjà lu. <b>⚠️ Cette formulation a été amendée le jour même</b> — voir l'encadré ci-dessous.</p>
-  </div>
-
-  <div class="card" style="padding:24px;border-color:var(--warn);margin-top:22px">
-    <p style="font-size:15px;margin-bottom:12px"><b style="color:var(--warn)">⚠️ Amendement du même jour — la clause ci-dessus était trop étroite.</b></p>
-    <p style="font-size:13.5px;color:var(--text-2)">Le plafond a été écrit le matin sur 15 passes. <b>La 16ᵉ, l'après-midi, l'a partiellement démenti</b> — le démenti annoncé au paragraphe suivant, arrivé en quelques heures.</p>
-    <p style="font-size:13.5px;color:var(--text-2)">Appliquée littéralement à la story 1.10a, la clause « une passe 2 n'est utile que si elle a du code neuf à lire » aurait conclu <b>« pas de passe 2 »</b> : la passe 1 n'avait quasiment rien écrit. Elle aurait eu tort — la passe 2 a produit <b>23 correctifs et 5 décisions</b>. Raison : la passe 1 n'avait rien écrit <em>parce que ses constats n'avaient pas été consommés</em>. La passe 2 n'a pas relu du code neuf, elle a <b>fermé la passe 1</b>.</p>
-    <p style="font-size:15px;margin:16px 0 12px;padding-left:15px;border-left:2px solid var(--lava)"><b>La 2ᵉ passe existe pour CLORE la première</b> — soit en relisant ce que ses correctifs ont écrit, soit en vérifiant que ses constats ont été consommés. Une passe 2 qui ne peut nommer ni l'un ni l'autre n'a rien à faire.</p>
-    <p style="font-size:13.5px;color:var(--text-2)"><b>Corollaire, plus important que le plafond lui-même :</b> appliquer les constats de la passe 1 est ce qui rend la passe 2 bon marché. Ne pas les appliquer transforme le budget de revue en budget de <b>re-découverte</b> — huit constats retrouvés à quatre couches, c'est-à-dire payés deux fois.</p>
-    <p style="font-size:13.5px;color:var(--text-2);margin-bottom:0">🔴 <b>Et la démonstration la plus dure vient du même endroit.</b> Le correctif <span class="mono">TRUSTED_PROXIES</span> de la passe 1 était <b>inopérant en production</b> : l'<span class="mono">env()</span> avait changé de <em>fichier</em>, pas de <em>moment</em>. Deux couches recommandaient même d'y lire <span class="mono">config('proxies.at')</span> — recommandation <b>fausse</b>, qui aurait fermé la confiance aux proxys en silence. La leçon n'est pas « les revues sont mauvaises » : c'est que <b>le correctif d'une revue est du code non revu</b>, et que c'est exactement ce que la 2ᵉ passe est là pour lire.</p>
-  </div>
-
-  <div class="note warn" style="margin-top:22px"><b>Ce que cette mesure ne dit pas</b> — et qui empêcherait d'en tirer plus qu'elle ne porte. Elle compte des <b>correctifs</b>, pas de la <b>gravité</b> : une passe à 1 correctif qui ferme un trou d'authentification bat une passe à 22 correctifs de nommage. Elle porte sur <b>un seul epic</b>, <b>un seul relecteur</b> et des stories de front pour la plupart. Et l'échantillon des passes 3 est de <b>un</b>. Le plafond est donc une règle de coût, pas une loi de la nature : il vaut jusqu'à ce qu'une story le démente — auquel cas c'est le démenti qu'on écrit, pas le plafond qu'on contourne.</div>
-</section>
-
-<hr class="sep">
-
-<section id="pattern">
-  <div class="eyebrow">08 — Le motif</div>
-  <h2 style="font-size:24px;margin-bottom:10px">Le garde-fou silencieux</h2>
-  <p class="lede">Si ce projet devait transmettre une seule chose, ce serait celle-ci. Un même défaut est réapparu <b>dix-huit fois</b> sous des formes différentes, dans le code, dans les tests, dans les documents, et jusque dans l'audit chargé de le traquer. Il a une cause racine, nommée le 2026-07-30 :</p>
-
-  <div class="card" style="padding:26px 28px;border-left:3px solid var(--lava);margin-bottom:26px">
-    <p style="font-size:19px;margin:0;letter-spacing:-.01em"><b>L'affirmation précède son référent.</b></p>
-    <p style="font-size:14px;color:var(--text-2);margin:10px 0 0">On écrit qu'une chose est vraie, ou gardée, ou vérifiée — et la chose qui la rendrait vraie n'existe pas encore, ou n'existe plus, ou n'a jamais existé. Rien ne rougit, parce qu'une affirmation ne peut être contredite que par un référent.</p>
-  </div>
-
-  <figure>
-  <svg viewBox="0 0 1120 246" role="img" aria-label="Quatre formes du même défaut : le référent absent, le référent disparu, le référent circulaire, le référent partiel">
-    <text x="28" y="30" fill="rgba(255,255,255,.38)" font-size="11" letter-spacing="1.6" class="m">QUATRE FORMES DU MÊME DÉFAUT</text>
-    <g>
-      <rect x="28" y="50" width="256" height="172" rx="9" fill="#141416" stroke="#2c2c31"/>
-      <text x="48" y="80" fill="rgba(255,255,255,.92)" font-size="13.5" font-weight="600">Le référent absent</text>
-      <text x="48" y="104" fill="rgba(255,255,255,.6)" font-size="11.5">L'affirmation nomme quelque</text>
-      <text x="48" y="120" fill="rgba(255,255,255,.6)" font-size="11.5">chose qui n'existe pas.</text>
-      <text x="48" y="152" fill="rgba(255,255,255,.38)" font-size="11" class="m">· un AC citant un composant</text>
-      <text x="48" y="168" fill="rgba(255,255,255,.38)" font-size="11" class="m">  créé 4 stories plus tard</text>
-      <text x="48" y="184" fill="rgba(255,255,255,.38)" font-size="11" class="m">· .ai/rules injecté par Boost</text>
-      <text x="48" y="200" fill="rgba(255,255,255,.38)" font-size="11" class="m">· public/fonts/filament</text>
-    </g>
-    <g>
-      <rect x="300" y="50" width="256" height="172" rx="9" fill="#141416" stroke="#2c2c31"/>
-      <text x="320" y="80" fill="rgba(255,255,255,.92)" font-size="13.5" font-weight="600">Le référent disparu</text>
-      <text x="320" y="104" fill="rgba(255,255,255,.6)" font-size="11.5">C'était vrai. Ça ne l'est plus,</text>
-      <text x="320" y="120" fill="rgba(255,255,255,.6)" font-size="11.5">et personne n'a de raison</text>
-      <text x="320" y="136" fill="rgba(255,255,255,.6)" font-size="11.5">de le relire.</text>
-      <text x="320" y="168" fill="rgba(255,255,255,.38)" font-size="11" class="m">· le FROM annonçant 8.5.8</text>
-      <text x="320" y="184" fill="rgba(255,255,255,.38)" font-size="11" class="m">  pendant que le digest sert 8.5.4</text>
-      <text x="320" y="200" fill="rgba(255,255,255,.38)" font-size="11" class="m">· la CI qui tournait sur MariaDB</text>
-    </g>
-    <g>
-      <rect x="572" y="50" width="256" height="172" rx="9" fill="#141416" stroke="#FF5722" stroke-width="1.4"/>
-      <text x="592" y="80" fill="#FF5722" font-size="13.5" font-weight="600">Le référent circulaire</text>
-      <text x="592" y="104" fill="rgba(255,255,255,.6)" font-size="11.5">Le test et le code dérivent</text>
-      <text x="592" y="120" fill="rgba(255,255,255,.6)" font-size="11.5">de la MÊME source. Les deux</text>
-      <text x="592" y="136" fill="rgba(255,255,255,.6)" font-size="11.5">côtés se calculent l'un l'autre.</text>
-      <text x="592" y="168" fill="rgba(255,255,255,.38)" font-size="11" class="m">· la table des fontes lue par</text>
-      <text x="592" y="184" fill="rgba(255,255,255,.38)" font-size="11" class="m">  le composant ET par le test</text>
-      <text x="592" y="200" fill="rgba(255,255,255,.38)" font-size="11" class="m">→ seule mutation SURVIVANTE</text>
-    </g>
-    <g>
-      <rect x="844" y="50" width="248" height="172" rx="9" fill="#141416" stroke="#2c2c31"/>
-      <text x="864" y="80" fill="rgba(255,255,255,.92)" font-size="13.5" font-weight="600">Le référent partiel</text>
-      <text x="864" y="104" fill="rgba(255,255,255,.6)" font-size="11.5">Mesuré une fois, au bon</text>
-      <text x="864" y="120" fill="rgba(255,255,255,.6)" font-size="11.5">endroit — puis généralisé</text>
-      <text x="864" y="136" fill="rgba(255,255,255,.6)" font-size="11.5">à tout le reste.</text>
-      <text x="864" y="168" fill="rgba(255,255,255,.38)" font-size="11" class="m">· « Filament ne traverse pas</text>
-      <text x="864" y="184" fill="rgba(255,255,255,.38)" font-size="11" class="m">  le groupe web » — vrai de 2</text>
-      <text x="864" y="200" fill="rgba(255,255,255,.38)" font-size="11" class="m">  routes sur 3, écrit 3 fois</text>
-    </g>
-  </svg>
-  <figcaption>Le catalogue complet vit dans <a class="ref" href="../ETAT.md">docs/ETAT.md</a>. Quelques spécimens que rien n'aurait attrapés autrement : un test nommé « la limite est de 5 » qui restait vert avec la limite à 500 · un <span class="mono">toHaveKey($clé, $message)</span> dont le second argument est en réalité la <em>valeur attendue</em> · un <span class="mono">toContain()</span> variadique où le message devient une seconde valeur à chercher, rendant l'assertion impossible à satisfaire · et un grep de sécurité qui rougissait sur le commentaire expliquant son propre motif.</figcaption>
-  </figure>
-
-  <div class="note lava"><b>La contre-mesure, et elle n'a pas d'exception :</b> <em>aucun garde-fou n'est livré sans avoir été VU ROUGE.</em> Casser ce qu'il teste, constater l'échec, restaurer. Pas de seuil de couverture en CI — il aurait été vert pendant tout ce que ces sessions ont trouvé. Et pour les stories critiques, une campagne de mutation <b>manuelle</b>, une mutation à la fois, <b>rejouée après toute réécriture des tests</b> — règle ajoutée après qu'un refactor a rendu un test non discriminant sans que personne ne le voie.</div>
-
-  <h3 style="font-size:17px;margin:34px 0 12px">La boucle qualité, dosée selon le risque</h3>
-  <p class="lede" style="margin-bottom:16px">Une boucle qu'on applique intégralement à tout est une boucle qu'on contourne. Chaque story est classée avant de choisir la cérémonie — sur un critère nommable, pas sur une impression.</p>
-  <div class="tw">
-  <table>
-    <thead><tr><th>Niveau</th><th>Ce qui déclenche</th><th>Revue</th><th>Sécurité</th><th>Couverture</th></tr></thead>
-    <tbody>
-      <tr><td><b>S</b> — Standard</td><td>Code applicatif sans surface de sécurité ni invariant transverse</td><td>1 passe</td><td class="mut">—</td><td>le code neuf est-il exercé ?</td></tr>
-      <tr><td><b>R</b> — Renforcé</td><td>Touche un invariant transverse, la CI, l'installeur, ou un mécanisme dont dépendent d'autres stories</td><td>1 passe + relecture ciblée de l'invariant</td><td>oui</td><td>+ les branches d'erreur</td></tr>
-      <tr><td><b>C</b> — Critique</td><td>Authentification, autorisation, tenancy, secrets, données personnelles, exposition réseau</td><td class="hi">2 passes max — la 2ᵉ relit la 1ʳᵉ</td><td>oui + « et sans authentification ? »</td><td>campagne de mutation manuelle</td></tr>
-    </tbody>
-  </table>
-  </div>
-  <p style="font-size:13px;color:var(--text-3);margin-top:12px">Une story est <b>S par défaut</b>. En cas d'hésitation, prendre le plus bas et écrire pourquoi : un doute non écrit se retransforme en zèle à la story suivante. Détail : <a class="ref" href="../process/03-boucle-qualite.md">docs/process/03-boucle-qualite.md</a>.</p>
-</section>
-
-<hr class="sep">
-
-<section id="decisions">
-  <div class="eyebrow">09 — Décisions</div>
-  <h2 style="font-size:24px;margin-bottom:10px">Les treize ADR</h2>
-  <p class="lede">Le seul niveau d'autorité qui compte. Un ADR ne se contredit pas dans un commentaire de code : il se remplace par un autre ADR — c'est ce qu'a fait le n° 10 avec le verrou « Laravel 12 + Filament v3 ».</p>
-  <div class="tw">
-  <table>
-    <thead><tr><th style="width:64px">N°</th><th>Décision</th><th>Ce qu'elle interdit, concrètement</th></tr></thead>
-    <tbody>
-      <tr><td class="mono">0001</td><td><a class="ref" href="../adr/ADR-0001-modularity-plausible-style.md">Modularité façon Plausible</a></td><td>Pas de système de plugins à l'exécution façon WordPress. On éteint par variable d'environnement, on n'installe pas à chaud.</td></tr>
-      <tr><td class="mono">0002</td><td><a class="ref" href="../adr/ADR-0002-rls-not-enabled-v1.md">Pas de RLS en v1</a></td><td>Rien en v1 ne doit bloquer une migration <b>additive</b> vers le multi-streamer.</td></tr>
-      <tr><td class="mono">0003</td><td><a class="ref" href="../adr/ADR-0003-backup-local-only-v1.md">Sauvegardes locales en v1</a></td><td>Pas d'hébergeur de sauvegarde à choisir maintenant — mais un hard-stop avant le premier streamer ami hébergé.</td></tr>
-      <tr><td class="mono">0004</td><td><a class="ref" href="../adr/ADR-0004-pulse-dedicated-database.md">Base dédiée à Pulse</a></td><td>Le monitoring n'écrit pas dans la base du produit. Conteneur <span class="mono">postgres-pulse</span> séparé.</td></tr>
-      <tr><td class="mono">0005</td><td><a class="ref" href="../adr/ADR-0005-apache-stays-v1-caddy-deferred.md">Apache reste en v1</a></td><td>Pas de migration vers Caddy tant que le vhost fonctionne — un changement d'infrastructure n'est pas une story de produit.</td></tr>
-      <tr><td class="mono">0006</td><td><a class="ref" href="../adr/ADR-0006-secrets-env-encrypt-native.md">Secrets par <span class="mono">env:encrypt</span></a></td><td>Pas de Vault, pas de service tiers : le natif Laravel suffit à cette échelle.</td></tr>
-      <tr><td class="mono">0007</td><td><a class="ref" href="../adr/ADR-0007-postgresql-17-over-mariadb.md">PostgreSQL, pas MariaDB</a></td><td>Pas de SQLite en test non plus. Dev et test sur le même moteur — sinon la CI valide autre chose que la production.</td></tr>
-      <tr><td class="mono">0008</td><td><a class="ref" href="../adr/ADR-0008-frontend-stack-blade-livewire.md">Blade + Livewire + Tailwind</a></td><td>Pas de SPA, pas de build front séparé. Alpine arrive <b>avec</b> Livewire — ne pas l'ajouter en npm, deux Alpine en parallèle est un bug classique.</td></tr>
-      <tr><td class="mono">0009</td><td><a class="ref" href="../adr/ADR-0009-modular-app-modules-psr4.md">Modules PSR-4 à la main</a></td><td>Pas de paquet de modularité, pas de DDD, pas de repositories, pas de CQRS, pas de <span class="mono">app/Domain/</span>. Eloquent <em>est</em> le repository.</td></tr>
-      <tr><td class="mono">0010</td><td><a class="ref" href="../adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md">Laravel 13 lève le verrou v3</a></td><td>Remplace une décision antérieure du PRD. Un verrou périmé se retire par écrit, pas par oubli.</td></tr>
-      <tr><td class="mono">0011</td><td><a class="ref" href="../adr/ADR-0011-observation-avant-composition.md">Observer avant de composer</a></td><td>Interdit d'écrire des composants dont on ne peut pas observer le rendu. A causé le spike runner et le réordonnancement de tout le reliquat d'Epic 1.</td></tr>
-      <tr><td class="mono">0012</td><td><a class="ref" href="../adr/ADR-0012-ecran-offline-et-module-media.md">Écran offline et module Media</a></td><td>⚠️ Cet ADR est aussi la pièce à conviction du risque de dérive : il conçoit en détail de l'Epic 4 alors qu'il restait cinq stories à l'Epic 1.</td></tr>
-      <tr><td class="mono">0013</td><td><a class="ref" href="../adr/ADR-0013-runner-navigateur-pest-browser.md">Runner navigateur Pest</a></td><td>Le verdict ne se lit pas dans le code de sortie. Chromium ne peut pas être celui de Playwright. <span class="mono">tests/Browser</span> n'est pas une testsuite.</td></tr>
-    </tbody>
-  </table>
-  </div>
-</section>
-
-<footer>
-  <p><b style="color:var(--text)">Comment cette page se met à jour :</b> à la main, quand quelqu'un décide qu'elle en vaut la peine. Il n'y a pas de générateur, délibérément — construire de l'outillage pour un tableau de bord pendant qu'il reste 119 stories à livrer serait précisément la dérive que ce projet a nommée et arrêtée.</p>
-  <p><b style="color:var(--text)">Ce qu'elle n'est pas :</b> une source de vérité. Elle ne se cite pas dans une story, elle ne clôt pas un critère d'acceptation, elle ne remplace ni un ADR, ni <span class="mono">epics.md</span>, ni <span class="mono">sprint-status.yaml</span>, ni <a class="ref" href="../ETAT.md">docs/ETAT.md</a>. Si elle contredit l'un d'eux, c'est elle qui a tort.</p>
-  <p><b style="color:var(--text)">Ce qu'elle garantit :</b> chaque fichier cité existe, et la table des ADR est exhaustive — vérifié par <a class="ref" href="../../src/tests/Unit/ReadingRoomReferentsTest.php">trois assertions vues rouges</a>. C'est peu. C'est le seul axe sur lequel une page écrite à la main peut être tenue honnête, et c'est justement celui sur lequel ce dépôt s'est fait avoir dix-huit fois.</p>
-  <p style="margin-bottom:0"><b style="color:var(--text)">Et le garde-fou a lui-même failli être silencieux.</b> Au premier jet, une mutation a <b>survécu</b> : renommer les 47 attributs <span class="mono">href</span> de la page en <span class="mono">data-href</span> laissait le test <b>vert</b>. Deux défauts se cachaient l'un l'autre — un plancher de vacuité fixé bien au-dessous du contenu réel (20 pour 33 référents), et une expression régulière non ancrée, qui matchait <em>à l'intérieur</em> de <span class="mono">data-href</span>. Le défaut était dans le garde-fou, pas dans la page. Corrigé, puis la campagne rejouée <b>intégralement</b> : cinq mutations, cinq rouges.</p>
+<footer class="rr">
+  <span>Reading Room — écrite à la main, sans autorité. La hiérarchie du projet reste <b>ADR &gt; epics.md + sprint-status.yaml &gt; ETAT.md</b>.</span>
+  <span class="mono" data-plan-stamp>—</span>
 </footer>
 </main>
 
-<script>
-(function () {
-  'use strict';
-
-  /* ── Panneaux de provenance des compteurs ──────────────────────────────── */
-  document.querySelectorAll('.metric').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var panel = document.getElementById(btn.dataset.prov);
-      if (!panel) { return; }
-      var open = btn.getAttribute('aria-expanded') === 'true';
-      // un seul panneau ouvert par grille, sinon la mise en page saute
-      btn.closest('.metrics').querySelectorAll('.metric').forEach(function (o) {
-        o.setAttribute('aria-expanded', 'false');
-        var p = document.getElementById(o.dataset.prov);
-        if (p) { p.classList.remove('open'); }
-      });
-      if (!open) { btn.setAttribute('aria-expanded', 'true'); panel.classList.add('open'); }
-    });
-  });
-
-  /* ── Accordéons ────────────────────────────────────────────────────────── */
-  document.querySelectorAll('.item > button').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var body = btn.nextElementSibling;
-      var open = btn.getAttribute('aria-expanded') === 'true';
-      btn.setAttribute('aria-expanded', open ? 'false' : 'true');
-      body.classList.toggle('open', !open);
-    });
-  });
-
-  /* ── Filtres de la section « non tranché » ─────────────────────────────── */
-  var tabs = document.querySelectorAll('.tabs .tab');
-  tabs.forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      tabs.forEach(function (t) { t.setAttribute('aria-selected', 'false'); });
-      tab.setAttribute('aria-selected', 'true');
-      var want = tab.id.replace('t-', '');
-      document.querySelectorAll('#pane-all .item').forEach(function (item) {
-        item.style.display = (want === 'all' || item.dataset.k === want) ? '' : 'none';
-      });
-    });
-  });
-
-  /* ── Surlignage de la section courante dans la barre ───────────────────── */
-  var links = {};
-  document.querySelectorAll('nav.top a').forEach(function (a) {
-    links[a.getAttribute('href').slice(1)] = a;
-  });
-  var spy = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      var a = links[e.target.id];
-      if (!a) { return; }
-      if (e.isIntersecting) {
-        Object.keys(links).forEach(function (k) { links[k].classList.remove('on'); });
-        a.classList.add('on');
-      }
-    });
-  }, { rootMargin: '-56px 0px -70% 0px' });
-  document.querySelectorAll('section[id]').forEach(function (s) { spy.observe(s); });
-})();
-</script>
+<script src="data/plan.js"></script>
+<script src="assets/rr.js"></script>
 </body>
 </html>
