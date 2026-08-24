@@ -1243,6 +1243,11 @@ endef
 test-bats: ## Tests shell Bats rapides (primitives du E2E, sans Docker)
 	$(call run_bats,tests/bats/unit)
 
+.PHONY: test-bats-uid
+test-bats-uid: ## 🐳 Vérifie que l'UID demandé est RÉELLEMENT appliqué dans les images (exige Docker, ~10 s)
+	@echo "$(CYAN)   Exige un démon Docker — rejoue le bloc d'ajustement d'utilisateur dans l'image de base.$(NC)"
+	$(call run_bats,tests/bats/uid.bats)
+
 .PHONY: test-bats-e2e
 test-bats-e2e: ## ⏱️ Installation E2E réelle sur un clone neuf (20-40 min, exige les ports 80/443 libres)
 	@echo "$(YELLOW)⚠️  Ce test CLONE le dépôt, BÂTIT les images et INSTALLE pour de vrai.$(NC)"

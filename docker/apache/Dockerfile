@@ -32,6 +32,25 @@ RUN apk add --no-cache \
     netcat-openbsd
 
 # Création de l'utilisateur (mais Apache reste root pour les ports)
+#
+# ⚠️ CES DEUX APPELS SONT INERTES, ET C'EST ÉCRIT PLUTÔT QUE SUBI (mesuré le
+# 2026-08-24). `www-data` existe DÉJÀ dans `httpd:2.4-alpine`, en uid **82** :
+# `addgroup`/`adduser` échouent donc — « already exists » — et le `|| true`
+# avale l'échec. L'`ARG UID` est accepté, et ignoré. C'est le défaut exact que
+# `docker/node/Dockerfile` portait et qui a bloqué le nightly (run 32748093741).
+#
+# ⛔ POURQUOI IL N'EST PAS CORRIGÉ ICI, ET PAS PAR PARESSE. Cette image n'est
+# pas dans le même cas que node :
+#   • `httpd.conf` porte `User www-data` / `Group www-data` — changer cet uid
+#     change l'utilisateur des WORKERS, pas seulement une identité de shell ;
+#   • `usermod` ne re-chowne que le HOME : `/usr/local/apache2`, le seul autre
+#     chemin possédé par `www-data(82)` (mesuré), resterait à 82 ;
+#   • et une vraie requête HTTP avec un apache non-1000 n'est pas éprouvable
+#     sans monter la pile complète — l'entrypoint attend `php:9000` SANS
+#     timeout et exige les certificats.
+# Rien ne le rend bloquant : les workers lisent l'arbre par les bits de
+# permission (775/664), et l'ont toujours fait. Le corriger reste un geste à
+# part, avec sa propre vérification. Report ouvert.
 RUN addgroup -g ${GID} www-data 2>/dev/null || true \
     && adduser -D -u ${UID} -G www-data www-data 2>/dev/null || true
 

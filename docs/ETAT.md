@@ -138,6 +138,25 @@
 > Alpine (`www-data` = 82, rien en 1000–1019, mesuré), et l'image php a été **réellement construite**
 > avec `UID=1001` : elle démarre, `www-data` y vaut 1001.
 >
+> ✅ **L'ALIGNEMENT DES UID TIENT** (run `32748093741`, 9m15) — le blocage précoce est franchi.
+> 🔴 **Et le constat que j'avais REPORTÉ est devenu bloquant** : `npm-install`, code **243**,
+> `npm error path /.npm`. `docker/node/Dockerfile` acceptait un `ARG UID`, le documentait… et
+> l'**ignorait** (`adduser … || true` sur un utilisateur `node` qui existe déjà en 1000). Sous
+> `-u 1001:1001`, l'uid n'avait aucune identité : `HOME` = `/`, cache npm = `/.npm`, inécrivable.
+> ✅ L'argument devient **autoritaire** (motif `usermod`/`groupmod` de l'image php, sous `set -eux`).
+> Mesuré : `npm install` sur un arbre à 1001 passe de **exit 1** — avec l'erreur littérale du run —
+> à **exit 0**. Le `CMD` propre du conteneur tourne désormais en 1001 : le risque latent que j'avais
+> nommé est levé, pas contourné. En uid 1000, image **strictement identique**.
+>
+> ⛔ **Le pansement a été REFUSÉ** : poser `HOME`/`npm_config_cache` au point d'appel aurait réglé
+> npm et laissé tomber le prochain outil ayant besoin d'un `HOME` — troisième pansement de la
+> journée après deux qui se sont contredits.
+>
+> 🎁 **Et la campagne a encore trouvé un garde à moi qui ne gardait rien** : ma post-condition
+> `test -w /home/node` était **inerte**, les étapes de build tournant en **root** pour qui `-w` est
+> toujours vrai. Elle était donc vraie dans le cas exact qu'elle prétendait interdire. Remplacée par
+> une assertion de PROPRIÉTÉ ; la mutation rougit.
+>
 > ⚠️ **DEUX AC RESTENT OUVERTES, ET AUCUNE N'A ÉTÉ FERMÉE SUR UNE LECTURE DE CODE.**
 > Le verdict de cette story est **un run réel**, et aucun n'a pu être lancé : le travail n'est pas
 > poussé, `workflow_dispatch` n'exécute que la version présente sur la branche par défaut. Restent
@@ -149,7 +168,7 @@
 > `nightly-freshness` en bloquant (geste 2, plus bas) **n'a pas été faite** : la faire avant un
 > premier vert installerait dans le verdict global le rouge permanent que cette section décrit.
 >
-> 🧪 **Campagne de mutation — 73 rouges observés, 11 témoins neutres verts.**
+> 🧪 **Campagne de mutation — 76 rouges observés, 12 témoins neutres verts.**
 > **Environnements nommés** (règle désormais ÉCRITE dans `docs/process/03-boucle-qualite.md`
 > §Étape 5, elle ne vivait que dans ce journal et dans `ADR-0013`) :
 > les 25 mutations Pest ont été appliquées sur l'arbre hôte et **exécutées dans le conteneur
@@ -176,7 +195,7 @@
 > (`github.actor == '…'`) a été ajouté ; la mutation rougit. Le motif est constant dans ce
 > projet : **un garde ne vaut que par le chemin que son test emprunte réellement.**
 >
-> 📊 **487 tests Pest · 49 tests Bats · ratchet 0/0/0.**
+> 📊 **487 tests Pest · 49 tests Bats (+4 uid) · ratchet 0/0/0.**
 
 > 🆕 **Story 2.4 implémentée, revues 1 et 2 traitées (≈60 + 31 constats).**
 > **423 tests Pest · 40 tests Bats · ratchet 0/0/0 · 87 mutations rejouées (60 + 27), toutes rouges

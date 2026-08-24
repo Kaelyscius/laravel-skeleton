@@ -67,6 +67,12 @@ on:
       #     sans qu'aucun run ne démarre. C'est le défaut exact déjà consigné
       #     pour `scripts/install.sh`, reconduit deux crans plus loin.
       - 'docker/php/scripts/docker-entrypoint.sh'
+      # Les Dockerfiles décident de l'UID réellement appliqué dans les images,
+      # et `tests/bats/uid.bats` l'éprouve. Sans ces entrées, on pouvait rendre
+      # un `ARG UID` inerte — le défaut qui a bloqué le nightly au run
+      # 32748093741 — sans qu'aucun run ne démarre.
+      - 'docker/node/**'
+      - 'docker/php/Dockerfile'
       - 'docker-compose*.yml'
       - '.github/workflows/nightly.yml'
       - '.github/workflows/ci.yml'
@@ -124,6 +130,12 @@ on:
       #     sans qu'aucun run ne démarre. C'est le défaut exact déjà consigné
       #     pour `scripts/install.sh`, reconduit deux crans plus loin.
       - 'docker/php/scripts/docker-entrypoint.sh'
+      # Les Dockerfiles décident de l'UID réellement appliqué dans les images,
+      # et `tests/bats/uid.bats` l'éprouve. Sans ces entrées, on pouvait rendre
+      # un `ARG UID` inerte — le défaut qui a bloqué le nightly au run
+      # 32748093741 — sans qu'aucun run ne démarre.
+      - 'docker/node/**'
+      - 'docker/php/Dockerfile'
       - 'docker-compose*.yml'
       - '.github/workflows/nightly.yml'
       - '.github/workflows/ci.yml'
@@ -260,6 +272,16 @@ jobs:
       # aurait déjà mergée. Bloquant, sans base de données, ~1 seconde.
       - name: 🦇 Tests shell Bats (primitives du E2E)
         run: make test-bats
+
+      # ⛔ L'UID DEMANDÉ EST-IL RÉELLEMENT APPLIQUÉ DANS LES IMAGES ?
+      # Un `ARG UID` inerte a bloqué le nightly au run 32748093741 : `npm`
+      # tournait sous un uid sans entrée `passwd`, donc sans `HOME`, et sortait
+      # en 243. Ce garde EXÉCUTE le bloc d'ajustement dans l'image de base — il
+      # exige donc Docker, que le runner fournit, et coûte une dizaine de
+      # secondes. Le laisser au seul nightly reviendrait à ne l'éprouver
+      # qu'une fois par nuit, après merge.
+      - name: 🆔 UID des images réellement appliqué (Bats · Docker)
+        run: make test-bats-uid
 
       # --- Informatifs (architecture §9.2) ---------------------------------
       # Rector est cassé par une incompatibilité de configuration connue :

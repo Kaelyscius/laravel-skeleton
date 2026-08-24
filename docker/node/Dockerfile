@@ -62,9 +62,44 @@ RUN apk add --no-cache \
   shadow \
   curl
 
-# Crée un utilisateur non-root
-RUN addgroup -g ${GID} node || true && \
-    adduser -D -u ${UID} -G node node || true
+# Ajuster UID et GID de `node` si besoin — MÊME MOTIF QUE L'IMAGE PHP.
+#
+# 🔴 LA RÉDACTION PRÉCÉDENTE ÉTAIT INERTE, ET ÇA A FINI PAR BLOQUER LE NIGHTLY.
+# Elle faisait `addgroup … || true && adduser … || true`. Or l'utilisateur
+# `node` EXISTE DÉJÀ dans `node:24-alpine`, en uid 1000 (mesuré) : les deux
+# appels échouaient donc — « user already exists » — et le `|| true` avalait
+# l'échec. L'argument `UID` était accepté, documenté… et ignoré.
+#
+# ⛔ CE QUE ÇA A COÛTÉ : run 32748093741, `npm-install` en erreur 243.
+# `make npm-install` lance `docker exec -u $(DOCKER_USER)`, donc en 1001 sur un
+# runner. Comme 1001 n'avait AUCUNE entrée `passwd` dans cette image, `HOME` se
+# résolvait en `/`, npm se rabattait sur `/.npm` et ne pouvait pas l'écrire :
+#   npm error path /.npm — errno -13 — Your cache folder contains root-owned files
+# Le défaut n'est pas npm : c'est un uid sans identité dans l'image.
+#
+# ⚖️ ON REND DONC L'ARGUMENT AUTORITAIRE plutôt que de poser `HOME` ou
+# `npm_config_cache` au point d'appel. Ce pansement-là aurait réglé npm et
+# laissé tomber le prochain outil qui a besoin d'un `HOME` — après deux
+# pansements contradictoires dans cette story, on traite la cause.
+#
+# ⚠️ `set -eux` : si `usermod` échoue, le BUILD échoue. Un uid demandé et non
+# appliqué est exactement ce qu'on vient de payer ; il ne doit plus jamais
+# passer en silence.
+RUN set -eux; \
+    existing_gid=$(getent group node | cut -d: -f3); \
+    if [ "$existing_gid" != "$GID" ]; then groupmod -g "$GID" node; fi; \
+    existing_uid=$(getent passwd node | cut -d: -f3); \
+    if [ "$existing_uid" != "$UID" ]; then usermod -u "$UID" node; fi; \
+    chown -R "$UID":"$GID" /home/node; \
+    test "$(getent passwd node | cut -d: -f3)" = "$UID"; \
+    test "$(stat -c %u /home/node)" = "$UID"
+# ⛔ LA POST-CONDITION PORTE SUR LE PROPRIÉTAIRE, PAS SUR `test -w`.
+# 🔴 Première rédaction : `test -w /home/node`. Les étapes de build tournent en
+# ROOT, et root peut écrire partout — la vérification était donc VRAIE même avec
+# un `/home/node` appartenant à root, c'est-à-dire dans le cas exact qu'elle
+# prétendait interdire. Trouvé en rejouant la mutation « le HOME n'est plus
+# rendu inscriptible », restée VERTE. On asserte la PROPRIÉTÉ, qui, elle, ne
+# dépend pas de qui exécute le test.
 
 # Active Corepack (pnpm, yarn) et met à jour les versions
 RUN corepack enable && \
