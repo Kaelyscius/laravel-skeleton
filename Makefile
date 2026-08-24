@@ -17,6 +17,41 @@ POSTGRES_CONTAINER = $$(docker ps -qf "name=$(COMPOSE_PROJECT_NAME)_postgres")
 # Containers par nom
 PHP_CONTAINER_NAME = $(COMPOSE_PROJECT_NAME)_php
 
+# =============================================================================
+# ⛔ L'UID DU CONTENEUR EST CELUI DE L'HÔTE — ET C'EST STRUCTUREL, PAS UN RÉGLAGE
+# =============================================================================
+# 🔴 CE QUI A ÉTÉ MESURÉ, ET DEUX FOIS PLUTÔT QU'UNE. L'arbre `./src` est
+# bind-monté : il est écrit par DEUX écrivains, le conteneur php (qui tournait en
+# `1000:1000` codé en dur) et l'hôte (`scripts/install-lockfile.sh` n'a aucun
+# `docker exec`). Sur la machine de développement l'hôte EST 1000 : les deux
+# coïncident, et rien ne se voit. Sur un runner GitHub l'hôte est **1001**, et
+# alors UN SEUL des deux peut posséder l'arbre :
+#   • avec le `chown` large de l'entrypoint, l'arbre passait à 1000 et
+#     l'installeur écrivait — mais l'hôte perdait son `mktemp` (run 32742873104) ;
+#   • sans lui, l'hôte gardait l'arbre et c'est l'installeur qui ne pouvait plus
+#     écrire (run 32745286801, échec dès l'étape 1/5).
+# Les deux pansements se contredisent. Aucun réglage du `chown` ne les concilie :
+# le conflit est dans les uid, il se règle dans les uid.
+#
+# ⚖️ ON ALIGNE DONC L'UID DU CONTENEUR SUR CELUI DE L'HÔTE. Il n'y a plus deux
+# propriétaires possibles, il n'y en a qu'un — le conflit disparaît par
+# construction plutôt que par arbitrage.
+#
+# ⚠️ DÉFAUT 1000 PARTOUT SI LA VARIABLE EST ABSENTE : sur un hôte en uid 1000
+# — la configuration WSL2/PhpStorm documentée — le comportement est
+# STRICTEMENT INCHANGÉ, et les images déjà construites restent valides.
+# `export` est indispensable : c'est par l'environnement que Compose interpole
+# `${HOST_UID}` dans les `args:` de build.
+HOST_UID := $(shell id -u)
+HOST_GID := $(shell id -g)
+export HOST_UID
+export HOST_GID
+
+# L'utilisateur passé à `docker exec`. Une seule définition : les 43 sites qui
+# portaient l'utilisateur en dur ne pouvaient pas suivre l'hôte, et aucun test
+# ne pouvait le dire puisque l'hôte de développement vaut précisément 1000.
+DOCKER_USER = $(HOST_UID):$(HOST_GID)
+
 # Patience du redémarrage post-installation (voir `post-install-restart-php`).
 # Surchargeables en ligne de commande — c'est par là que les tests réduisent
 # l'attente à zéro plutôt que de dupliquer la boucle dans une fixture.
@@ -250,9 +285,9 @@ define run_npm_command
 	fi
 	@echo "$(YELLOW)→ Running npm $(1) in $(NPM_PATH)$(NC)"
 	@if [ "$(NPM_PATH)" = "/var/www/project" ]; then \
-		docker exec -u 1000:1000 -w $(NPM_PATH) $(NODE_CONTAINER_NAME) npm $(1); \
+		docker exec -u $(DOCKER_USER) -w $(NPM_PATH) $(NODE_CONTAINER_NAME) npm $(1); \
 	else \
-		docker exec -u 1000:1000 $(NODE_CONTAINER_NAME) npm $(1); \
+		docker exec -u $(DOCKER_USER) $(NODE_CONTAINER_NAME) npm $(1); \
 	fi
 endef
 
@@ -695,7 +730,7 @@ install-laravel: ## Installer Laravel complet [DRY_RUN=true] [RESUME_FROM=<modul
 	@echo "$(CYAN)🚀 Installation Laravel 12 + PHP 8.5...$(NC)"
 	@echo ""
 	@echo "$(BLUE)━━━ Étape 1/5 : Installation des packages et configuration ━━━$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh $(INSTALL_FLAGS)"
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh $(INSTALL_FLAGS)"
 # ⛔ SOUS SIMULATION, LA RECETTE S'ARRÊTE ICI — ET C'EST LE MÊME RAISONNEMENT
 # QUE POUR LES CHAÎNES COMPOSITES, MOT POUR MOT (relevé revue 1).
 # `DRY_RUN=true` n'atteignait que l'étape 1/5. Les étapes 2 à 5 s'exécutaient
@@ -726,7 +761,7 @@ else
 		chmod +x /var/www/html/artisan 2>/dev/null || true && \
 		chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true && \
 		find /var/www/html/vendor/bin -type f -exec chmod +x {} + 2>/dev/null || true"
-	@echo "$(GREEN)✓ Permissions corrigées dans le container (775/664, www-data = UID 1000)$(NC)"
+	@echo "$(GREEN)✓ Permissions corrigées dans le container (775/664, www-data = UID $(HOST_UID))$(NC)"
 	@echo ""
 	@echo "$(BLUE)━━━ Étape 3/5 : Correction des permissions côté hôte WSL2 ━━━$(NC)"
 	@$(MAKE) fix-permissions-host || echo "$(YELLOW)⚠️  fix-permissions-host ignoré (sudo non disponible) — relancez manuellement: make fix-permissions-host$(NC)"
@@ -786,11 +821,11 @@ install-laravel-prod: ## Installer Laravel PRODUCTION [DRY_RUN=true] (sans packa
 	$(call check_container,$(PHP_CONTAINER_NAME))
 	@echo "$(CYAN)📦 Installation Laravel PRODUCTION (packages essentiels uniquement)$(NC)"
 	@echo "$(BLUE)→ Installation packages production$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 10-laravel-core $(INSTALL_ONLY_FLAGS)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 20-database $(INSTALL_ONLY_FLAGS)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 30-packages-prod $(INSTALL_ONLY_FLAGS)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 35-configure-spatie-packages $(INSTALL_ONLY_FLAGS)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 99-finalize $(INSTALL_ONLY_FLAGS)"
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 10-laravel-core $(INSTALL_ONLY_FLAGS)"
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 20-database $(INSTALL_ONLY_FLAGS)"
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 30-packages-prod $(INSTALL_ONLY_FLAGS)"
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 35-configure-spatie-packages $(INSTALL_ONLY_FLAGS)"
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) bash -c "cd /var/www/html && /var/www/project/scripts/install.sh --only 99-finalize $(INSTALL_ONLY_FLAGS)"
 # ⛔ Même raison qu'`install-laravel` : ce bloc `chown -R` + `find -exec chmod`
 # MUTE l'arbre applicatif, il ne le simule pas.
 ifeq ($(DRY_RUN_VALUE),true)
@@ -871,7 +906,7 @@ update-packages: ## Vérifier et installer packages devenus compatibles
 
 .PHONY: artisan
 artisan: ## Exécuter artisan (usage: make artisan cmd="migrate")
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan $(cmd)
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan $(cmd)
 
 .PHONY: bmad-doctor
 bmad-doctor: ## Vérifier que les commandes BMad prescrites par les docs peuvent DÉMARRER
@@ -928,32 +963,32 @@ artisan-it: ## Exécuter artisan en INTERACTIF (usage: make artisan-it cmd="make
 	@# poser sa première question. Trois documents recommandaient pourtant
 	@# `make artisan cmd="make:filament-user"` — relevé en revue le 2026-08-20
 	@# (finding Q16), sur le chemin de création du PREMIER administrateur.
-	@$(DOCKER) exec -it -u 1000:1000 $(PHP_CONTAINER) php artisan $(cmd)
+	@$(DOCKER) exec -it -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan $(cmd)
 
 .PHONY: filament-user
 filament-user: ## Créer le premier administrateur du panel /admin (interactif)
 	@echo "$(CYAN)👤 Création d'un utilisateur Filament — le rôle super-admin doit exister ($(YELLOW)make artisan cmd=\"db:seed\"$(CYAN)).$(NC)"
-	@$(DOCKER) exec -it -u 1000:1000 $(PHP_CONTAINER) php artisan make:filament-user
+	@$(DOCKER) exec -it -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan make:filament-user
 	@echo "$(YELLOW)⚠️  Le compte n'a encore AUCUN rôle : /admin lui répondra 403.$(NC)"
 	@echo "$(CYAN)   Assignez-le : $(NC)make artisan cmd=\"tinker\"$(CYAN) puis$(NC)"
 	@echo "$(CYAN)   User::query()->where('email','vous@exemple.test')->firstOrFail()->assignRole('super-admin');$(NC)"
 
 .PHONY: composer
 composer: ## Exécuter composer (usage: make composer cmd="install")
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) composer $(cmd)
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) composer $(cmd)
 
 .PHONY: migrate
 migrate: ## Lancer les migrations
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan migrate
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan migrate
 
 .PHONY: fresh
 fresh: ## Reset DB avec seeds
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan migrate:fresh --seed
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan migrate:fresh --seed
 
 .PHONY: clean-telescope-migrations
 clean-telescope-migrations: ## Nettoyer les entrées de migrations Telescope en double
 	@echo "$(YELLOW)🧹 Nettoyage des migrations Telescope en double...$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan tinker --execute="\
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan tinker --execute="\
 		DB::table('migrations')->where('migration', 'like', '%create_telescope%')->delete();\
 		echo 'Migrations Telescope supprimées de la table migrations';\
 	" 2>/dev/null || echo "$(RED)Erreur lors du nettoyage$(NC)"
@@ -1039,15 +1074,15 @@ npm-watch: npm-install ## Mode watch
 
 .PHONY: test
 test: ## Lancer tous les tests
-	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test
+	@$(DOCKER) exec -u $(DOCKER_USER) -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test
 
 .PHONY: test-unit
 test-unit: ## Tests unitaires
-	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --testsuite=Unit
+	@$(DOCKER) exec -u $(DOCKER_USER) -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --testsuite=Unit
 
 .PHONY: test-coverage
 test-coverage: ## Tests avec couverture
-	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --coverage-html coverage
+	@$(DOCKER) exec -u $(DOCKER_USER) -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --coverage-html coverage
 
 .PHONY: test-drift
 test-drift: ## ⛔ DESTRUCTIF — migre les tests PHPUnit vers Pest (RÉÉCRIT tests/). Pas une analyse.
@@ -1079,11 +1114,11 @@ test-drift-force: ## Exécute réellement la migration Drift (voir l'avertisseme
 		echo "$(YELLOW)   Committez d'abord, puis relancez.$(NC)"; \
 		exit 1; \
 	}
-	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --drift
+	@$(DOCKER) exec -u $(DOCKER_USER) -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --drift
 
 .PHONY: test-feature
 test-feature: ## Tests fonctionnels
-	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --testsuite=Feature
+	@$(DOCKER) exec -u $(DOCKER_USER) -e TELESCOPE_ENABLED=false $(PHP_CONTAINER) php artisan test --testsuite=Feature
 
 # Tests navigateur — délibérément HORS de `make test`.
 #
@@ -1103,7 +1138,7 @@ test-browser: ## Tests navigateur (Chromium, profil test)
 	@echo "$(CYAN)🌐 Démarrage du runner navigateur...$(NC)"
 	@$(DOCKER) compose --profile test up -d test-browser
 	@$(DOCKER) exec $(BROWSER_CONTAINER_NAME) /usr/local/bin/link-alpine-chromium.sh
-	@$(DOCKER) exec -u 1000:1000 -e TELESCOPE_ENABLED=false $(BROWSER_CONTAINER_NAME) \
+	@$(DOCKER) exec -u $(DOCKER_USER) -e TELESCOPE_ENABLED=false $(BROWSER_CONTAINER_NAME) \
 		/usr/local/bin/run-browser-tests.sh $(BROWSER_TEST_TIMEOUT)
 
 .PHONY: test-browser-down
@@ -1221,35 +1256,35 @@ test-bats-e2e: ## ⏱️ Installation E2E réelle sur un clone neuf (20-40 min, 
 
 .PHONY: ecs
 ecs: ## Vérifier le style de code
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/ecs check
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) ./vendor/bin/ecs check
 
 .PHONY: ecs-fix
 ecs-fix: ## Corriger le style automatiquement
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/ecs check --fix
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) ./vendor/bin/ecs check --fix
 
 .PHONY: phpstan
 phpstan: ## Analyse statique
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/phpstan analyse
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) ./vendor/bin/phpstan analyse
 
 .PHONY: rector
 rector: ## Refactoring suggestions
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/rector process --dry-run
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) ./vendor/bin/rector process --dry-run
 
 .PHONY: rector-fix
 rector-fix: ## Appliquer refactoring
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/rector process
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) ./vendor/bin/rector process
 
 .PHONY: insights
 insights: ## PHP Insights
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan insights
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan insights
 
 .PHONY: archeology
 archeology: ## PhpCodeArcheology - analyse architecture + métriques (rapport HTML + JSON)
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/phpcodearcheology --report-type=html,json
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) ./vendor/bin/phpcodearcheology --report-type=html,json
 
 .PHONY: archeology-quick
 archeology-quick: ## PhpCodeArcheology - résumé rapide dans le terminal
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/phpcodearcheology --quick
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) ./vendor/bin/phpcodearcheology --quick
 
 .PHONY: archeology-init
 archeology-init: ## PhpCodeArcheology - initialiser la configuration interactivement
@@ -1257,7 +1292,7 @@ archeology-init: ## PhpCodeArcheology - initialiser la configuration interactive
 
 .PHONY: archeology-baseline
 archeology-baseline: ## PhpCodeArcheology - créer une baseline (projets existants)
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/phpcodearcheology baseline create app
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) ./vendor/bin/phpcodearcheology baseline create app
 
 .PHONY: reading-room
 reading-room: ## Régénérer les données de la reading room (docs/reading-room/data/plan.js)
@@ -1277,9 +1312,9 @@ reading-room: ## Régénérer les données de la reading room (docs/reading-room
 ide-helper: ## Générer les fichiers IDE Helper (autocomplétion PhpStorm/VSCode)
 	$(call check_container,$(PHP_CONTAINER_NAME))
 	@echo "$(BLUE)🔧 Generating IDE helpers...$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan ide-helper:generate
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan ide-helper:meta
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan ide-helper:models --nowrite
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan ide-helper:generate
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan ide-helper:meta
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan ide-helper:models --nowrite
 	@echo "$(GREEN)✓ IDE helpers generated$(NC)"
 
 .PHONY: boost-setup
@@ -1304,7 +1339,7 @@ boost-setup: ## Configurer Laravel Boost guidelines AI (interactif)
 .PHONY: boost-update
 boost-update: ## Mettre à jour les guidelines Laravel Boost (explicite — relire le diff !)
 	$(call check_container,$(PHP_CONTAINER_NAME))
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan boost:update --ansi
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan boost:update --ansi
 	@echo "$(GREEN)✓ Boost guidelines à jour$(NC)"
 	@echo "$(YELLOW)⚠️  src/CLAUDE.md est VERSIONNÉ : relisez 'git diff src/CLAUDE.md' puis lancez 'make test'.$(NC)"
 
@@ -1448,11 +1483,11 @@ daily-check: ## Vérifications quotidiennes
 
 .PHONY: shell
 shell: ## Shell PHP (défaut)
-	@$(DOCKER) exec -it -u 1000:1000 $(PHP_CONTAINER) bash
+	@$(DOCKER) exec -it -u $(DOCKER_USER) $(PHP_CONTAINER) bash
 
 .PHONY: shell-node
 shell-node: ## Shell Node
-	@$(DOCKER) exec -it -u 1000:1000 $(NODE_CONTAINER) bash
+	@$(DOCKER) exec -it -u $(DOCKER_USER) $(NODE_CONTAINER) bash
 
 .PHONY: shell-db
 shell-db: ## Console PostgreSQL (psql)
@@ -1537,14 +1572,14 @@ clean-cache: ## Nettoyer tous les caches (Composer, NPM, Laravel)
 .PHONY: update-deps
 update-deps: ## Mettre à jour les dépendances
 	@echo "$(YELLOW)Updating dependencies...$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) composer update --no-interaction
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) composer update --no-interaction
 	$(call run_npm_command,update)
 	@echo "$(GREEN)✓ Dependencies updated$(NC)"
 
 .PHONY: security-check
 security-check: ## Audit de sécurité
 	@echo "$(PURPLE)🔒 Security audit$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) composer audit || true
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) composer audit || true
 	$(call run_npm_command,audit)
 	@$(MAKE) enlightn || true
 	@echo "$(GREEN)✓ Security check completed$(NC)"
@@ -1585,17 +1620,17 @@ healthcheck: ## Vérifier la santé des services
 .PHONY: health
 health: ## Health check Laravel (spatie/laravel-health)
 	@echo "$(CYAN)🏥 Exécution des health checks Laravel...$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan health:check
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan health:check
 
 .PHONY: schedule-monitor-sync
 schedule-monitor-sync: ## Synchroniser les moniteurs de tâches planifiées
 	@echo "$(CYAN)⏰ Synchronisation des moniteurs de tâches...$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan schedule-monitor:sync
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan schedule-monitor:sync
 
 .PHONY: schedule-monitor-list
 schedule-monitor-list: ## Lister les tâches planifiées monitorées
 	@echo "$(CYAN)📋 Liste des tâches monitorées:$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) php artisan schedule-monitor:list
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) php artisan schedule-monitor:list
 
 .PHONY: metrics
 metrics: ## Métriques système
@@ -1777,7 +1812,7 @@ _open_url:
 nightwatch-start: ## Démarrer l'agent Nightwatch
 	$(call check_container,$(PHP_CONTAINER_NAME))
 	@echo "$(YELLOW)🌙 Démarrage de l'agent Nightwatch...$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "\
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) bash -c "\
 		if [ -f nightwatch.pid ] && kill -0 \$$(cat nightwatch.pid) 2>/dev/null; then \
 			echo '⚠️ Agent déjà en cours (PID: '\$$(cat nightwatch.pid)')'; \
 			exit 0; \
@@ -1802,7 +1837,7 @@ nightwatch-start: ## Démarrer l'agent Nightwatch
 nightwatch-stop: ## Arrêter l'agent Nightwatch
 	$(call check_container,$(PHP_CONTAINER_NAME))
 	@echo "$(YELLOW)🌙 Arrêt de l'agent Nightwatch...$(NC)"
-	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) bash -c "\
+	@$(DOCKER) exec -u $(DOCKER_USER) $(PHP_CONTAINER) bash -c "\
 		if [ -f nightwatch.pid ]; then \
 			pid=\$$(cat nightwatch.pid); \
 			if kill -0 \$$pid 2>/dev/null; then \

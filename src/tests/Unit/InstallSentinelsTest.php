@@ -2590,6 +2590,212 @@ it('EXÉCUTÉE : un conteneur qui refuse de repartir est FATAL, pas ignoré', fu
         ->toContain('Redémarrage impossible');
 });
 
+/*
+|------------------------------------------------------------------------------
+| L'UID du conteneur suit celui de l'hôte — clôture 2.4, 3ᵉ correctif
+|------------------------------------------------------------------------------
+|
+| 🔴 DEUX PANSEMENTS CONTRADICTOIRES ONT PRÉCÉDÉ CELUI-CI, ET LE NIGHTLY A
+| REFUSÉ LES DEUX. `./src` est bind-monté et écrit par DEUX écrivains : le
+| conteneur php (figé à `1000:1000`) et l'hôte (`install-lockfile.sh` n'a aucun
+| `docker exec`). Sur la machine de développement l'hôte EST 1000 — ils
+| coïncident, rien ne se voit. Sur un runner l'hôte est **1001** :
+|   • avec le `chown` large de l'entrypoint, l'arbre passait à 1000 et
+|     l'installeur écrivait, mais l'hôte perdait son `mktemp` (run 32742873104) ;
+|   • sans lui, l'hôte gardait l'arbre et l'installeur ne pouvait plus écrire
+|     (run 32745286801, mort dès l'étape 1/5).
+| Un seul des deux peut posséder l'arbre. Le conflit est dans les uid.
+|
+| ⚖️ CE GARDE ÉPINGLE UN UID HÔTE ≠ 1000 AU LIEU DE L'HÉRITER, et c'est tout son
+| objet : un test qui tourne sous un hôte en 1000 et n'éprouve que ce cas ne
+| garde RIEN — c'est le défaut qu'on corrige, et il a déjà piégé deux gardes de
+| cette story (le `find` non stubé, puis le `chown` seul).
+|
+| ⚠️ CE QUI N'EST PAS ASSERTÉ ICI, ET POURQUOI : l'interpolation de
+| `${HOST_UID:-1000}` appartient à Compose, et `docker` est ABSENT du conteneur
+| où Pest tourne (mesuré). On asserte donc le LITTÉRAL que Compose lira, pas son
+| rendu. Le rendu, lui, a été mesuré à la main le 2026-08-24 sur l'hôte :
+| `HOST_UID=1001 docker compose config` rend `UID: "1001"` pour les quatre
+| services, et l'absence de la variable rend `"1000"`.
+|
+*/
+
+it('l’utilisateur des `docker exec` est DÉRIVÉ de l’hôte, jamais figé', function (): void {
+    /*
+     * ⛔ L'UID EST ÉPINGLÉ PAR UN STUB `id`, PAS HÉRITÉ DE LA MACHINE.
+     * `make` évalue `$(shell id -u)` via le `PATH` : un `id` stubé rend donc la
+     * valeur qu'on veut, et le test mesure la DÉRIVATION plutôt que la valeur
+     * locale — qui vaut précisément 1000 et ne prouverait rien.
+     */
+    $sonde = static function (string $uid, string $gid): string {
+        $fragment = <<<BASH
+            set -e
+            bac="\$(mktemp -d)"
+            case "\$bac" in
+                /tmp/*) ;;
+                *) echo "BAC_HORS_TMP=[\$bac]"; exit 9 ;;
+            esac
+
+            mkdir -p "\$bac/bin"
+            printf '%s\\n' \\
+                '#!/bin/sh' \\
+                'case "\$1" in' \\
+                '  -u) echo {$uid} ;;' \\
+                '  -g) echo {$gid} ;;' \\
+                '  *)  echo {$uid} ;;' \\
+                'esac' \\
+                > "\$bac/bin/id"
+            chmod +x "\$bac/bin/id"
+
+            PATH="\$bac/bin:\$PATH"; export PATH
+
+            # ⚠️ `--no-print-directory` : sans lui, « make: Leaving directory … »
+            # est la DERNIÈRE ligne, et toute lecture par `tail` mesurerait ça.
+            make -C "\$REPO_ROOT" --no-print-directory \\
+                --eval='__sonde_uid__: ; @echo "DERIVE=\$(DOCKER_USER)"' \\
+                __sonde_uid__ 2>/dev/null
+
+            rm -rf "\$bac"
+            BASH;
+
+        $result = ShellProbe::run($fragment, [
+            'REPO_ROOT' => ShellProbe::repoRoot(),
+        ], 60);
+
+        return $result['output'];
+    };
+
+    // 🔴 UN HÔTE QUI N'EST PAS 1000 — la condition du runner, épinglée.
+    // ⚠️ `toContain` prend des AIGUILLES, pas un message : un second argument y
+    // devient une seconde aiguille recherchée, et l'assertion passe alors sur
+    // la mauvaise chose. Ce piège a coûté SIX allers-retours dans cette story ;
+    // cinq fichiers du dépôt le documentent déjà en prose.
+    expect(str_contains($sonde('1001', '1001'), 'DERIVE=1001:1001'))
+        ->toBeTrue('L’utilisateur des `docker exec` ne suit pas l’hôte.');
+
+    /*
+     * ⛔ ANTI-COÏNCIDENCE : une seconde valeur, arbitraire. Sans elle, un
+     * `DOCKER_USER` figé à `1001:1001` — ou toute constante — satisferait
+     * l'assertion précédente.
+     */
+    expect($sonde('4242', '4243'))
+        ->toContain('DERIVE=4242:4243');
+
+});
+
+it('`HOST_UID` est EXPORTÉ : c’est par là que Compose l’interpole', function (): void {
+    // ⛔ SANS `export`, LA VARIABLE N'ATTEINT PAS COMPOSE. `make` ne transmet à
+    // ses recettes que ce qui est exporté ; les `args: UID: ${HOST_UID:-1000}`
+    // retomberaient silencieusement sur 1000 — c'est-à-dire sur le défaut, avec
+    // l'apparence du correctif.
+    $fragment = <<<'BASH'
+        set -e
+        bac="$(mktemp -d)"
+        case "$bac" in
+            /tmp/*) ;;
+            *) echo "BAC_HORS_TMP=[$bac]"; exit 9 ;;
+        esac
+
+        mkdir -p "$bac/bin"
+        printf '%s\n' \
+            '#!/bin/sh' \
+            'case "$1" in' \
+            '  -u) echo 1001 ;;' \
+            '  -g) echo 1001 ;;' \
+            '  *)  echo 1001 ;;' \
+            'esac' \
+            > "$bac/bin/id"
+        chmod +x "$bac/bin/id"
+
+        PATH="$bac/bin:$PATH"; export PATH
+
+        make -C "$REPO_ROOT" --no-print-directory \
+            --eval='__sonde_export__: ; @sh -c "echo VU=\$$HOST_UID/\$$HOST_GID"' \
+            __sonde_export__ 2>/dev/null
+
+        rm -rf "$bac"
+        BASH;
+
+    $result = ShellProbe::run($fragment, [
+        'REPO_ROOT' => ShellProbe::repoRoot(),
+    ], 60);
+
+    expect(str_contains($result['output'], 'VU=1001/1001'))
+        ->toBeTrue('`HOST_UID`/`HOST_GID` ne sont pas exportés : Compose lira le défaut 1000.');
+});
+
+it('aucun `docker exec` du Makefile ne fige l’utilisateur', function (): void {
+    /*
+     * 🔴 IL Y EN AVAIT 44, TOUS `-u 1000:1000`. Aucun ne pouvait suivre l'hôte,
+     * et aucun test ne pouvait le dire puisque l'hôte de développement vaut
+     * précisément 1000.
+     */
+    $makefile = RepoFile::read('Makefile');
+
+    preg_match_all('/-u\s+(\S+)/', $makefile, $trouves);
+
+    /*
+     * ⚖️ UNE SEULE FORME ALTERNATIVE EST TOLÉRÉE, ET ELLE SE JUSTIFIE :
+     * `-u www-data` désigne l'utilisateur par son NOM. Il se résout dans le
+     * conteneur quel que soit son uid — donc il suit l'hôte par construction,
+     * exactement comme `$(DOCKER_USER)`. C'est un uid NUMÉRIQUE figé qui est le
+     * défaut, pas le fait de préciser un utilisateur.
+     */
+    $figes = array_values(array_unique(array_filter(
+        $trouves[1],
+        static fn (string $u): bool => $u !== '$(DOCKER_USER)' && $u !== 'www-data',
+    )));
+
+    // Anti-vacuité : il y a bien des `-u` à garder.
+    expect(count($trouves[1]))
+        ->toBeGreaterThanOrEqual(40);
+
+    expect($figes)
+        ->toBe([], 'Un `docker exec -u` fige l’utilisateur : il ne suivra pas un hôte dont l’uid n’est pas 1000.');
+});
+
+it('les args de build de CHAQUE service suivent l’hôte, avec 1000 par défaut', function (): void {
+    /*
+     * ⚖️ LE LITTÉRAL QUE COMPOSE LIRA — le rendu appartient à Compose, et
+     * `docker` est absent du conteneur où ce test tourne (mesuré). La forme
+     * `${HOST_UID:-1000}` porte les deux moitiés : elle suit l'hôte quand la
+     * variable est là, et laisse le comportement d'Alex STRICTEMENT inchangé
+     * quand elle ne l'est pas.
+     */
+    $compose = RepoFile::yaml('docker-compose.yml');
+    $services = $compose['services'] ?? null;
+
+    expect(is_array($services))
+        ->toBeTrue();
+
+    $portants = [];
+
+    /** @var array<string, mixed> $services */
+    foreach ($services as $nom => $service) {
+        $args = is_array($service) && is_array($service['build'] ?? null)
+            ? ($service['build']['args'] ?? null)
+            : null;
+
+        if (! is_array($args) || ! array_key_exists('UID', $args)) {
+            continue;
+        }
+
+        $portants[] = (string) $nom;
+
+        expect($args['UID'])
+            ->toBe('${HOST_UID:-1000}', "Le service « {$nom} » fige l’UID de build.");
+        expect($args['GID'] ?? null)
+            ->toBe('${HOST_GID:-1000}', "Le service « {$nom} » fige le GID de build.");
+    }
+
+    // Anti-vacuité : les quatre services concernés sont bien vus. Un `build.args`
+    // renommé ou déplacé rendrait ce test vert en n'inspectant rien.
+    sort($portants);
+
+    expect($portants)
+        ->toBe(['apache', 'node', 'php', 'test-browser']);
+});
+
 it('les chaînes d’installation sont déclarées NON parallélisables', function (): void {
     /*
      * ⛔ DEUX GARDES DE CE FICHIER ASSERTENT UN ORDRE DE PRÉREQUIS — `setup-ssl`

@@ -178,14 +178,23 @@ wait_for_service redis 6379
 #     find "$APP_ROOT" -not -user www-data … -exec chown www-data:www-data {} +
 #
 # c'est-à-dire : « tout ce qui n'appartient pas à www-data devient www-data ».
-# `www-data` vaut UID **1000** dans cette image. Sur la machine de
-# développement documentée (WSL2/PhpStorm) l'hôte est AUSSI 1000 : le geste est
-# un no-op, et le défaut est invisible. Sur un runner GitHub, l'hôte est
-# **1001** — l'entrypoint retirait donc à l'hôte la propriété de son propre
-# arbre. `scripts/install-lockfile.sh` s'exécute SUR L'HÔTE (aucun `docker
-# exec`) : son `mktemp` dans `src/.install-state/`, désormais possédé par 1000,
-# était refusé, et l'installation mourait à sa dernière étape après avoir
-# réussi les onze modules.
+# `www-data` valait alors UID **1000** en dur. Sur la machine de développement
+# documentée (WSL2/PhpStorm) l'hôte est AUSSI 1000 : le geste était un no-op, et
+# le défaut invisible. Sur un runner GitHub, l'hôte est **1001** — l'entrypoint
+# retirait donc à l'hôte la propriété de son propre arbre.
+# `scripts/install-lockfile.sh` s'exécute SUR L'HÔTE (aucun `docker exec`) : son
+# `mktemp` dans `src/.install-state/`, désormais possédé par 1000, était refusé,
+# et l'installation mourait à sa dernière étape après avoir réussi les onze
+# modules (run 32742873104).
+#
+# 🔁 ET LE RETIRER SEUL N'A PAS SUFFI — c'était l'autre moitié du même piège.
+# Sans lui, l'hôte gardait l'arbre… et c'est l'INSTALLEUR, qui tourne en
+# `docker exec -u`, qui ne pouvait plus écrire : run 32745286801, mort dès
+# l'étape 1/5. Deux pansements contradictoires pour un seul conflit.
+# ✅ La cause est traitée ailleurs, et à la racine : `HOST_UID`/`HOST_GID`
+# (Makefile) alignent l'uid du conteneur sur celui de l'hôte, donc `www-data`
+# **EST** l'hôte. Il n'y a plus qu'un propriétaire possible, et le `chown`
+# restreint ci-dessous devient juste et inoffensif.
 #
 # ⚖️ CE QUI DOIT ÊTRE ÉCRIVABLE PAR LE CONTENEUR EST CONNU ET COURT : `storage/`
 # et `bootstrap/cache/`. Le reste — le code, la configuration, `.install-state/`
@@ -196,9 +205,6 @@ wait_for_service redis 6379
 # déjà pour tout l'arbre — le `find` ne faisait rien pour lui. Ce qu'il
 # corrigeait réellement, ce sont les fichiers écrits en root PAR L'ENTRYPOINT,
 # et ceux-là vivent précisément dans `storage/` et `bootstrap/cache/`.
-# ⛔ Les args `UID`/`GID` de `docker-compose.yml` restent FIXES : les rendre
-# dynamiques serait la correction la plus profonde, mais elle change la
-# construction des images pour tout le monde et mérite son propre arbitrage.
 # ─────────────────────────────────────────────────────────────────────────────
 if [ -d "$APP_ROOT" ]; then
     echo -e "${YELLOW}Ajustement des permissions d'écriture du conteneur...${NC}"
@@ -414,8 +420,8 @@ mkdir -p "$SUPERVISOR_LOG_DIR"
 # ⚠️ `|| true` ASSUMÉ, ET DIT. Ce `chown` était fatal ; il ne l'est plus, pour
 # une raison d'ENVIRONNEMENT DE MESURE. En production l'entrypoint tourne en
 # root et le geste réussit ; sous sonde, il tourne comme l'utilisateur des tests
-# — uid 1000 dans le conteneur (= www-data), mais un utilisateur QUELCONQUE sur
-# un runner `ubuntu-latest` nu, qui n'appartient pas au groupe `www-data`.
+# — celui de l'hôte dans le conteneur (= www-data, cf. `HOST_UID`), mais un
+# utilisateur QUELCONQUE sur un runner nu, hors du groupe `www-data`.
 # Laisser `set -e` tuer la sonde là aurait rendu ce script vert en local et
 # rouge en CI : le défaut exact relevé sur `main` au run 32627114533.
 # ⚖️ Et le compromis est petit : des permissions de RÉPERTOIRE DE LOGS ne

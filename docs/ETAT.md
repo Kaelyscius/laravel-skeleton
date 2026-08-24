@@ -113,6 +113,31 @@
 > réels, donc inerte sous un test tournant en uid 1000. `find` est stubé lui aussi, et la mutation
 > rougit.
 >
+> 🔴 **MON CORRECTIF PRÉCÉDENT ÉTAIT UNE NON-CORRECTION — À ÉCRIRE NOIR SUR BLANC.** Restreindre le
+> `chown` à `storage/` + `bootstrap/cache/` n'a pas corrigé le défaut, il l'a **déplacé** : run
+> `32745286801`, l'installation meurt **plus tôt** qu'avant, dès l'étape 1/5. Le `chown` large
+> n'était pas un confort, il était **porteur**. `./src` est bind-monté et écrit par DEUX écrivains —
+> le conteneur (`docker exec -u 1000:1000` en dur) et l'hôte (`install-lockfile.sh`, sans `docker
+> exec`). Le `chown` donnait l'arbre au conteneur ; le retirer l'a rendu à l'hôte. **Un seul des deux
+> peut le posséder**, et les deux pansements se contredisent.
+>
+> ✅ **LA CORRECTION EST DANS LES UID** : `HOST_UID`/`HOST_GID` exportés par le Makefile, `UID:
+> ${HOST_UID:-1000}` sur les **quatre** services qui portent l'arg, et les **44** `-u 1000:1000`
+> remplacés par `-u $(DOCKER_USER)`. Le conflit disparaît par construction. Défaut 1000 partout :
+> sur un hôte en uid 1000, comportement **strictement inchangé**, images existantes valides.
+>
+> 🎁 **ET LA BOUCLE DE RETOUR EST RÉPARÉE — c'était le vrai sujet.** Trois allers-retours en CI
+> aujourd'hui parce que « hôte uid ≠ uid conteneur » n'existe pas sur cette machine. La condition est
+> désormais reproductible **localement et sans privilèges** (`sudo -n` indisponible, mesuré) : *root
+> dans un conteneur peut `chown` un bind-mount*. Verdict en une seconde — arbre à 1001 + conteneur
+> figé à 1000 → `mktemp: Permission denied`, l'échec EXACT du run ; conteneur dérivé de l'hôte → OK ;
+> et l'arbre reste à 1001, donc les deux écrivains coexistent.
+>
+> ⚠️ **Reconstruction d'image** : nécessaire seulement si l'uid hôte ≠ 1000 (l'uid est figé au
+> build) — les chaînes commencent par `build`, le nightly la fait seul. Aucune collision d'uid dans
+> Alpine (`www-data` = 82, rien en 1000–1019, mesuré), et l'image php a été **réellement construite**
+> avec `UID=1001` : elle démarre, `www-data` y vaut 1001.
+>
 > ⚠️ **DEUX AC RESTENT OUVERTES, ET AUCUNE N'A ÉTÉ FERMÉE SUR UNE LECTURE DE CODE.**
 > Le verdict de cette story est **un run réel**, et aucun n'a pu être lancé : le travail n'est pas
 > poussé, `workflow_dispatch` n'exécute que la version présente sur la branche par défaut. Restent
@@ -124,7 +149,7 @@
 > `nightly-freshness` en bloquant (geste 2, plus bas) **n'a pas été faite** : la faire avant un
 > premier vert installerait dans le verdict global le rouge permanent que cette section décrit.
 >
-> 🧪 **Campagne de mutation — 68 rouges observés, 10 témoins neutres verts.**
+> 🧪 **Campagne de mutation — 73 rouges observés, 11 témoins neutres verts.**
 > **Environnements nommés** (règle désormais ÉCRITE dans `docs/process/03-boucle-qualite.md`
 > §Étape 5, elle ne vivait que dans ce journal et dans `ADR-0013`) :
 > les 25 mutations Pest ont été appliquées sur l'arbre hôte et **exécutées dans le conteneur
@@ -151,7 +176,7 @@
 > (`github.actor == '…'`) a été ajouté ; la mutation rougit. Le motif est constant dans ce
 > projet : **un garde ne vaut que par le chemin que son test emprunte réellement.**
 >
-> 📊 **483 tests Pest · 49 tests Bats · ratchet 0/0/0.**
+> 📊 **487 tests Pest · 49 tests Bats · ratchet 0/0/0.**
 
 > 🆕 **Story 2.4 implémentée, revues 1 et 2 traitées (≈60 + 31 constats).**
 > **423 tests Pest · 40 tests Bats · ratchet 0/0/0 · 87 mutations rejouées (60 + 27), toutes rouges

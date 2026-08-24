@@ -4,8 +4,8 @@ services:
         context: .
         dockerfile: docker/apache/Dockerfile
         args:
-          UID: 1000
-          GID: 1000
+          UID: ${HOST_UID:-1000}
+          GID: ${HOST_GID:-1000}
       container_name: ${COMPOSE_PROJECT_NAME}_apache
       ports:
         - "80:80"
@@ -35,8 +35,8 @@ services:
       dockerfile: docker/php/Dockerfile
       target: development
       args:
-        UID: 1000
-        GID: 1000
+        UID: ${HOST_UID:-1000}
+        GID: ${HOST_GID:-1000}
     container_name: ${COMPOSE_PROJECT_NAME}_php
     volumes:
       - ./src:/var/www/html:delegated
@@ -89,8 +89,8 @@ services:
       dockerfile: docker/php/Dockerfile
       target: test          # stage descendant de `development` — prod intacte
       args:
-        UID: 1000
-        GID: 1000
+        UID: ${HOST_UID:-1000}
+        GID: ${HOST_GID:-1000}
     container_name: ${COMPOSE_PROJECT_NAME}_test_browser
     # `sleep infinity` : ce conteneur n'expose aucun service, on l'exec.
     # Ni php-fpm ni supervisor ne sont utiles ici.
@@ -214,8 +214,8 @@ services:
         context: .
         dockerfile: docker/node/Dockerfile
         args:
-          UID: 1000
-          GID: 1000
+          UID: ${HOST_UID:-1000}
+          GID: ${HOST_GID:-1000}
       container_name: ${COMPOSE_PROJECT_NAME}_node
       volumes:
         - ./src:/var/www/html:delegated
