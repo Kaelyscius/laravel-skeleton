@@ -2028,3 +2028,143 @@ it('ne lit JAMAIS « le dernier nightly » toutes branches confondues', function
             ->toBeTrue("Requête de runs sans filtre de branche : « {$query} ».");
     }
 });
+
+/*
+|------------------------------------------------------------------------------
+| Références d'image Docker — clôture 2.4 (constat d'après-merge)
+|------------------------------------------------------------------------------
+|
+| 🔴 MESURÉ SUR LA PR DEPENDABOT #27, LE 2026-08-24. Le build Docker échouait sur
+| « invalid tag "docker.io//laravel-skeleton-apache:pr-27": invalid reference
+| format » — DEUX barres obliques. `secrets.DOCKER_USERNAME` est VIDE dans une PR
+| Dependabot (périmètre de secrets distinct), et la référence dégénérait avant
+| même que le Dockerfile ne soit lu.
+|
+| ⚖️ CE QUE ÇA COÛTAIT : toute PR Dependabot rougissait son build, pour une raison
+| ÉTRANGÈRE à la dépendance montée. Le rouge nommait le mauvais coupable — la
+| même classe de défaut que le 504 amont imputé à l'installeur, corrigé le même
+| jour. Un rouge qu'on ne peut pas croire est un rouge qu'on cesse de lire.
+|
+| ⛔ ET LE CAS ÉTAIT DÉJÀ CONNU DU FICHIER, À DEUX ENDROITS SUR TROIS : l'étape de
+| login est gardée par `if [ -n … ]`, et un commentaire explique précisément
+| pourquoi un segment propriétaire manquant est fatal. C'est l'endroit qui
+| DÉCIDE du tag qui ne l'était pas.
+|
+| ⚖️ CE GARDE ÉVALUE, IL NE RELIT PAS. Il rend la référence comme le moteur de
+| workflow le ferait, secret VIDE, puis vérifie que le résultat est une référence
+| Docker valide. Recopier le texte de l'expression n'aurait rien prouvé.
+|
+*/
+
+/**
+ * La valeur d'une clé du bloc `env:` de `docker.yml`.
+ */
+function envDocker(string $cle): string
+{
+    $document = RepoFile::yaml('.github/workflows/docker.yml');
+    $env = $document['env'] ?? null;
+    $valeur = is_array($env) ? ($env[$cle] ?? null) : null;
+
+    // ⚠️ `expect()` ne RESTREINT PAS le type pour l'analyseur statique : la
+    // rédaction précédente cassait le ratchet (`Cannot cast mixed to string`).
+    // Le refus explicite fait les deux — il nomme la cause et il narrow.
+    if (! is_string($valeur) || $valeur === '') {
+        throw new RuntimeException(
+            "La clé `env.{$cle}` de docker.yml a disparu : la référence d'image ne peut plus être rendue.",
+        );
+    }
+
+    return $valeur;
+}
+
+/**
+ * Rend TOUTES les références d'image de `docker.yml` comme le ferait le moteur
+ * de workflow, pour une valeur donnée de `secrets.DOCKER_USERNAME`.
+ *
+ * @return array<int, string>
+ */
+function referencesImageDocker(string $secret): array
+{
+    $lignes = explode("\n", RepoFile::read('.github/workflows/docker.yml'));
+    $rendus = [];
+
+    foreach ($lignes as $ligne) {
+        // ⚠️ LE SLASH FINAL EST LE FILTRE, et il n'est pas décoratif : l'étape de
+        // login porte `registry: ${{ env.REGISTRY }}` SANS slash — c'est le nom
+        // du registre, pas une référence d'image. Sans cette précision, ce garde
+        // rougissait sur `docker.io` seul, c'est-à-dire sur son propre bruit.
+        if (! str_contains($ligne, '${{ env.REGISTRY }}/')) {
+            continue;
+        }
+
+        $rendu = $ligne;
+
+        // Le ternaire d'expression GitHub : `A != '' && A || B`.
+        $rendu = preg_replace_callback(
+            '/\$\{\{\s*secrets\.DOCKER_USERNAME\s*!=\s*\'\'\s*&&\s*secrets\.DOCKER_USERNAME\s*\|\|\s*env\.FALLBACK_OWNER\s*\}\}/',
+            static fn (): string => $secret !== '' ? $secret : envDocker('FALLBACK_OWNER'),
+            (string) $rendu,
+        ) ?? '';
+
+        $rendu = str_replace(
+            ['${{ env.REGISTRY }}', '${{ env.NAMESPACE }}', '${{ env.FALLBACK_OWNER }}',
+                '${{ secrets.DOCKER_USERNAME }}', '${{ matrix.service }}', '${{ github.sha }}', '${service}'],
+            [envDocker('REGISTRY'), envDocker('NAMESPACE'), envDocker('FALLBACK_OWNER'),
+                $secret, 'php', 'cafe1234', 'php'],
+            $rendu,
+        );
+
+        // On ne garde que le fragment de référence lui-même.
+        if (preg_match('#[a-z0-9./:_-]*' . preg_quote(envDocker('REGISTRY'), '#') . '[^"\s]*#', $rendu, $m) === 1) {
+            $rendus[] = trim($m[0], '"\'');
+        }
+    }
+
+    return $rendus;
+}
+
+it('la référence d’image Docker reste VALIDE quand le secret est absent', function (): void {
+    /*
+     * 🔴 LE CAS DEPENDABOT, ET C'EST CELUI QUI A CASSÉ. Secret vide.
+     * Une référence valide a TROIS segments : registre / propriétaire / dépôt.
+     * Deux barres obliques consécutives = un segment vide = « invalid reference
+     * format », et buildx sort avant de lire quoi que ce soit.
+     */
+    $references = referencesImageDocker('');
+
+    // Anti-vacuité : il y a bien des références à éprouver. Sans elle, supprimer
+    // toute construction d'image rendrait ce test vert.
+    expect(count($references))
+        ->toBeGreaterThanOrEqual(2, 'Aucune référence d’image trouvée dans docker.yml : ce garde ne garde rien.');
+
+    foreach ($references as $reference) {
+        expect(str_contains($reference, '//'))
+            ->toBeFalse("Segment VIDE dans « {$reference} » — c’est l’échec mesuré sur la PR #27.");
+
+        // Registre / propriétaire / dépôt, en minuscules — Docker refuse les majuscules.
+        expect((bool) preg_match(
+            '#^[a-z0-9.-]+/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*(:[A-Za-z0-9._-]+)?$#',
+            $reference,
+        ))->toBeTrue("Référence Docker invalide : « {$reference} ».");
+    }
+});
+
+it('n’a pas rendu le propriétaire constant pour autant', function (): void {
+    /*
+     * ⛔ ANTI-VACUITÉ, ET C'EST ELLE QUI DONNE SA VALEUR AU TEST PRÉCÉDENT.
+     * Un repli qui s'appliquerait TOUJOURS satisferait le garde ci-dessus tout
+     * en poussant les images sous un nom qui n'appartient à personne. Quand le
+     * secret EST présent, c'est lui qui doit gagner.
+     */
+    $avecSecret = referencesImageDocker('kaelyscius');
+    $repli = envDocker('FALLBACK_OWNER');
+
+    expect(count($avecSecret))
+        ->toBeGreaterThanOrEqual(2);
+
+    foreach ($avecSecret as $reference) {
+        expect($reference)->toContain('/kaelyscius/');
+        expect($reference)
+            ->not->toContain('/' . $repli . '/');
+    }
+});

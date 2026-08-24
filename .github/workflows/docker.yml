@@ -35,6 +35,21 @@ env:
   REGISTRY: docker.io
   NAMESPACE: laravel-skeleton
 
+  # ⛔ LE SEGMENT PROPRIÉTAIRE NE DOIT JAMAIS POUVOIR ÊTRE VIDE.
+  # 🔴 MESURÉ le 2026-08-24 sur la PR Dependabot #27 : le tag construit valait
+  # `docker.io//laravel-skeleton-apache:pr-27` — DEUX barres obliques — et buildx
+  # sortait sur « invalid reference format », AVANT même de lire le Dockerfile.
+  # Cause : `secrets.DOCKER_USERNAME` est VIDE dans une PR Dependabot, qui
+  # dispose d'un périmètre de secrets distinct. Conséquence : TOUTE PR Dependabot
+  # rougissait son build Docker, pour une raison étrangère à la dépendance
+  # montée — un rouge qui nomme le mauvais coupable, et qu'on apprend à ignorer.
+  # ⚖️ Le repli ne sert QU'À rendre la référence syntaxiquement valide : l'étape
+  # `push:` reste conditionnée à la présence réelle des identifiants, donc rien
+  # n'est jamais poussé sous ce nom. Il est en minuscules parce que Docker refuse
+  # les majuscules dans un nom de dépôt — `github.repository_owner` ne convenait
+  # donc pas tel quel.
+  FALLBACK_OWNER: build-only
+
 jobs:
   # ==========================================
   # JOB 1: DOCKER VALIDATION
@@ -155,7 +170,10 @@ jobs:
           # `docker.io/library/laravel-skeleton-apache`, l'espace de noms officiel,
           # où personne ne peut pousser. D'où l'échec constant du workflow :
           #   push access denied … insufficient_scope: authorization failed
-          images: ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.NAMESPACE }}-${{ matrix.service }}
+          # 🔴 ET IL A UN REPLI, PARCE QU'IL PEUT ÊTRE ABSENT (voir `FALLBACK_OWNER`).
+          # Le secret est vide dans une PR Dependabot : sans ce repli, la référence
+          # dégénère en `docker.io//…` et buildx refuse le format.
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_USERNAME || env.FALLBACK_OWNER }}/${{ env.NAMESPACE }}-${{ matrix.service }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -381,7 +399,12 @@ jobs:
           
           # Scan images for vulnerabilities
           for service in php apache node; do
-            image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}-${service}:${{ github.sha }}"
+            # ⛔ LE SEGMENT PROPRIÉTAIRE MANQUAIT ICI, et c'est le défaut que le
+            # commentaire de l'étape « Extract metadata » décrit comme fatal —
+            # reproduit dans un second job, où personne ne le voyait :
+            # `docker.io/laravel-skeleton-php` n'a QU'UN segment, donc Docker le
+            # résout en `docker.io/library/…`, l'espace de noms officiel.
+            image="${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_USERNAME || env.FALLBACK_OWNER }}/${{ env.NAMESPACE }}-${service}:${{ github.sha }}"
             echo "Scanning $image..."
             trivy image --severity HIGH,CRITICAL --format table "$image" || echo "Vulnerabilities found in $service"
           done
