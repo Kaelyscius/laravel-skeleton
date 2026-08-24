@@ -1259,6 +1259,20 @@ archeology-init: ## PhpCodeArcheology - initialiser la configuration interactive
 archeology-baseline: ## PhpCodeArcheology - créer une baseline (projets existants)
 	@$(DOCKER) exec -u 1000:1000 $(PHP_CONTAINER) ./vendor/bin/phpcodearcheology baseline create app
 
+.PHONY: reading-room
+reading-room: ## Régénérer les données de la reading room (docs/reading-room/data/plan.js)
+	@# ⚠️ Tourne sur l'HÔTE, pas dans le conteneur php, et ce n'est pas un oubli :
+	@# le script lit `_bmad-output/`, qui est gitignoré et vit hors de `src/` —
+	@# donc hors du volume monté dans le conteneur.
+	@#
+	@# Le fichier produit est VERSIONNÉ, à dessein : ses deux sources sont
+	@# gitignorées, donc sans ce rendu figé la reading room serait vide sur un
+	@# clone. Le prix est un instantané daté, et les pages le disent.
+	@command -v python3 >/dev/null 2>&1 || { \
+		echo "$(RED)✖ python3 est requis pour régénérer la reading room.$(NC)"; exit 1; }
+	@python3 docs/reading-room/tools/build-plan.py
+	@echo "$(GREEN)→ Ouvrir : docs/reading-room/index.html$(NC)"
+
 .PHONY: ide-helper
 ide-helper: ## Générer les fichiers IDE Helper (autocomplétion PhpStorm/VSCode)
 	$(call check_container,$(PHP_CONTAINER_NAME))

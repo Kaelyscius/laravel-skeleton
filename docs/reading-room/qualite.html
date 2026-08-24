@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qualité — la boucle, les portes, les mutations · Reading Room</title>
+<meta name="description" content="Comment ce projet décide qu'une story est finie : la boucle qualité, les portes automatiques, la campagne de mutation, et le catalogue des garde-fous silencieux.">
+<link rel="stylesheet" href="assets/rr.css">
+</head>
+<body>
+<a class="skip" href="#principe">Aller au contenu</a>
+
+<nav class="top" aria-label="Sections de la reading room">
+  <div class="in">
+    <a class="brand" href="index.html"><i></i>Reading&nbsp;Room</a>
+    <div class="links">
+      <a href="index.html">Accueil</a>
+      <a href="produit.html">Produit</a>
+      <a href="epics.html">Plan</a>
+      <a href="exigences.html">Exigences</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="decisions.html">Décisions</a>
+      <a href="qualite.html">Qualité</a>
+      <a href="suivi.html">Où on en est</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">07 — Qualité</div>
+  <h1>« Est-ce que je l'ai<br>vu rougir ? »</h1>
+  <p class="sub">Une seule question distingue un garde-fou d'une décoration. Pas « est-ce qu'il <em>pourrait</em> rougir ». <b>Vu.</b> Tout le reste — couverture, scores, revues — est de l'instrumentation : utile, mais subordonnée.</p>
+
+  <div class="authority">
+    <p><b>⚠️ Ce n'est pas un catalogue de bonnes pratiques.</b> La boucle décrite ici a été écrite le 2026-08-07 à partir de ce que <em>ce dépôt</em> a réellement produit comme défauts. Chaque règle est payée par une story identifiable, et l'histoire est nommée à chaque fois. La source fait autorité : <a class="ref" href="../process/03-boucle-qualite.md">docs/process/03-boucle-qualite.md</a>.</p>
+    <p style="margin-bottom:0"><b>L'objectif tient en une phrase d'Alex</b> — <em>« une qualité de code excellente, sans pour autant sur-ingénierer à chaque fois »</em> — et les deux moitiés comptent autant. Une boucle qu'on applique intégralement à tout est une boucle qu'on finit par contourner.</p>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="principe">
+  <div class="eyebrow">Le principe</div>
+  <h2 class="sec">Le motif dominant : l'affirmation précède son référent</h2>
+  <p class="lede">Ce dépôt a produit une famille de défauts si régulière qu'elle a fini par être nommée. Une CI qui tournait sur le mauvais moteur. Un crochet jamais exécuté. Des scans dormants. Un <code>.gitignore</code> qui avalait des fichiers. Une assertion variadique toujours vraie. Un critère d'acceptation sans référent. Un drapeau d'environnement que rien ne testait.</p>
+
+  <div class="callout">
+    <b>La cause racine, et sa contre-mesure</b>
+    <p><b>Quelqu'un écrit une phrase vraie au moment où il l'écrit, et rien ne la recalcule ensuite.</b> Le document continue de se lire normalement ; sa fausseté ne se découvre qu'au clic, par quelqu'un qui n'osera pas conclure que le document a tort.</p>
+    <p style="margin-bottom:0">D'où la seule règle sans exception du projet : <b>aucun garde-fou n'est livré sans son rouge.</b> Casser ce qu'il teste, constater l'échec, restaurer. Trois lignes dans le message de commit suffisent à le prouver.</p>
+  </div>
+
+  <div class="note err">
+    <p><b>🔴 Corollaire appris à ses dépens : la couverture ne répond pas à cette question.</b> Elle mesure ce qui a été <b>exécuté</b>, jamais ce qui serait <b>détecté</b>. Trois cas de ce dépôt suffisent à le montrer :</p>
+    <div class="tw" style="margin:12px 0 0">
+      <table>
+        <thead><tr><th>Défaut réel</th><th>Couverture au moment du défaut</th></tr></thead>
+        <tbody>
+          <tr><td>Le bootstrap devenu sourd à sa configuration — drapeau d'environnement inerte</td><td class="err">100 % sur <code>AppServiceProvider</code></td></tr>
+          <tr><td>Une erreur fatale PHP dans le modèle <code>User</code></td><td class="err">0 % sur <code>Models/User</code>, suite entièrement verte</td></tr>
+          <tr><td><code>SetCurrentStreamer</code> rendant un 404 indiscernable d'une page inexistante</td><td class="err">100 % sur le middleware</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-bottom:0;margin-top:12px"><b>C'est pourquoi il n'y a aucun seuil de couverture en intégration continue.</b> Un seuil transforme la couverture en cible ; une cible cesse de mesurer. Le chiffre est suivi comme un indicateur de tendance — <b>78,8 %</b> au dernier relevé — jamais comme une porte.</p>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="niveaux">
+  <div class="eyebrow">Avant tout</div>
+  <h2 class="sec">Classer la story, pour ne pas sur-ingénierer</h2>
+  <p class="lede">C'est l'étape qui empêche la boucle de gonfler. Elle prend deux minutes. Une story est <b>S par défaut</b> ; on monte de niveau sur un critère nommable, pas sur une impression. En cas d'hésitation, on prend le plus bas <b>et on écrit pourquoi</b> — un doute non écrit se retransforme en zèle à la story suivante.</p>
+
+  <div class="grid g3">
+    <div class="card pad">
+      <span class="chip ok">S — Standard</span>
+      <h3 style="font-size:15.5px;margin:11px 0 7px">Code applicatif ordinaire</h3>
+      <p class="mut" style="font-size:13.5px">Sans surface de sécurité ni invariant transverse.</p>
+      <p class="mut" style="font-size:12.5px;margin-bottom:0"><b style="color:var(--text-2)">Boucle :</b> étapes 0, 1, 2, 3, 6. C'est la majorité des stories.</p>
+    </div>
+    <div class="card pad">
+      <span class="chip warn">R — Renforcé</span>
+      <h3 style="font-size:15.5px;margin:11px 0 7px">Un invariant transverse</h3>
+      <p class="mut" style="font-size:13.5px">La CI, l'installeur, ou un mécanisme dont dépendent d'autres stories.</p>
+      <p class="mut" style="font-size:12.5px;margin-bottom:0"><b style="color:var(--text-2)">Ajoute :</b> relecture ciblée de l'invariant, revue de sécurité.</p>
+    </div>
+    <div class="card pad">
+      <span class="chip err">C — Critique</span>
+      <h3 style="font-size:15.5px;margin:11px 0 7px">La surface sensible</h3>
+      <p class="mut" style="font-size:13.5px">Authentification, autorisation, multi-locataire, secrets, données personnelles, exposition réseau.</p>
+      <p class="mut" style="font-size:12.5px;margin-bottom:0"><b style="color:var(--text-2)">Ajoute :</b> lentille adversariale, revue de sécurité, <b>campagne de mutation manuelle</b>.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="boucle">
+  <div class="eyebrow">La boucle</div>
+  <h2 class="sec">Sept étapes, dont trois seulement sont toujours obligatoires</h2>
+
+  <div class="tl">
+    <div class="ev done" id="ready">
+      <span class="when">étape 0 · toutes stories · 5 min</span>
+      <h4>Definition-of-ready — chaque nom cité résout</h4>
+      <p>Chaque nom cité dans les critères d'acceptation doit pointer vers un chemin existant, ou vers une story déjà livrée. Née du sixième cas : un critère nommait un composant créé par une story <em>ultérieure</em>. La relecture du 2026-07-30 en a trouvé <b>5 sur 14</b>.</p>
+      <p class="mut" style="font-size:13px"><b>Non automatisable, et c'est assumé</b> — personne n'a su nommer la mutation qui ferait rougir un tel test. Le résolveur de noms, c'est le framework : un test qui passe par un rendu réel échoue nativement sur un composant inexistant.</p>
+    </div>
+
+    <div class="ev done">
+      <span class="when">étape 1 · développement</span>
+      <h4>Une seule règle pendant le dev</h4>
+      <p><b>Tout garde-fou ajouté doit avoir été vu rouge avant d'être considéré comme livré.</b> Pas de nuance, pas d'exception.</p>
+    </div>
+
+    <div class="ev done">
+      <span class="when">étape 2 · portes automatiques</span>
+      <h4>Trois commandes, et le ratchet ne négocie pas</h4>
+      <p><code>make test</code> · <code>make quality-ratchet</code> · <code>make test-browser</code> si la story touche du rendu.</p>
+      <p>Le <b>ratchet</b> est un plafond de dette <b>monotone</b> : les compteurs ne remontent jamais. Toute hausse est un échec, pas une négociation. Faire monter un compteur exige de modifier <a class="ref" href="../../src/quality-baseline.json">src/quality-baseline.json</a> <b>dans le même commit</b>, pour que ce soit visible en revue.</p>
+    </div>
+
+    <div class="ev done">
+      <span class="when">étape 3 · revue, dosée</span>
+      <h4>Deux passes maximum — et la seconde relit la première</h4>
+      <p>Le plafond a été décidé <b>sur mesure, pas sur intuition</b> : les 13 stories de l'epic 1 avaient subi 15 passes. Le détail est ci-dessous, avec l'argument qui a emporté la décision.</p>
+    </div>
+
+    <div class="ev done">
+      <span class="when">étape 4 · niveaux R et C</span>
+      <h4>Sécurité — scanners et la question qu'ils ne posent pas</h4>
+      <p><code>/security-review</code>, <code>make security-scan</code>, <code>composer audit &amp;&amp; npm audit</code>. Ce n'est pas un contrôle annuel : <b><code>composer audit</code> a sorti 7 alertes en une seule session</b> le 2026-08-06, toutes publiées dans les 48 h.</p>
+      <p>En niveau C, on ajoute la question qu'aucun outil ne pose : <em>que se passe-t-il si cette fonctionnalité est appelée sans authentification, ou par un autre streamer ?</em> C'est exactement la question qui manquait à <code>SetCurrentStreamer</code>.</p>
+    </div>
+
+    <div class="ev done">
+      <span class="when">étape 5 · couverture, et mutation en niveau C</span>
+      <h4>Trois questions, dans cet ordre — et aucun seuil</h4>
+      <p><b>1.</b> Le code neuf de la story est-il exercé ? Une classe fraîchement écrite à 0 % n'a jamais été chargée, pas même pour vérifier qu'elle se déclare. <b>2.</b> Les branches d'erreur le sont-elles ? C'est là que vivent les défauts silencieux. <b>3.</b> Un garde-fou neuf a-t-il été vu rouge ? Sinon la couverture qu'il apporte est cosmétique.</p>
+      <p class="mut" style="font-size:13px"><b>On n'améliore jamais la couverture pour elle-même</b> : on ajoute un test parce qu'on a nommé le défaut qu'il attraperait. Si on n'arrive pas à le nommer, on n'écrit pas le test — on aurait fabriqué un garde-fou silencieux de plus.</p>
+    </div>
+
+    <div class="ev done">
+      <span class="when">étape 6 · commit</span>
+      <h4>Le message dit ce qui a été observé, pas ce qui a été fait</h4>
+      <p>« Rouge observé sur la mutation X » vaut mieux que « ajout de tests ». Et : <b>quand une décision contredit un document, on modifie le document dans le même commit.</b></p>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="plafond">
+  <div class="eyebrow">La règle la plus contre-intuitive</div>
+  <h2 class="sec">Pourquoi deux passes de revue, et pas trois</h2>
+  <p class="lede">Empiler les revues « pour être sûr » ne rend pas le code meilleur : ça fabrique de la confiance. Voici la mesure qui a fixé le plafond.</p>
+
+  <div class="two">
+    <div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Rang de passe</th><th class="mono">Correctifs</th><th>Dont réparation de la passe précédente</th></tr></thead>
+          <tbody>
+            <tr><td>Passe 1 — 13 stories</td><td class="num">117</td><td class="ok">0 %</td></tr>
+            <tr><td>Passe 2 — 3 passes</td><td class="num">27</td><td class="warn">22 %</td></tr>
+            <tr><td>Passe 3 — 1 passe</td><td class="num">5</td><td class="err">80 %, dont un retour arrière pur</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mut" style="font-size:13px">Ce qui compte dans le quota : les revues de code. Ce qui en est exclu : les scanners. <b>Un scanner ne fabrique pas de la confiance, il constate.</b></p>
+    </div>
+    <div>
+      <div class="note err">
+        <p><b>🔴 L'argument qui a emporté la décision</b></p>
+        <p>Un correctif de la <b>passe 2</b> de la story 1.1 a <b>introduit</b> <code>TRUSTED_PROXIES=*</code>, avec une justification fausse. C'est le trou de sécurité trouvé <b>deux mois et demi plus tard</b> : toute adresse d'Internet devenait proxy de confiance, l'adresse IP vue par l'application était celle que le client déclarait, et la limitation de débit sur la connexion donnait <b>un seau neuf à chaque tentative</b>.</p>
+        <p style="margin-bottom:0"><b>La revue adversariale ne l'a pas trouvé — elle l'a posé.</b> Et la passe 3 est repassée dessus sans le voir : elle regardait l'analyse de la variable, pas ce que sa valeur par défaut autorisait.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>⚠️ Et le plafond a été amendé le jour même où il a été écrit</b>
+    <p>La clause d'origine disait : <em>une passe 2 n'est utile que si elle a du code neuf à lire.</em> Appliquée littéralement à la story 1.10a, elle aurait conclu « pas de passe 2 » — la passe 1 n'avait quasiment rien écrit. <b>Elle aurait eu tort.</b> La passe 2 a produit 23 correctifs et 5 décisions.</p>
+    <p>Son constat de tête explique pourquoi : <b>des 13 constats de la passe 1, 1 résolu, 2 traités sans atteindre leur but, 10 intacts.</b> La passe 1 n'avait rien écrit <em>parce que ses constats n'avaient pas été consommés</em>. Les quatre couches de la passe 2, qui ne connaissaient pas cette liste, en ont retrouvé <b>huit indépendamment</b> — c'est-à-dire payés deux fois.</p>
+    <p><b>Formulation corrigée, et c'est elle qui fait foi :</b> <em>la deuxième passe existe pour</em> clore <em>la première — soit en relisant ce que ses correctifs ont écrit, soit en vérifiant que ses constats ont été consommés. Une passe 2 qui ne peut nommer ni l'un ni l'autre n'a rien à faire.</em></p>
+    <p style="margin-bottom:0"><b>Corollaire opérationnel, plus important que le plafond lui-même :</b> appliquer les constats de la passe 1 est ce qui rend la passe 2 bon marché. Ne pas les appliquer transforme le budget de revue en budget de <em>re-découverte</em>.</p>
+  </div>
+
+  <div class="note warn">
+    <p><b>Ce que ce plafond n'est pas :</b> une loi de la nature. La mesure compte des <em>correctifs</em>, pas de la <em>gravité</em> ; elle porte sur un seul epic et un seul relecteur ; l'échantillon des passes 3 est de <b>un</b>. C'est une règle de coût — <b>elle vaut jusqu'à ce qu'une story la démente, auquel cas on écrit le démenti</b> plutôt que de contourner le plafond en silence. C'est ce qui s'est passé.</p>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="mutation">
+  <div class="eyebrow">La méthode qui remplace un outil</div>
+  <h2 class="sec">La campagne de mutation, à la main</h2>
+
+  <div class="note err">
+    <p><b>⛔ Une phrase se trouvait ici, et elle était fausse.</b> Le processus recommandait <code>make test-drift</code> comme « outil de mutation déjà installé ». Constaté le 2026-08-09 : ce n'est pas un outil de mutation, c'est le <b>migrateur PHPUnit → Pest</b>, et il <b>réécrit <code>tests/</code> sur place</b>. Un seul appel a réécrit 7 fichiers de tests, supprimé un invariant délibéré <em>avec sa justification</em>, et injecté des imports cassés.</p>
+    <p style="margin-bottom:0">La cible a été rendue non destructive, la documentation corrigée dans le même passage. <b>L'étape 5 du niveau critique reposait sur une prémisse fausse</b> — elle a été remplacée par ce qui suit.</p>
+  </div>
+
+  <p class="lede">On casse le code volontairement, une mutation à la fois, et on regarde quel test rougit. Ce n'est pas un pis-aller : c'est la seule méthode qui oblige à <b>nommer</b> le défaut qu'un garde-fou attrape.</p>
+
+  <div class="grid g3">
+    <div class="card pad">
+      <span class="chip">règle 1</span>
+      <h3 style="font-size:15px;margin:10px 0 7px">Une mutation à la fois, et on restaure entre chaque</h3>
+      <p class="mut" style="font-size:13px;margin:0">Payée par la story 1.13 : une mutation en masquait une autre. <b>Deux mutations ne sont orthogonales que si elles ne partagent aucun <em>mécanisme</em></b> — pas seulement aucun test.</p>
+    </div>
+    <div class="card pad">
+      <span class="chip">règle 2</span>
+      <h3 style="font-size:15px;margin:10px 0 7px">Compter ce qu'on rejoue vraiment</h3>
+      <p class="mut" style="font-size:13px;margin:0">Payée par la revue de la story 1.12 : la campagne annonçait 18 mutations, <b>33 avaient été jouées</b>. Un compteur de campagne qui se trompe est une campagne qui ne prouve pas ce qu'elle dit.</p>
+    </div>
+    <div class="card pad">
+      <span class="chip">règle 3</span>
+      <h3 style="font-size:15px;margin:10px 0 7px">Rejouer après toute réécriture des tests</h3>
+      <p class="mut" style="font-size:13px;margin:0">Payée par la story 1.10a : neuf mutations avaient été observées <em>avant</em> un remaniement du mécanisme de requête. <b>Elles ne prouvaient plus rien sur le code livré.</b></p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>Une mutation qui laisse tout vert n'est pas un échec de la campagne — c'est sa trouvaille</b>
+    <p>La story 1.10a en a eu une : un test nommé « la limite est de 5 » restait vert avec la limite portée à <b>500</b>, parce qu'il comptait les coups portés au seau et non la limite. Le test a été réécrit.</p>
+    <p style="margin-bottom:0"><b>Et la story 1.9 a produit la variante la plus retorse :</b> basculer un préchargement de police à <code>false</code> ne faisait rougir personne — le composant dérivait son rendu d'une table, et le test dérivait ses attentes de <b>la même table</b>. Les deux côtés se calculaient l'un l'autre. Correctif : un test qui écrit <b>en dur</b> le jeu servi et le jeu préchargé — il décrit la <em>décision</em>, pas la table.</p>
+  </div>
+
+  <div class="note warn">
+    <p><b>🆕 Une variante inédite, trouvée à la story 2.3 : c'est l'environnement de mesure qui ment.</b> La mutation d'un garde « le fichier d'environnement n'est jamais écrasé sans sauvegarde » <b>ne rougit pas dans le conteneur</b> — le <code>cp</code> de BusyBox refuse l'écrasement de lui-même, donc le fichier survit <em>pour une raison étrangère au garde</em>. Elle rougit sur GNU coreutils, donc en intégration continue.</p>
+    <p style="margin-bottom:0">Contre-mesures désormais appliquées : <b>rejouer la mutation, jamais lire la phrase</b> ; <b>dire sur quel binaire elle a rougi</b> ; et glisser un <b>témoin neutre</b> dans la campagne — une mutation dont on sait qu'elle ne doit rien casser, pour vérifier que la campagne mesure bien quelque chose.</p>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="outils">
+  <div class="eyebrow">L'outillage</div>
+  <h2 class="sec">Ce qui tourne, et sur quoi</h2>
+
+  <div class="two">
+    <div>
+      <h4 class="min" style="margin-top:0">Les suites de tests</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Suite</th><th class="mono">Fichiers</th><th class="mono">Déclarations</th><th>Ce qu'elle garde</th></tr></thead>
+          <tbody>
+            <tr><td><b>Unit</b></td><td class="num">15</td><td class="num">150</td><td>Invariants du dépôt : autoload, couplage inter-modules, profils Docker, primitives shell, sentinelles d'installation, référents documentaires.</td></tr>
+            <tr><td><b>Feature</b></td><td class="num">23</td><td class="num">271</td><td>Le comportement réel : accès au panneau, activation des modules, multi-locataire, sondes de santé, composants Blade, polices, tokens.</td></tr>
+            <tr><td><b>Browser</b></td><td class="num">5</td><td class="num">34</td><td>Ce qu'un navigateur seul peut dire : cascade CSS réelle, polices effectivement chargées, pseudo-états, rafraîchissement client.</td></tr>
+            <tr><td><b>Bats</b></td><td class="num">2</td><td class="num">46</td><td>Le shell et l'installation de bout en bout — hors du conteneur, parce qu'ils pilotent Docker et l'hôte.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <p><b>Pourquoi la suite navigateur n'est pas dans <code>phpunit.xml</code>.</b> C'est délibéré : sinon <code>php artisan test</code> exigerait un Chromium en intégration continue <em>et en production</em>. Elle se lance par <code>make test-browser</code>, dans un conteneur dédié au profil <code>test</code>, et son verdict se lit dans le rapport JUnit — pas dans le code de sortie.</p>
+      </div>
+      <div class="note warn">
+        <p style="margin-bottom:0"><b>⚠️ Ces nombres sont des <em>déclarations</em>, pas des <em>exécutions</em>.</b> Un compte statique de <code>it(</code> et <code>test(</code> ne vaut pas un compte d'exécution : les jeux de données en démultiplient, les tests conditionnels en retirent. Le dernier relevé d'exécution est de <b>424 tests Pest et 2 266 assertions</b>, mesuré le 2026-08-24. <b>Le seul chiffre qui engage est celui que <code>make test</code> imprime.</b></p>
+      </div>
+    </div>
+
+    <div>
+      <h4 class="min" style="margin-top:0">Le ratchet — plafond monotone</h4>
+      <div class="metrics">
+        <button class="metric" aria-expanded="false" data-prov="p-ecs">
+          <span class="k">ECS</span><span class="v ok">0 / 0</span></button>
+        <button class="metric" aria-expanded="false" data-prov="p-stan">
+          <span class="k">PHPStan</span><span class="v">niv. 10</span></button>
+        <div class="prov" id="p-ecs">
+          <p><b>Source :</b> <a class="ref" href="../../src/quality-baseline.json">src/quality-baseline.json</a> — 0 erreur, 0 différence de formatage, figé le 2026-08-08. Appliqué par <a class="ref" href="../../scripts/quality-ratchet.sh">scripts/quality-ratchet.sh</a>.</p>
+          <p style="margin-bottom:0">Le style est PSR-12, vérifié par Easy Coding Standard. <code>make ecs-fix</code> corrige automatiquement ce qui peut l'être.</p>
+        </div>
+        <div class="prov" id="p-stan">
+          <p><b>Source :</b> <code>level: 10</code> dans <a class="ref" href="../../src/phpstan.neon">src/phpstan.neon</a>. Monté de 8 à 10 le 2026-08-07, dette ramenée à zéro dans le même passage — l'architecture annonçait « niveau 8 », le code est au-dessus.</p>
+          <p style="margin-bottom:0"><b>Un effet de bord instructif :</b> dans une closure Pest, l'analyseur résout <code>$this</code> en type de test — 49 erreurs de ce seul motif, résorbées en extrayant une classe de support plutôt qu'en désactivant la règle.</p>
+        </div>
+      </div>
+
+      <h4 class="min">Les outils, et leur poids</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Outil</th><th>Rôle</th><th>Statut</th></tr></thead>
+          <tbody>
+            <tr><td>Pest 4</td><td>tests, plus le module navigateur</td><td class="ok">bloquant</td></tr>
+            <tr><td>PHPStan / Larastan</td><td>analyse statique, niveau 10</td><td class="ok">bloquant</td></tr>
+            <tr><td>ECS</td><td>style PSR-12</td><td class="ok">bloquant</td></tr>
+            <tr><td>Gitleaks</td><td>fuite de secrets</td><td class="ok">bloquant</td></tr>
+            <tr><td>Rector</td><td>suggestions de remaniement</td><td class="warn">informatif</td></tr>
+            <tr><td>PHP Insights</td><td>métriques de complexité</td><td class="warn">informatif</td></tr>
+            <tr><td>PhpCodeArcheology</td><td>métriques d'architecture + turbulence Git</td><td class="warn">informatif</td></tr>
+            <tr><td>Snyk</td><td>vulnérabilités, hebdomadaire</td><td class="warn">alerte</td></tr>
+            <tr><td><code>composer</code> / <code>npm audit</code></td><td>alertes de dépendances</td><td class="ok">nocturne</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note lava">
+        <p style="margin-bottom:0"><b>Quand deux outils divergent, l'ordre d'autorité est écrit :</b> le langage tranche, puis PHPStan, puis Insights. Payé par un cas réel — Insights demandait un type natif sur une propriété, PHPStan le refusait, et PHP produisait une erreur <em>fatale</em>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="ci">
+  <div class="eyebrow">Intégration continue</div>
+  <h2 class="sec">Quatre workflows, et un garde-fou qui surveille un garde-fou</h2>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 900 300" role="img" aria-labelledby="d-ci-t d-ci-d">
+      <title id="d-ci-t">Les workflows d'intégration continue</title>
+      <desc id="d-ci-d">Sur push, le workflow principal enchaîne intégrité, qualité, tests, navigateur, puis un résumé. Un workflow nocturne joue l'installation de bout en bout. Deux autres couvrent la sécurité et la construction Docker.</desc>
+
+      <text class="lbl-t" x="20" y="22">ci.yml — sur push vers main et develop, et sur pull request</text>
+      <rect class="nb-ok" x="20" y="34" width="160" height="56" rx="8"/>
+      <text class="lbl" x="34" y="56">Integrity</text>
+      <text class="lbl-s" x="34" y="74">gitleaks · fichiers suivis</text>
+      <path class="edge" d="M180 62 H 208" marker-end="url(#ac)"/>
+      <rect class="nb-ok" x="212" y="34" width="160" height="56" rx="8"/>
+      <text class="lbl" x="226" y="56">Quality</text>
+      <text class="lbl-s" x="226" y="74">ECS · PHPStan · ratchet</text>
+      <path class="edge" d="M372 62 H 400" marker-end="url(#ac)"/>
+      <rect class="nb-ok" x="404" y="34" width="176" height="56" rx="8"/>
+      <text class="lbl" x="418" y="56">Tests</text>
+      <text class="lbl-s" x="418" y="74">Pest × PostgreSQL 18</text>
+      <path class="edge" d="M580 62 H 608" marker-end="url(#ac)"/>
+      <rect class="nb-ok" x="612" y="34" width="160" height="56" rx="8"/>
+      <text class="lbl" x="626" y="56">Browser</text>
+      <text class="lbl-s" x="626" y="74">Chromium</text>
+      <path class="edge-lava" d="M772 62 H 812" marker-end="url(#ac2)"/>
+      <rect class="nb-core" x="816" y="34" width="66" height="56" rx="8"/>
+      <text class="lbl-s" x="828" y="58">CI</text>
+      <text class="lbl-s" x="828" y="74">Summary</text>
+
+      <rect class="nb-mut" x="20" y="108" width="500" height="60" rx="8"/>
+      <text class="lbl" x="34" y="130">Nightly freshness — « le garde-fou tourne-t-il ? »</text>
+      <text class="lbl-s" x="34" y="150">lit la date ET la conclusion du dernier run nocturne : « il tourne » n'est pas « il passe »</text>
+      <path class="edge-dash" d="M520 138 H 610 V 96" marker-end="url(#ac)"/>
+      <text class="lbl-s" x="530" y="132" style="fill:var(--warn)">hors des dépendances du résumé</text>
+      <text class="lbl-s" x="530" y="148" style="fill:var(--text-3)">tant que le 1er nocturne n'existe pas</text>
+
+      <text class="lbl-t" x="20" y="196">nightly.yml — 03:17 chaque nuit · 90 min de plafond</text>
+      <rect class="nb-core" x="20" y="206" width="330" height="66" rx="8"/>
+      <text class="lbl" x="34" y="228">Install E2E</text>
+      <text class="lbl-s" x="34" y="246">clone neuf → make install-dev-full → /health</text>
+      <text class="lbl-s" x="34" y="262" style="fill:var(--lava)">le 4ᵉ bloquant de mise en production</text>
+      <path class="edge" d="M350 240 H 378" marker-end="url(#ac)"/>
+      <rect class="nb" x="382" y="206" width="130" height="66" rx="8"/>
+      <text class="lbl-s" x="396" y="234">Summary</text>
+      <path class="edge" d="M512 240 H 540" marker-end="url(#ac)"/>
+      <rect class="nb" x="544" y="206" width="130" height="66" rx="8"/>
+      <text class="lbl-s" x="558" y="234">Alert</text>
+
+      <rect class="nb" x="694" y="206" width="188" height="30" rx="7"/>
+      <text class="lbl-s" x="708" y="226">security.yml — audit + planifié</text>
+      <rect class="nb" x="694" y="242" width="188" height="30" rx="7"/>
+      <text class="lbl-s" x="708" y="262">docker.yml — build + validation</text>
+
+      <defs>
+        <marker id="ac" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#2c2c31"/></marker>
+        <marker id="ac2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#FF5722"/></marker>
+      </defs>
+    </svg>
+    <figcaption>Le job « nightly freshness » existe parce qu'un garde-fou nocturne qui cesse de tourner ne fait aucun bruit — c'est un garde-fou silencieux par extinction.</figcaption>
+  </figure>
+
+  <div class="grid g2">
+    <div class="note warn">
+      <p><b>⚠️ La CI ne se déclenche que sur <code>main</code> et <code>develop</code>.</b> Conséquence pratique, apprise en la subissant : <b>le verdict n'existe qu'au merge</b>. Une story développée sur une branche peut être « verte en local » et rouge en intégration. C'est déjà arrivé, et c'est le point suivant.</p>
+    </div>
+    <div class="note err">
+      <p><b>🔴 Un garde-fou mesurait le conteneur et l'affirmait universel.</b> Un test du flux d'entrées-sorties passait en local — où <code>make test</code> tourne dans le conteneur — et échouait sur le runner nu de la CI. La leçon est devenue une règle : <b>épingler l'environnement, ne jamais le subir</b>, et dire sur quel binaire une mesure a été faite.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>⚖️ Une décision d'arbitrage qui mérite d'être lue</b>
+    <p style="margin-bottom:0">Le job « nightly freshness » est <b>volontairement hors des dépendances du résumé de CI</b> tant que le premier nocturne n'existe pas. Motif : <b>un rouge attendu en permanence masque une régression réelle</b> — l'œil s'habitue, et la porte cesse de garder. La bascule en bloquant est une étape écrite, à faire juste après le premier passage nocturne réussi.</p>
+  </div>
+
+  <h3 class="sub">L'écart entre la CI décrite et la CI réelle</h3>
+  <div class="note">
+    <p style="margin-bottom:0">Le document d'architecture décrit <b>huit jobs séparés</b>. La CI réelle en a longtemps eu <b>un seul, monolithique</b> — écart qui a existé sans signal pendant tout l'epic 1. Le découpage a été fait depuis (<code>integrity</code>, <code>quality</code>, <code>tests</code>, <code>browser</code>, <code>nightly-freshness</code>, <code>summary</code>), mais deux points restent ouverts : Rector et PHP Insights sont <b>encore bloquants</b> alors qu'ils devraient être informatifs. C'est écrit dans <a class="ref" href="../architecture/9-architecture-qualit.md">docs/architecture/9-architecture-qualit.md</a> plutôt que corrigé en silence.</p>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="resume">
+  <div class="eyebrow">Le résumé exécutable</div>
+  <h2 class="sec">La boucle, en commandes</h2>
+  <p class="lede">Les noms qui suivent sont ceux de la version <b>6.11</b> de l'outillage, re-pointés le 2026-08-20. Un test verrouille l'invariant : <b>toute commande citée ici doit résoudre vers un skill installé et non déprécié</b> — <a class="ref" href="../../src/tests/Unit/BmadCommandReferentsTest.php">src/tests/Unit/BmadCommandReferentsTest.php</a>.</p>
+
+<!-- bmad-referents:ignore — bloc HISTORIQUE : il NOMME les commandes dépréciées pour
+     expliquer la migration. Sans ce marqueur, le garde-fou rougirait sur la phrase qui
+     explique son propre motif — même piège que dans docs/process/03-boucle-qualite.md.
+     Voir src/tests/Unit/BmadCommandReferentsTest.php. -->
+  <div class="note warn">
+    <p style="margin-bottom:0"><b>Deux anciens noms ne sont plus les bons.</b> <code>/bmad-create-story</code> et <code>/bmad-dev-story</code> sont <b>dépréciés</b> : <code>/bmad-build</code> les <em>fusionne</em> — il crée la story <em>et</em> l'implémente —, ce n'est donc pas un simple renommage. Les quatre anciens skills de revue sont regroupés en lentilles sous <code>/bmad-review</code>. Les anciens noms redirigent encore ; <b>rien ne garantit qu'ils le feront toujours</b>.</p>
+  </div>
+<!-- /bmad-referents:ignore -->
+
+  <div class="tw">
+    <table>
+      <thead><tr><th class="mono">Étape</th><th>Commande</th><th>Quand</th><th>Ce qu'on vérifie en sortant</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="num">0</td>
+          <td class="mono"><code>/bmad-build</code></td>
+          <td>toutes stories</td>
+          <td>Chaque nom cité dans les critères d'acceptation résout. On relit les critères <b>avant</b> de lancer le développement.</td>
+        </tr>
+        <tr>
+          <td class="num">1</td>
+          <td class="mono"><code>/bmad-build &lt;story&gt;</code></td>
+          <td>toutes stories</td>
+          <td>Tout garde-fou ajouté a été <b>vu rouge</b>. Casser, constater, restaurer.</td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="mono"><code>make test</code><br><code>make quality-ratchet</code><br><code>make test-browser</code></td>
+          <td>toutes stories<br><span class="mut">navigateur : si la story touche du rendu</span></td>
+          <td>Suite verte, ratchet à <b>0 / 0 / 0</b>. Toute hausse d'un compteur exige de modifier la baseline <b>dans le même commit</b>.</td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="mono"><code>/bmad-code-review</code><br><code>/bmad-review</code></td>
+          <td>toutes stories<br><span class="mut">lentille adversariale : niveau C</span></td>
+          <td><b>Deux passes maximum</b>, et la seconde clôt la première. Seules ces deux commandes comptent dans le quota.</td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="mono"><code>/security-review</code><br><code>make security-scan</code><br><code>composer audit &amp;&amp; npm audit</code></td>
+          <td>niveaux R et C</td>
+          <td>Hors quota — <b>un scanner ne fabrique pas de la confiance, il constate</b>. Plus, en niveau C, la question qu'aucun outil ne pose.</td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="mono"><code>php artisan test --coverage</code><br><span class="mut">+ campagne de mutation manuelle</span></td>
+          <td>niveau C</td>
+          <td>Le code neuf est exercé, les branches d'erreur aussi, et chaque garde neuf a rougi. <b class="err">⛔ Pas <code>make test-drift</code></b> — c'est le migrateur PHPUnit → Pest, il réécrit <code>tests/</code>.</td>
+        </tr>
+        <tr>
+          <td class="num">6</td>
+          <td class="mono"><code>git commit</code></td>
+          <td>toutes stories</td>
+          <td>Le message dit ce qui a été <b>observé</b>. Et si une décision contredit un document, le document change <b>dans le même commit</b>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note lava">
+    <p style="margin-bottom:0"><b>Niveau S : étapes 0, 1, 2, 3, 6.</b> C'est la boucle courte, et c'est la majorité des stories. Les étapes 4 et 5 ne s'ajoutent que quand le niveau les appelle. <b>Une boucle qu'on applique intégralement à tout est une boucle qu'on finit par contourner.</b></p>
+  </div>
+
+  <div class="note warn">
+    <p style="margin-bottom:0"><b>⚠️ Le garde-fou des noms de commandes est <em>local uniquement</em>, et c'est écrit plutôt que subi.</b> Le répertoire des skills est gitignoré, donc la CI ne les a pas et le test s'y déclare <em>ignoré</em> — bruyamment, jamais vert par extinction. C'est le bon compromis : la dérive naît sur le poste du développeur au moment d'une mise à jour de l'outillage, et c'est là que le test tourne.</p>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="gardes">
+  <div class="eyebrow">Le catalogue</div>
+  <h2 class="sec">Les garde-fous silencieux, et leurs mutations</h2>
+  <p class="lede">Un « garde-fou silencieux » est un test vert qui ne garde rien. Le dépôt en a recensé <b>plus de trente instances</b>. Elles ne sont pas une honte : ce sont les données à partir desquelles la boucle a été écrite. Voici les formes que le motif a prises.</p>
+
+  <div class="items">
+    <div class="item">
+      <button data-toggle aria-expanded="false"><span class="dot d-err"></span>
+        <span class="ttl">Forme 1 — le test qui vérifie sa propre source<em>les deux côtés se calculent l'un l'autre</em></span><span class="chev">›</span></button>
+      <div class="body"><div class="in">
+        <p>Un composant dérive son rendu d'une table de configuration ; son test dérive ses attentes de <b>la même table</b>. Changer la table change les deux : le test reste vert quoi qu'il arrive.</p>
+        <p style="margin-bottom:0"><b>Le correctif générique :</b> le côté « attendu » doit venir d'ailleurs que le côté « constaté ». Le test qui garde la table des ADR de cette reading room applique la règle — son côté attendu est <b>le disque</b> (<code>glob</code> sur <code>docs/adr/</code>), pas la page.</p>
+      </div></div>
+    </div>
+    <div class="item">
+      <button data-toggle aria-expanded="false"><span class="dot d-err"></span>
+        <span class="ttl">Forme 2 — le plancher trop bas<em>attrape l'effondrement, jamais l'érosion</em></span><span class="chev">›</span></button>
+      <div class="body"><div class="in">
+        <p>Un test anti-vacuité posait un plancher à 20 référents sur une page qui en portait 45. Dé-baliser 25 liens d'un coup laissait la page <em>au-dessus</em> du plancher, donc verte.</p>
+        <p style="margin-bottom:0"><b>La leçon :</b> un plancher très au-dessous du contenu réel n'attrape que l'effondrement total. <b>Et l'érosion est le mode de défaut d'un document.</b> Le plancher a été relevé, et une troisième assertion ajoutée.</p>
+      </div></div>
+    </div>
+    <div class="item">
+      <button data-toggle aria-expanded="false"><span class="dot d-err"></span>
+        <span class="ttl">Forme 3 — le test qui mesure autre chose que ce qu'il nomme<em>« la limite est de 5 » reste vert à 500</em></span><span class="chev">›</span></button>
+      <div class="body"><div class="in">
+        <p>Il comptait les coups portés au seau, pas la limite. Trouvé par mutation, pas par lecture.</p>
+        <p style="margin-bottom:0"><b>Variante de la story 2.4 :</b> un test qui prétendait vérifier un portillon d'accès réseau utilisait un domaine invalide, résolu en <b>0,0149 s</b> au lieu des 3,13 s d'un conteneur arrêté. L'assertion temporelle passait avec ou sans portillon — <b>seul le libellé du résumé faisait rougir</b>. Réécrit pour compter les tentatives d'ouverture de connexion : déterministe, indépendant de l'horloge et du libellé.</p>
+      </div></div>
+    </div>
+    <div class="item">
+      <button data-toggle aria-expanded="false"><span class="dot d-err"></span>
+        <span class="ttl">Forme 4 — le test satisfait par un autre chemin de code<em>3 assertions sur 4 passaient par accident</em></span><span class="chev">›</span></button>
+      <div class="body"><div class="in">
+        <p>Un test « racine d'état inécrivable » avait trois de ses quatre assertions satisfaites par un avertissement de métrologie déclaré non fatal — <b>pas par le refus qu'il nomme</b>.</p>
+        <p style="margin-bottom:0">Ce cas est le plus difficile à voir : le test échoue bien quand on casse le mécanisme… mais pour la mauvaise raison. Seule la mutation ciblée le révèle.</p>
+      </div></div>
+    </div>
+    <div class="item">
+      <button data-toggle aria-expanded="false"><span class="dot d-err"></span>
+        <span class="ttl">Forme 5 — l'environnement de mesure qui ment<em>vert sous BusyBox, rouge sous GNU coreutils</em></span><span class="chev">›</span></button>
+      <div class="body"><div class="in">
+        <p>Détaillée plus haut. C'est la variante la plus récente, et la plus troublante : <b>le garde-fou est correct, le test est correct, et le résultat est faux</b> — pour une raison entièrement extérieure au sujet.</p>
+        <p style="margin-bottom:0"><b>Autre incarnation :</b> un test à fréquence horaire était vrai <b>59 minutes sur 60</b>. La mutation est passée pendant la minute 0. Et deux mutations visaient des fichiers dont les gardes vivent dans une suite que le script d'orchestration <em>n'exécutait pas</em>.</p>
+      </div></div>
+    </div>
+    <div class="item">
+      <button data-toggle aria-expanded="false"><span class="dot d-err"></span>
+        <span class="ttl">Forme 6 — la phrase fausse à côté du code juste<em>depuis la story 2.1, c'est la forme dominante</em></span><span class="chev">›</span></button>
+      <div class="body"><div class="in">
+        <p>Le code est correct. Le test est correct. <b>C'est la documentation qui ment</b> — un chemin de fichier périmé, un compte qui a dérivé, une commande décrite pour ce qu'on croit qu'elle fait.</p>
+        <p><b>Le cas le plus instructif :</b> une de ces phrases fausses est <b>née de la correction d'une phrase fausse</b> précédente. Corriger un document, c'est écrire du texte non relu — exactement comme un correctif de revue est du code non revu.</p>
+        <p style="margin-bottom:0"><b>La commande <code>test-drift</code> est l'exemple canonique</b>, et le plus cher : une phrase de processus décrivait un migrateur destructif comme un outil d'analyse. Il a fallu qu'il réécrive 7 fichiers pour qu'on le découvre.</p>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="callout" style="margin-top:22px">
+    <b>Comment cette page elle-même est tenue</b>
+    <p>Une reading room écrite à la main dérive : c'est acquis, et aucun test ne prétend l'empêcher. Ce qui <em>est</em> empêché est plus étroit et plus important : <b>que la page cite des fichiers qui n'existent pas</b>. Toute citation de fichier est un lien relatif cliquable — un seul mécanisme sert deux fins : le lecteur ouvre la source, et le test vérifie qu'elle est là.</p>
+    <p style="margin-bottom:0"><b>Ce que ce test ne couvre pas, et qu'il faut savoir :</b> les <em>nombres</em> — « 423 tests », « 78,8 % » — ne sont vérifiés par rien et dériveront. C'est pourquoi chacun s'affiche avec sa provenance et sa date de lecture. Les chemins écrits en prose sans être des liens ne sont pas gardés non plus, volontairement : ils désignent ce qui n'est pas un fichier versionné. <a class="ref" href="../../src/tests/Unit/ReadingRoomReferentsTest.php">src/tests/Unit/ReadingRoomReferentsTest.php</a></p>
+  </div>
+</section>
+
+<footer class="rr">
+  <span>Reading Room — écrite à la main, sans autorité. La hiérarchie du projet reste <b>ADR &gt; epics.md + sprint-status.yaml &gt; ETAT.md</b>.</span>
+  <span class="mono" data-plan-stamp>—</span>
+</footer>
+</main>
+
+<script src="data/plan.js"></script>
+<script src="assets/rr.js"></script>
+</body>
+</html>

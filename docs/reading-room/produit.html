@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Le produit — vision, personas, périmètre · Reading Room</title>
+<meta name="description" content="Ce que l'application fait et pour qui : le pari produit, les quatre personas, le périmètre v1 module par module, et ce qui est refusé.">
+<link rel="stylesheet" href="assets/rr.css">
+</head>
+<body>
+<a class="skip" href="#pari">Aller au contenu</a>
+
+<nav class="top" aria-label="Sections de la reading room">
+  <div class="in">
+    <a class="brand" href="index.html"><i></i>Reading&nbsp;Room</a>
+    <div class="links">
+      <a href="index.html">Accueil</a>
+      <a href="produit.html">Produit</a>
+      <a href="epics.html">Plan</a>
+      <a href="exigences.html">Exigences</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="decisions.html">Décisions</a>
+      <a href="qualite.html">Qualité</a>
+      <a href="suivi.html">Où on en est</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">02 — Produit</div>
+  <h1>Deux produits<br>dans un seul dépôt.</h1>
+  <p class="sub">Le site personnel d'un streamer — live, reviews de jeux, press kit — <b>et</b> le squelette libre qu'un autre streamer peut forker pour obtenir le sien. Les deux sont livrés par le même code, et cette contrainte explique la moitié des décisions du projet.</p>
+
+  <div class="authority">
+    <p><b>⚠️ Page de synthèse.</b> Elle condense <a class="ref" href="../prd.md">docs/prd.md</a> (le document produit, format six-pager) et la spécification UX. En cas de désaccord, le PRD gagne — sauf là où un <a class="plain" href="decisions.html">ADR</a> l'a explicitement amendé, ce qui est arrivé quatre fois.</p>
+    <p style="margin-bottom:0">Les chiffres cités ici sont des <b>cibles</b>, pas des mesures. Le site n'existe pas encore : il n'a ni visiteur, ni audience, ni ligne de base. Un ADR a d'ailleurs déjà rétrogradé l'une de ces cibles en simple hypothèse datée, pour cette raison exacte.</p>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="pari">
+  <div class="eyebrow">Le point de départ</div>
+  <h2 class="sec">Un travail éditorial réel, mais qui ne se capitalise pas</h2>
+  <p class="lede">Alex streame depuis des années. Ce qu'il produit — des analyses calmes, une audience qui lit plutôt qu'elle ne scrolle — n'a aujourd'hui <b>aucun point d'atterrissage durable</b>.</p>
+
+  <div class="grid g2">
+    <div class="card pad">
+      <h4 class="min" style="margin-top:0">Ce qui se perd</h4>
+      <ul style="color:var(--text-2);font-size:14px;margin:0">
+        <li>Les clips Twitch <b>disparaissent à J+14</b> sans abonnement payant.</li>
+        <li>Les VOD YouTube portent des descriptions plates, <b>non indexables</b>.</li>
+        <li>Aucun point de centralisation pour la presse, les studios, les nouveaux venus.</li>
+        <li>Aucun signal SEO durable, alors que le contenu de fond, lui, est produit régulièrement.</li>
+      </ul>
+    </div>
+    <div class="card pad">
+      <h4 class="min" style="margin-top:0">La conséquence, en une phrase</h4>
+      <p style="color:var(--text-2);font-size:14px">Quelqu'un qui découvre Alex par un stream isolé <b>ne devient pas un lecteur récurrent</b>. Et un studio qui pourrait lui offrir une clé de jeu n'a rien de scannable pour juger sa légitimité éditoriale.</p>
+      <p style="color:var(--text-2);font-size:14px;margin-bottom:0">Le site est la réponse à ces deux fuites — pas à un problème de visibilité en général.</p>
+    </div>
+  </div>
+
+  <h3 class="sub">Pourquoi ce pari, et pas un autre</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Option pesée</th><th>Verdict</th><th>Motif</th></tr></thead>
+      <tbody>
+        <tr><td>WordPress + thème + extensions</td><td class="err">refusé</td><td>Maintenance sur mesure infernale, signal éditorial bas de gamme, dépendance aux extensions.</td></tr>
+        <tr><td>CMS découplé (Strapi, Ghost) + Next.js</td><td class="err">refusé</td><td>Pile non maîtrisée — 60 à 75 h d'apprentissage Vue/TS — et segmente l'audience libre visée.</td></tr>
+        <tr><td><b>Laravel sur mesure, modulaire, style Plausible</b></td><td class="ok">retenu</td><td>Pile maîtrisée, opinion tranchée, PHP/Laravel pur donc forkable, coût d'apprentissage nul.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <b>Le pari, formulé sans précaution</b>
+    <p style="margin-bottom:0">Un <b>préréglage fort</b> — opinion claire, refus explicite du modèle « personnalisable à l'exécution » — battra un panneau d'administration à la fois pour la maintenabilité d'Alex <em>et</em> pour la crédibilité du dépôt public. La conséquence est violente et assumée : <b>un autre streamer ne personnalise pas par une interface, il forke le dépôt.</b> C'est <a class="ref" href="../adr/ADR-0001-modularity-plausible-style.md">ADR-0001</a>.</p>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="personas">
+  <div class="eyebrow">Pour qui</div>
+  <h2 class="sec">Quatre personnes, quatre gestes différents</h2>
+  <p class="lede">Deux personas <b>primaires</b> pilotent les arbitrages de périmètre. Deux personas <b>secondaires</b> contraignent les non-régressions : on ne les sert pas en priorité, mais on n'a pas le droit de les casser.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 880 300" role="img" aria-labelledby="d-personas-t d-personas-d">
+      <title id="d-personas-t">Quatre personas et les pages qu'ils atteignent</title>
+      <desc id="d-personas-d">Le Reader-Gamer arrive par Google sur une page de review. Le Twitch Viewer arrive sur l'accueil. Le Game Dev arrive sur la page presse. Le Fork-Streamer arrive sur le dépôt GitHub.</desc>
+
+      <text class="lbl-t" x="16" y="20">D'où ils viennent</text>
+      <text class="lbl-t" x="360" y="20">Ce qu'ils veulent</text>
+      <text class="lbl-t" x="690" y="20">Où ils atterrissent</text>
+
+      <!-- Reader-Gamer -->
+      <rect class="nb-ext" x="12" y="36" width="150" height="46" rx="8"/>
+      <text class="lbl" x="24" y="58">Recherche Google</text>
+      <text class="lbl-s" x="24" y="74">« [jeu] avis »</text>
+      <path class="edge-lava" d="M162 59 H 340" marker-end="url(#a1)"/>
+      <rect class="nb-core" x="344" y="30" width="300" height="58" rx="8"/>
+      <text class="lbl" x="358" y="52">Reader-Gamer <tspan class="lbl-s">— primaire</tspan></text>
+      <text class="lbl-s" x="358" y="70">« Ce jeu vaut-il mes 60 € ? Sans hype. »</text>
+      <path class="edge-lava" d="M644 59 H 686" marker-end="url(#a1)"/>
+      <rect class="nb" x="690" y="38" width="176" height="42" rx="8"/>
+      <text class="lbl-s" x="702" y="56">/reviews/{slug}</text>
+      <text class="lbl-s" x="702" y="72" style="fill:var(--text-3)">verdict en &lt; 5 s</text>
+
+      <!-- Twitch Viewer -->
+      <rect class="nb-ext" x="12" y="102" width="150" height="46" rx="8"/>
+      <text class="lbl" x="24" y="124">Lien de profil</text>
+      <text class="lbl-s" x="24" y="140">signet, Discord</text>
+      <path class="edge-lava" d="M162 125 H 340" marker-end="url(#a1)"/>
+      <rect class="nb-core" x="344" y="96" width="300" height="58" rx="8"/>
+      <text class="lbl" x="358" y="118">Twitch Viewer <tspan class="lbl-s">— primaire</tspan></text>
+      <text class="lbl-s" x="358" y="136">« Il stream là ? Sinon, le dernier truc. »</text>
+      <path class="edge-lava" d="M644 125 H 686" marker-end="url(#a1)"/>
+      <rect class="nb" x="690" y="104" width="176" height="42" rx="8"/>
+      <text class="lbl-s" x="702" y="122">/ (accueil)</text>
+      <text class="lbl-s" x="702" y="138" style="fill:var(--text-3)">perception &lt; 300 ms</text>
+
+      <!-- Game Dev -->
+      <rect class="nb-ext" x="12" y="168" width="150" height="46" rx="8"/>
+      <text class="lbl" x="24" y="190">Keymailer, DM</text>
+      <text class="lbl-s" x="24" y="206">20 dossiers / sem.</text>
+      <path class="edge" d="M162 191 H 340" marker-end="url(#a2)"/>
+      <rect class="nb" x="344" y="162" width="300" height="58" rx="8"/>
+      <text class="lbl" x="358" y="184">Game Dev / PR <tspan class="lbl-s">— secondaire</tspan></text>
+      <text class="lbl-s" x="358" y="202">« Audience réelle ? Je lui gifte ou pas ? »</text>
+      <path class="edge" d="M644 191 H 686" marker-end="url(#a2)"/>
+      <rect class="nb" x="690" y="170" width="176" height="42" rx="8"/>
+      <text class="lbl-s" x="702" y="188">/press</text>
+      <text class="lbl-s" x="702" y="204" style="fill:var(--text-3)">scanné en &lt; 30 s</text>
+
+      <!-- Fork-Streamer -->
+      <rect class="nb-ext" x="12" y="234" width="150" height="46" rx="8"/>
+      <text class="lbl" x="24" y="256">Reddit, Discord</text>
+      <text class="lbl-s" x="24" y="272">bouton « forker »</text>
+      <path class="edge" d="M162 257 H 340" marker-end="url(#a2)"/>
+      <rect class="nb" x="344" y="228" width="300" height="58" rx="8"/>
+      <text class="lbl" x="358" y="250">Fork-Streamer <tspan class="lbl-s">— secondaire</tspan></text>
+      <text class="lbl-s" x="358" y="268">« Forkable en 30 min, déployé en 1 h ? »</text>
+      <path class="edge" d="M644 257 H 686" marker-end="url(#a2)"/>
+      <rect class="nb" x="690" y="236" width="176" height="42" rx="8"/>
+      <text class="lbl-s" x="702" y="254">le dépôt Git</text>
+      <text class="lbl-s" x="702" y="270" style="fill:var(--text-3)">install &lt; 15 min</text>
+
+      <defs>
+        <marker id="a1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#FF5722"/></marker>
+        <marker id="a2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#2c2c31"/></marker>
+      </defs>
+    </svg>
+    <figcaption>En orange : les deux personas qui décident du périmètre. Les deux autres contraignent sans arbitrer.</figcaption>
+  </figure>
+
+  <div class="items" style="margin-top:20px">
+    <div class="item">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-now"></span>
+        <span class="ttl">Reader-Gamer — le chercheur Google<em>primaire · 18-35 ans · fatigué du format « hype »</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>« Je veux comprendre si ce jeu vaut mes 60 € et mon temps, par quelqu'un qui ne hype pas. »</b></p>
+        <p><b>Ce qu'il attend :</b> un article de 800 à 1 200 mots, une note sur 10 visible, un verdict clair en introduction, une VOD YouTube <em>complémentaire</em> et non obligatoire, et pas de mur de cookies qui bloque la lecture.</p>
+        <p><b>Ce qu'il refuse :</b> lecture vidéo automatique, fenêtre d'inscription à une infolettre, dégradé violet de startup, photo du streamer au-dessus de la ligne de flottaison.</p>
+        <p style="margin-bottom:0"><b>Comment on saura :</b> temps passé médian sur une review &gt; 3 min, taux de rebond &lt; 60 %.</p>
+      </div></div>
+    </div>
+
+    <div class="item">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-now"></span>
+        <span class="ttl">Twitch Viewer — celui qui est déjà là<em>primaire · vient vérifier, pas découvrir</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>« Je veux savoir si Alex stream là, et si oui rejoindre. Sinon, voir le dernier truc. »</b></p>
+        <p><b>Ce qu'il attend :</b> l'information LIVE / hors ligne en moins d'une seconde. En direct : le badge lava, le lecteur Twitch, le chat. Hors direct : le dernier replay et la dernière review.</p>
+        <p><b>Le fait qui structure tout :</b> un streamer est hors ligne environ <b>88 % du temps</b>. L'écran « hors ligne » n'est donc pas un état dégradé — c'est statistiquement <em>le</em> site. <a class="ref" href="../adr/ADR-0012-ecran-offline-et-module-media.md">ADR-0012</a> en a tiré la conséquence jusqu'au bout : le mot « hors ligne » est <b>supprimé</b> de l'écran, remplacé par « Dernier stream il y a X ». Une scène conçue comme état nominal ne s'ouvre pas sur une négation.</p>
+        <p style="margin-bottom:0"><b>Comment on saura :</b> conversion accueil → lecteur Twitch en direct &gt; 40 %. La conversion accueil → article hors direct, elle, <b>a cessé d'être une cible</b> — voir plus bas.</p>
+      </div></div>
+    </div>
+
+    <div class="item">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-idle"></span>
+        <span class="ttl">Game Dev / studio — le coin marketing<em>secondaire · scanne 20 dossiers par semaine</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>« Cet Alex, il a une audience réelle ? Une ligne éditoriale claire ? Je lui gifte ou pas ? »</b></p>
+        <p><b>Ce qu'il attend :</b> des statistiques <b>médianes</b> (P50 de viewers concurrents — jamais la moyenne, jamais le nombre d'abonnés qui est une vanité manipulable), une bio en français <em>et</em> en anglais, trois reviews récentes visibles, un contact direct.</p>
+        <p><b>Ce qu'il refuse :</b> des statistiques invérifiables, et <b>une archive zip</b> — un développeur sérieux veut le SVG seul, téléchargeable en un clic, dix secondes avant un appel. Le press kit ne propose donc <em>aucun</em> zip global.</p>
+        <p style="margin-bottom:0"><b>Comment on saura :</b> &gt; 5 téléchargements de SVG individuels par mois à partir de M+3 ; taux de réponse aux propositions Keymailer &gt; 15 % à M+6.</p>
+      </div></div>
+    </div>
+
+    <div class="item">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-idle"></span>
+        <span class="ttl">Fork-Streamer — le pari long<em>secondaire · c'est lui qui justifie la moitié de l'ingénierie</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>« Ce squelette, je peux le forker en 30 min et le déployer en 1 h sur mon VPS ? »</b></p>
+        <p><b>Ce qu'il attend :</b> un README « vitrine » (captures, démo animée, proposition de valeur lisible en 30 s), un <code>make install-dev-full</code> qui marche en moins de 15 minutes sur un VPS vierge — <b>prouvé par un test, pas affirmé</b> — et des modules qu'on active par variable d'environnement, jamais par un panneau.</p>
+        <p><b>Ce qu'il refuse :</b> un <code>composer install</code> qui casse, une dépendance payante bloquante, de la documentation en franglais.</p>
+        <p style="margin-bottom:0"><b>Pourquoi il compte plus que son rang :</b> c'est lui qui impose <code>streamer_id</code> partout dès le premier jour, les modules activables, l'installeur idempotent et le test d'installation de bout en bout. Sans lui, l'epic 1 et l'epic 2 n'existeraient pas. <b>Il est le persona le plus cher du projet, et il n'est même pas prioritaire.</b></p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="modules">
+  <div class="eyebrow">Le produit</div>
+  <h2 class="sec">Cinq modules, et ce que chacun fait vraiment</h2>
+  <p class="lede">Le découpage n'est pas décoratif : chaque module est un dossier PSR-4, un fournisseur de services, ses propres migrations et ses propres routes. Un fork qui pose <code>MODULE_REVIEWS_ENABLED=false</code> n'a plus ni route, ni migration, ni vue Reviews. <a class="plain" href="architecture.html#modules">Comment c'est câblé</a>.</p>
+
+  <div role="tablist" class="tabs" aria-label="Modules">
+    <button class="tab" role="tab" aria-selected="true" aria-controls="m-public" id="t-public">Public</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="m-live" id="t-live">Live</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="m-reviews" id="t-reviews">Reviews</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="m-press" id="t-press">PressKit</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="m-admin" id="t-admin">Admin</button>
+  </div>
+
+  <div class="pane" id="m-public" role="tabpanel" aria-labelledby="t-public">
+    <div class="card pad">
+      <h3 style="font-size:17px;margin-bottom:8px">Public — l'ossature et le référencement</h3>
+      <p style="color:var(--text-2);font-size:14px">L'accueil, la page « à propos », la mise en page commune, et tout ce qui rend le site indexable. C'est le module qui décide de ce qu'un moteur de recherche comprend du site.</p>
+      <dl class="kv" style="margin-top:16px">
+        <dt>Accueil</dt><dd>Différenciation nette LIVE / hors direct. En direct : badge lava, lecteur Twitch, chat, VOD récentes. Hors direct : un clip en vedette, un rail de vidéos, la dernière review.</dd>
+        <dt>À propos</dt><dd>Bio FR + EN, parcours, valeurs éditoriales explicitées.</dd>
+        <dt>Mise en page</dt><dd>En-tête collant discret — 48 px sur mobile, 56 px sur bureau, trois entrées maximum, <b>pas de menu hamburger</b>. Pied de page minimal : mentions légales, presse, RSS en toutes lettres, dépôt Git.</dd>
+        <dt>Archive</dt><dd>Navigation de plein droit par <code>/{année}</code>, <code>/{tag}</code>, <code>/{jeu}</code>, pagination par curseur — dimensionnée pour 100+ articles à M+24.</dd>
+        <dt>Machines</dt><dd><code>sitemap.xml</code> et flux RSS régénérés à la publication ; données structurées Schema.org <code>Person</code>, <code>Review</code>, <code>VideoGame</code>, <code>Article</code>, avec <code>datePublished</code> <em>et</em> <code>dateModified</code>.</dd>
+      </dl>
+      <div class="note lava" style="margin-top:18px"><p><b>L'enjeu réel de ce module est un fossé économique.</b> Un article de fond qui remonte encore dans Google 18 mois après sa publication ne coûte plus rien et rapporte tous les mois. La cible stratégique est écrite : <b>plus de 40 % du trafic organique sur des articles de plus de 6 mois à M+12</b>, plus de 60 % à M+18.</p></div>
+    </div>
+  </div>
+
+  <div class="pane" id="m-live" role="tabpanel" aria-labelledby="t-live" hidden>
+    <div class="card pad">
+      <h3 style="font-size:17px;margin-bottom:8px">Live — le seul état nommé du site</h3>
+      <p style="color:var(--text-2);font-size:14px">Savoir si Alex stream, et le montrer instantanément. Puis, les 88 % du temps restants, rendre l'absence intéressante.</p>
+      <dl class="kv" style="margin-top:16px">
+        <dt>Badge LIVE</dt><dd>Interrogation de l'API Twitch Helix toutes les 60 s côté serveur, cache Redis, affichage immédiat côté client. Texte temporel : « LIVE depuis 2 h 17 ».</dd>
+        <dt>Intégration</dt><dd>Lecteur et chat en iframes officielles, <b>derrière le consentement aux cookies</b> — obligatoire avant tout chargement. Le chat est masqué sous 768 px.</dd>
+        <dt>Écran par défaut</dt><dd>Un clip en 16:9 comme héros, un rail horizontal de 3-4 vidéos, une bande de formats verticaux 9:16 en liens sortants, puis la dernière review. <b>La forme porte le sens :</b> 16:9 = ça se regarde ici, 9:16 = ça t'emmène ailleurs.</dd>
+        <dt>Repli</dt><dd>Après 3 échecs Helix, un disjoncteur bascule en « hors direct » <b>en silence</b> — jamais d'alerte « API indisponible » à l'écran.</dd>
+        <dt>Troisième état</dt><dd><code>MODULE_LIVE_ENABLED=false</code> : une variante purement éditoriale, sans zone live. Un fork qui ne streame pas sur Twitch garde un site cohérent.</dd>
+      </dl>
+      <div class="note warn" style="margin-top:18px"><p><b>Vignette et lien sortant, jamais d'intégration tierce sur l'écran par défaut.</b> Aucun script externe, donc aucun consentement requis pour <em>afficher</em> ; les vignettes sont rapatriées et servies localement. Le consentement est demandé au moment de l'intention — quand on appuie sur lecture. C'est <a class="ref" href="../adr/ADR-0012-ecran-offline-et-module-media.md">ADR-0012</a>.</p></div>
+    </div>
+  </div>
+
+  <div class="pane" id="m-reviews" role="tabpanel" aria-labelledby="t-reviews" hidden>
+    <div class="card pad">
+      <h3 style="font-size:17px;margin-bottom:8px">Reviews — le cœur éditorial</h3>
+      <p style="color:var(--text-2);font-size:14px">Un modèle unique <code>Article</code> porte trois types (<code>review</code>, <code>news</code>, <code>preview</code>) via une énumération. Pas trois modèles, pas trois écrans d'administration : <b>un seul</b>, avec des champs nullables pour ce qui ne concerne pas les news.</p>
+      <dl class="kv" style="margin-top:16px">
+        <dt>Rédaction</dt><dd>Écran Filament unique : titre, slug ASCII pur, couverture 16:9 webp, corps en Markdown, note 0-10 <em>nullable</em>, jeu lié <em>nullable</em>, URL de VOD <em>nullable</em>, type, dates de publication et de mise à jour, note de révision.</dd>
+        <dt>Confort d'écriture</dt><dd>Enregistrement automatique toutes les 60 s avec confirmation discrète (« Enregistré 23:14:32 »), aperçu <b>en ligne, pas en fenêtre modale</b>. Cible : publier une review complète en moins de 10 minutes, à 23 h, fatigué.</dd>
+        <dt>Anti-lien-mort</dt><dd>Avant publication, un validateur vérifie que la VOD YouTube existe vraiment. Une tâche nocturne re-vérifie ensuite : si la vidéo disparaît, l'article le signale au lieu de mentir.</dd>
+        <dt>Page publique</dt><dd>Verdict au-dessus de la ligne de flottaison en moins de 5 s sur mobile : H1, note en gros (60 à 96 px), verdict en 1 à 3 phrases. Corps d'article à <b>720 px de large, immuable</b>. Intégration YouTube <em>petite</em>, 480 × 270 maximum, jamais pleine largeur.</dd>
+        <dt>Timecodes</dt><dd><code>[00:42]</code> écrit dans le texte devient un lien qui ouvre la VOD à la bonne seconde, dans un nouvel onglet.</dd>
+        <dt>Mise à jour en place</dt><dd>Une review qu'on corrige garde son URL — donc son référencement. La date de modification remonte, un badge « Mis à jour le X » apparaît si l'écart dépasse 30 jours, et Schema.org le dit à Google.</dd>
+        <dt>Compteur de vues</dt><dd>Sur la page de détail uniquement, et <b>seulement au-delà de 100 vues</b>. Pas dans les listes. Un compteur à 3 est une information sur la vanité, pas sur l'article.</dd>
+      </dl>
+      <div class="note" style="margin-top:18px"><p><b>Les commentaires sont éteints au premier jour</b>, et c'est une décision, pas un report. Les migrations existent, l'anti-spam est pré-câblé, un drapeau <code>comments.enabled=false</code> les tient fermés. Ils s'allumeront à M+1 sur <b>trois signaux mesurables</b> : au moins 3 demandes prouvées de lecteurs, l'anti-spam en place, et un budget de modération sous 30 min par semaine. Voir <a class="plain" href="epics.html?epic=9">l'epic 9</a>.</p></div>
+    </div>
+  </div>
+
+  <div class="pane" id="m-press" role="tabpanel" aria-labelledby="t-press" hidden>
+    <div class="card pad">
+      <h3 style="font-size:17px;margin-bottom:8px">PressKit — de la crédibilité, pas de la promotion</h3>
+      <p style="color:var(--text-2);font-size:14px">Une page, <code>/press</code>, conçue pour être scannée en moins de 30 secondes par quelqu'un qui en regarde vingt par semaine.</p>
+      <dl class="kv" style="margin-top:16px">
+        <dt>Hiérarchie</dt><dd><b>Statistiques &gt; Photo &gt; Bio.</b> Cet ordre casse délibérément l'instinct « photo d'abord » : le studio veut savoir si l'audience est réelle avant de savoir à quoi ressemble Alex.</dd>
+        <dt>Statistiques</dt><dd>Médiane P50 des viewers concurrents, heures streamées au total, nombre de VOD, « streaming depuis 4 ans ». <b>Jamais la moyenne, jamais le nombre d'abonnés.</b> Une petite courbe sur 7 jours donne la tendance.</dd>
+        <dt>Méthodologie</dt><dd>Un lien « comment je calcule » à <b>un clic maximum</b>, vers une page dédiée. Une statistique dont on ne peut pas vérifier la fabrication n'est pas un signal de confiance, c'est une affirmation.</dd>
+        <dt>Téléchargements</dt><dd>SVG, PNG, kit complet — <b>chacun individuellement</b>, un clic = un fichier. Pas de zip global.</dd>
+        <dt>Contact</dt><dd>Formulaire simple, envoi par Resend (offre gratuite, 100 messages par jour, sans carte bancaire), tracé dans le journal d'activité.</dd>
+        <dt>Bouton « copier le lien »</dt><dd>Copie l'URL du press kit avec les paramètres UTM déjà posés. C'est la seule instrumentation qui permettra de savoir si l'hypothèse « les studios giftent » tient.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="pane" id="m-admin" role="tabpanel" aria-labelledby="t-admin" hidden>
+    <div class="card pad">
+      <h3 style="font-size:17px;margin-bottom:8px">Admin — l'atelier, et rien d'autre</h3>
+      <p style="color:var(--text-2);font-size:14px">Un panneau Filament sur <code>/admin</code>. Un seul rôle réel en v1 : <code>super-admin</code>. Ce panneau sert à <b>écrire</b>, jamais à configurer le produit — configurer, c'est le travail des variables d'environnement.</p>
+      <dl class="kv" style="margin-top:16px">
+        <dt>Écrans</dt><dd><code>ArticleResource</code> (les trois types unifiés), <code>GameResource</code> (le catalogue de jeux référencés), <code>SettingsResource</code> (URLs sociales, bios, photo presse), <code>PressContactResource</code> (lecture seule, pour l'audit).</dd>
+        <dt>Accès</dt><dd>Refusé par défaut : <code>User::canAccessPanel()</code> exige le rôle <code>super-admin</code>. Le rôle est semé, <b>l'administrateur ne l'est pas</b> — il se crée explicitement par <code>make filament-user</code>.</dd>
+        <dt>Brouillon social</dt><dd>Un composant qui génère, à partir d'une review, un texte prêt à coller pour Twitter, Mastodon et Bluesky. <b>Pas de publication automatique</b> : le brouillon copiable suffit en v1, et c'est écrit dans le hors-périmètre.</dd>
+        <dt>Extinction</dt><dd>Le fournisseur de panneau vit sous <code>App\Modules\Admin\</code> et <b>non</b> dans <code>bootstrap/providers.php</code>, pour que <code>MODULE_ADMIN_ENABLED=false</code> l'éteigne réellement. Mesuré : sans ça, <code>/admin</code> répondait 302 au lieu de 404.</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="metriques">
+  <div class="eyebrow">Ce qui vaudra succès</div>
+  <h2 class="sec">Trois chiffres verrouillés, et une cible retirée</h2>
+  <p class="lede">Le succès à six mois tient en trois nombres. Ils ont été fixés en séance et ne se renégocient pas en cours de route.</p>
+
+  <div class="grid g3">
+    <div class="card pad" style="text-align:center">
+      <div class="mono" style="font-size:34px;font-weight:600;letter-spacing:-.03em">1 500</div>
+      <div class="mut" style="font-size:12.5px;margin-top:6px">visiteurs uniques / mois à M+6</div>
+    </div>
+    <div class="card pad" style="text-align:center">
+      <div class="mono" style="font-size:34px;font-weight:600;letter-spacing:-.03em">+200</div>
+      <div class="mut" style="font-size:12.5px;margin-top:6px">abonnés Twitch attribués par UTM</div>
+    </div>
+    <div class="card pad" style="text-align:center">
+      <div class="mono" style="font-size:34px;font-weight:600;letter-spacing:-.03em">10-15</div>
+      <div class="mut" style="font-size:12.5px;margin-top:6px">articles publiés, cumulés</div>
+    </div>
+  </div>
+
+  <h3 class="sub">Les métriques dérivées, par persona</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Persona</th><th>Ce qu'on mesure</th><th class="mono">Cible M+6</th><th>Comment</th></tr></thead>
+      <tbody>
+        <tr><td>Reader-Gamer</td><td>Temps passé médian sur une review</td><td class="num">&gt; 3 min</td><td>événement personnalisé</td></tr>
+        <tr><td>Reader-Gamer</td><td>Taux de rebond sur les reviews</td><td class="num">&lt; 60 %</td><td>analytique</td></tr>
+        <tr><td>Twitch Viewer</td><td>Accueil → lecteur Twitch, en direct</td><td class="num">&gt; 40 %</td><td>événement personnalisé</td></tr>
+        <tr><td>Twitch Viewer</td><td>Accueil → article, hors direct</td><td class="num mut">retirée</td><td class="warn">voir ci-dessous</td></tr>
+        <tr><td>Game Dev</td><td>Téléchargements de SVG individuels</td><td class="num">&gt; 5 / mois</td><td>événement, dès M+3</td></tr>
+        <tr><td>Game Dev</td><td>Clés reçues / propositions envoyées</td><td class="num">&gt; 15 %</td><td>tableur tenu à la main</td></tr>
+        <tr><td>Fork-Streamer</td><td>Premier fork actif</td><td class="num">1</td><td>statistiques du dépôt</td></tr>
+        <tr><td>SEO</td><td>Une review en première page Google (longue traîne)</td><td class="num">1</td><td>Search Console</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <b>🔴 Une cible a été retirée du contrat — et c'est la décision produit la plus saine du projet</b>
+    <p>« Conversion accueil → article en état hors direct &gt; 25 % » était un critère d'acceptation de l'epic 4. Le 2026-07-30, <a class="ref" href="../adr/ADR-0012-ecran-offline-et-module-media.md">ADR-0012</a> l'a reclassée en <b>hypothèse datée</b>. Le motif est net : <b>ce nombre ne vient d'aucun visiteur.</b> Il n'y a ni site, ni audience, ni ligne de base — c'est une intuition habillée en pourcentage.</p>
+    <p>La reformulation : « on suppose &gt; 25 % ; l'instrumentation est livrée en epic 4 ; premier relevé après 30 jours de trafic réel ; <b>le chiffre observé remplace la cible</b>. » Le critère d'acceptation devient <em>l'instrumentation existe et produit un nombre</em>.</p>
+    <p style="margin-bottom:0">Deux conséquences techniques suivent : la mesure est <b>côté serveur, sans cookie</b> — une mesure derrière un consentement RGPD ne mesure que le sous-ensemble consentant, donc se ment à elle-même — et la métrique devient bicéphale : conversion vers l'article <em>et</em> taux de sortie vers l'extérieur, parce qu'envoyer quelqu'un vers un clip est aussi un succès.</p>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="hors-scope">
+  <div class="eyebrow">Le périmètre par la négative</div>
+  <h2 class="sec">Ce qui n'arrivera pas en v1, et pourquoi</h2>
+  <p class="lede">Cette liste existe pour <b>être citée en revue</b> quand une idée pousse pour entrer. Ce n'est ni un oubli ni un manque d'ambition : c'est ce qui permet au reste de tenir en 11 semaines. Toute exception exige un mini-débat écrit.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Écarté</th><th>Motif</th><th class="mono">Quand</th></tr></thead>
+      <tbody>
+        <tr><td>Panneau de personnalisation / marketplace de modules</td><td>Le refus fondateur. C'est <a class="ref" href="../adr/ADR-0001-modularity-plausible-style.md">ADR-0001</a> — on ne fait pas un WordPress bis.</td><td class="mut">jamais</td></tr>
+        <tr><td>Multi-locataire dans une seule application</td><td>Si SaaS un jour : une instance par streamer. <code>streamer_id</code> est là, la sécurité au niveau ligne ne l'est pas (<a class="ref" href="../adr/ADR-0002-rls-not-enabled-v1.md">ADR-0002</a>).</td><td class="mut">v2+</td></tr>
+        <tr><td>Clips MP4 générés automatiquement</td><td>Complexité d'infrastructure, et c'est le coin d'une offre payante.</td><td class="mut">v1.5</td></tr>
+        <tr><td>Infolettre</td><td>Aucune demande validée sur l'audience actuelle.</td><td class="mut">v2+</td></tr>
+        <tr><td>Notifications Discord automatiques</td><td>Côté stream, pas côté site.</td><td class="mut">v1.5</td></tr>
+        <tr><td>Publication automatique sur les réseaux</td><td>Le brouillon copiable suffit, et il ne casse jamais.</td><td class="mut">v1.5 ou jamais</td></tr>
+        <tr><td>Collecte concurrentielle sur Twitch</td><td>Risque juridique — jamais sans revue écrite.</td><td class="mut">conditionnel</td></tr>
+        <tr><td>Stripe, monétisation</td><td>Suppose une décision SaaS qui n'est pas prise.</td><td class="mut">v3+</td></tr>
+        <tr><td>Modération assistée par IA</td><td>10-15 articles par mois : le volume manuel tient largement.</td><td class="mut">v2+</td></tr>
+        <tr><td>Recherche interne</td><td>15 articles : <code>Ctrl+F</code> suffit.</td><td class="mut">v2+</td></tr>
+        <tr><td>Tags et catégories</td><td>Prématuré pour 15 articles, et trivial à ajouter ensuite.</td><td class="mut">v2+</td></tr>
+        <tr><td>Interface multilingue complète</td><td>Audience française. Seule la bio est bilingue.</td><td class="mut">v2+</td></tr>
+        <tr><td>Caddy à la place d'Apache</td><td>2 jours de reconstruction contre un gain imperceptible en v1 (<a class="ref" href="../adr/ADR-0005-apache-stays-v1-caddy-deferred.md">ADR-0005</a>).</td><td class="mut">v1.5</td></tr>
+        <tr><td>Sauvegarde distante payante</td><td>Local + distant gratuit suffit — <b>jusqu'au jour où Alex héberge la donnée d'un tiers</b> (<a class="ref" href="../adr/ADR-0003-backup-local-only-v1.md">ADR-0003</a>).</td><td class="mut">M+6</td></tr>
+        <tr><td>Démo publique en ligne</td><td>Retirée du périmètre le 2026-05-23 : 2 jours réinvestis en marge. Un installeur qui marche <em>et le prouve</em> est une meilleure démonstration.</td><td class="mut">v1.1</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="sep">
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="ux">
+  <div class="eyebrow">Règles de décision</div>
+  <h2 class="sec">Six principes d'interface, écrits pour trancher</h2>
+  <p class="lede">Pas une charte graphique — un jeu de règles qui permet de dire non sans rouvrir le débat. Le détail des tokens vit dans <a class="ref" href="../../src/resources/css/tokens.css">src/resources/css/tokens.css</a>, qui fait autorité sur toute prose.</p>
+
+  <div class="grid g2">
+    <div class="card pad">
+      <span class="chip now">01</span>
+      <h3 style="font-size:15.5px;margin:10px 0 6px">Discipline 90 / 8 / 2</h3>
+      <p class="mut" style="font-size:13.5px;margin:0">90 % de monochrome, 8 % d'accent lava, 2 % d'états. Le lava <code>#FF5722</code> est réservé à <b>exactement quatre usages</b> : le badge LIVE, les appels à l'action primaires, les notes ≥ 9/10, les actions destructives en administration. Partout ailleurs, il est en infraction — et un audit dédié le vérifie en epic 10.</p>
+    </div>
+    <div class="card pad">
+      <span class="chip">02</span>
+      <h3 style="font-size:15.5px;margin:10px 0 6px">Mobile d'abord pour le contenu, pas pour tout</h3>
+      <p class="mut" style="font-size:13.5px;margin:0">La page de review doit être parfaite sur mobile — c'est de la lecture longue. Le panneau d'administration a le droit d'être réservé au bureau. La tablette portrait est <b>délibérément ignorée</b> et traitée comme un grand mobile.</p>
+    </div>
+    <div class="card pad">
+      <span class="chip">03</span>
+      <h3 style="font-size:15.5px;margin:10px 0 6px">Aucune friction avant la lecture</h3>
+      <p class="mut" style="font-size:13.5px;margin:0">Consentement aux cookies : oui, c'est la loi — bandeau en bas à droite, 64 px de haut maximum, jamais un voile plein écran. Infolettre : non. Lecture automatique : non. Fenêtre surgissante : non. Détection d'intention de sortie : non.</p>
+    </div>
+    <div class="card pad">
+      <span class="chip">04</span>
+      <h3 style="font-size:15.5px;margin:10px 0 6px">Premier contenu en moins de 1,5 s en 4G</h3>
+      <p class="mut" style="font-size:13.5px;margin:0">Ce qui en découle mécaniquement : polices préchargées et auto-hébergées, images différées en WebP avec leurs dimensions réservées, images sociales <b>pré-générées</b> et jamais calculées à la volée — 800 ms de plus tuent le partage.</p>
+    </div>
+    <div class="card pad">
+      <span class="chip">05</span>
+      <h3 style="font-size:15.5px;margin:10px 0 6px">Les vetos visuels</h3>
+      <p class="mut" style="font-size:13.5px;margin:0">Pas de dégradé lava vers noir en fond. Pas de police Geist (elle signale Vercel, pas IBM). Pas de lava en aplat. Pas de photo d'Alex sur les images sociales. Ces refus sont nominatifs pour qu'on ne les redécouvre pas en revue.</p>
+    </div>
+    <div class="card pad">
+      <span class="chip">06</span>
+      <h3 style="font-size:15.5px;margin:10px 0 6px">Accessibilité : plancher AA</h3>
+      <p class="mut" style="font-size:13.5px;margin:0">Contraste WCAG 2.2 AA vérifié par outil, navigation clavier complète, texte alternatif obligatoire et validé côté serveur, anneau de focus visible, lien d'évitement en premier tabulable, mouvement réduit respecté.</p>
+    </div>
+  </div>
+
+  <div class="note lava" style="margin-top:22px">
+    <p><b>Une signature, une seule : « le temps comme texture ».</b> Les métadonnées temporelles — « il y a 3 jours », « depuis 2 h 17 », « streaming depuis 4 ans » — sont composées en IBM Plex Mono et deviennent un motif reconnaissable. Mais <b>l'audit de cette signature a eu lieu avant le durcissement</b>, pas après : sur l'écran par défaut, 14 mentions temporelles sont descendues à 8. « Publié il y a 3 jours » a été coupé sur la review — une date ancienne dissuade, la signature aurait saboté la conversion. <em>Un audit qui arrive après la référence n'est pas un audit, c'est une autopsie.</em></p>
+  </div>
+</section>
+
+<footer class="rr">
+  <span>Reading Room — écrite à la main, sans autorité. La hiérarchie du projet reste <b>ADR &gt; epics.md + sprint-status.yaml &gt; ETAT.md</b>.</span>
+  <span class="mono" data-plan-stamp>—</span>
+</footer>
+</main>
+
+<script src="data/plan.js"></script>
+<script src="assets/rr.js"></script>
+</body>
+</html>

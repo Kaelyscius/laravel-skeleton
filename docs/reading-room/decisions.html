@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Décisions — les treize ADR · Reading Room</title>
+<meta name="description" content="Les treize Architecture Decision Records du projet, plus les dix questions ouvertes tranchées au PRD.">
+<link rel="stylesheet" href="assets/rr.css">
+</head>
+<body>
+<a class="skip" href="#adr">Aller aux décisions</a>
+
+<nav class="top" aria-label="Sections de la reading room">
+  <div class="in">
+    <a class="brand" href="index.html"><i></i>Reading&nbsp;Room</a>
+    <div class="links">
+      <a href="index.html">Accueil</a>
+      <a href="produit.html">Produit</a>
+      <a href="epics.html">Plan</a>
+      <a href="exigences.html">Exigences</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="decisions.html">Décisions</a>
+      <a href="qualite.html">Qualité</a>
+      <a href="suivi.html">Où on en est</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">06 — Décisions</div>
+  <h1>Treize décisions<br>qu'on ne redébat pas.</h1>
+  <p class="sub">Un ADR — <em>Architecture Decision Record</em> — n'est pas de la documentation : c'est une <b>clôture de débat</b>. Il dit ce qui a été tranché, dans quel contexte, et ce que ça coûte. Il permet de dire « c'est déjà décidé » sans avoir à re-argumenter, et de savoir exactement quoi rouvrir si le contexte change.</p>
+
+  <div class="authority">
+    <p><b>⚠️ Les ADR sont au sommet de la hiérarchie du projet</b> — <b>ADR &gt; epics.md + sprint-status.yaml &gt; ETAT.md</b>. Cette page les résume ; en cas d'écart, <b>le fichier ADR gagne</b>, et cette page a tort. Chaque titre ci-dessous est un lien vers le document complet.</p>
+    <p style="margin-bottom:0">Un test Pest vérifie que cette table est <b>exhaustive</b> : un ADR posé sur le disque et absent d'ici fait rougir la suite. C'est un choix — la page a le droit de ne pas tout couvrir, mais alors elle doit cesser de le prétendre, et le test doit partir avec la prétention. Voir <a class="ref" href="../../src/tests/Unit/ReadingRoomReferentsTest.php">src/tests/Unit/ReadingRoomReferentsTest.php</a>.</p>
+  </div>
+</header>
+
+<section id="adr">
+  <div class="eyebrow">Vue d'ensemble</div>
+  <h2 class="sec">La table complète</h2>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th class="mono">#</th><th>Titre</th><th class="mono">Date</th><th>Ce que ça verrouille en une phrase</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">0001</td><td><a class="plain" href="#a1">Modularité style Plausible</a></td><td class="mono">05-08</td><td>On active par variable d'environnement, on personnalise par fork. Jamais par une interface.</td></tr>
+        <tr><td class="mono">0002</td><td><a class="plain" href="#a2">Sécurité au niveau ligne non activée</a></td><td class="mono">05-08</td><td><code>streamer_id</code> partout, portée Eloquent en v1 ; la sécurité PostgreSQL viendra en additif.</td></tr>
+        <tr><td class="mono">0003</td><td><a class="plain" href="#a3">Sauvegarde locale seule</a></td><td class="mono">05-08</td><td>Locale activée, distante gratuite prête mais éteinte, payante avant tout hébergement de tiers.</td></tr>
+        <tr><td class="mono">0004</td><td><a class="plain" href="#a4">Base dédiée à la métrologie</a></td><td class="mono">05-08</td><td>Un conteneur PostgreSQL séparé pour Pulse, exclu des sauvegardes.</td></tr>
+        <tr><td class="mono">0005</td><td><a class="plain" href="#a5">Apache reste, Caddy reporté</a></td><td class="mono">05-08</td><td>2 jours de reconstruction contre un gain imperceptible : on garde ce qui marche.</td></tr>
+        <tr><td class="mono">0006</td><td><a class="plain" href="#a6">Secrets par <code>env:encrypt</code></a></td><td class="mono">05-08</td><td>Le natif Laravel suffit ; Doppler et Vault sont surdimensionnés à cette échelle.</td></tr>
+        <tr><td class="mono">0007</td><td><a class="plain" href="#a7">PostgreSQL remplace MariaDB</a></td><td class="mono">05-08</td><td>Migrer sur un <code>/src</code> vide coûte 10 h ; sur une base pleine, 30 jours.</td></tr>
+        <tr><td class="mono">0008</td><td><a class="plain" href="#a8">Blade + Livewire + Alpine</a></td><td class="mono">05-08</td><td>Un seul modèle mental. Vue aurait coûté 16 h de plus et segmenté l'audience du fork.</td></tr>
+        <tr><td class="mono">0009</td><td><a class="plain" href="#a9">Modules PSR-4 à la main</a></td><td class="mono">05-08</td><td>Pas de bibliothèque de modularisation, pas de DDD. Dix anti-motifs refusés nommément.</td></tr>
+        <tr><td class="mono">0010</td><td><a class="plain" href="#a10">Laravel 13 lève le verrou</a></td><td class="mono">07-27</td><td>Le verrou protégeait une migration qui n'existait pas : Filament n'était pas installé.</td></tr>
+        <tr><td class="mono">0011</td><td><a class="plain" href="#a11">Observer avant composer</a></td><td class="mono">07-30</td><td>Aucun navigateur n'avait jamais affiché ce projet. On réordonne l'epic 1 pour regarder d'abord.</td></tr>
+        <tr><td class="mono">0012</td><td><a class="plain" href="#a12">L'écran par défaut</a></td><td class="mono">07-30</td><td>Un streamer est hors ligne 88 % du temps : cet écran <em>est</em> le site. Le mot « hors ligne » disparaît.</td></tr>
+        <tr><td class="mono">0013</td><td><a class="plain" href="#a13">Runner navigateur</a></td><td class="mono">08-06</td><td>Pest browser sur Chromium natif Alpine. Le plan B TypeScript est écarté après mesure.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note lava">
+    <p><b>Deux vagues, deux natures.</b> Les ADR <b>0001 à 0009</b> datent tous du 2026-05-08 : ce sont les décisions <em>de conception</em>, prises avant d'écrire du code. Les ADR <b>0010 à 0013</b> datent de juillet-août : ce sont des décisions <em>de correction</em>, chacune née d'un fait mesuré qui contredisait un document. La deuxième vague est la plus intéressante — elle raconte comment ce projet apprend.</p>
+  </div>
+</section>
+
+<hr class="sep">
+
+<section id="detail">
+  <div class="eyebrow">Une par une</div>
+  <h2 class="sec">Le détail, avec ce que chacune coûte</h2>
+
+  <div class="items">
+
+    <div class="item" id="a1">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-ok"></span>
+        <span class="ttl">ADR-0001 — Modularité style Plausible, refus du modèle WordPress<em>2026-05-08 · la décision fondatrice</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>Le problème.</b> Un dépôt doit servir deux usages : le site sur mesure d'Alex, et un squelette libre réutilisable. Deux philosophies s'affrontaient — le modèle WordPress (activation par interface, personnalisation par réglages, marketplace) et le modèle Plausible (activation par variable d'environnement, personnalisation par fork, une instance par client).</p>
+        <p><b>La décision.</b> Plausible. Six implications concrètes : modules activables <em>uniquement</em> au déploiement ; <b>aucune interface</b> de bascule ; la personnalisation d'un tiers passe par un fork Git ; un éventuel SaaS serait « une instance par streamer » ; le multi-locataire Filament reste optionnel ; les futurs modules payants seraient des paquets Composer, pas un verrouillage à l'exécution.</p>
+        <p><b>Ce que ça coûte.</b> Un autre streamer doit savoir forker, éditer un <code>.env</code> et déployer. C'est une barrière assumée : elle filtre l'audience vers les gens qui peuvent réellement maintenir leur instance.</p>
+        <p style="margin-bottom:0" class="mut">Verbatim d'Alex, cité dans l'ADR : <em>« Je veux que les modules soient activables ou non. Mais pas que ce soit aux autres de customiser. Je veux pas faire un WordPress bis. »</em> — <a class="ref" href="../adr/ADR-0001-modularity-plausible-style.md">docs/adr/ADR-0001-modularity-plausible-style.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a2">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-ok"></span>
+        <span class="ttl">ADR-0002 — Sécurité au niveau ligne non activée en v1<em>2026-05-08 · avec un verrou écrit en majuscules</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>Le problème.</b> Le passage à PostgreSQL était motivé <em>en partie</em> par sa sécurité au niveau ligne, présentée comme une assurance gratuite pour un futur multi-streamer. Fallait-il l'activer tout de suite ?</p>
+        <p><b>Cinq motifs mesurés disent non.</b> Laravel n'ouvre pas de transaction par requête, donc le réglage de session devient un no-op et la règle peut autoriser <em>toutes</em> les lignes. Un mutualisateur de connexions en mode transaction fait fuir ce réglage d'une requête à l'autre. Le multi-locataire natif de Filament a des lacunes documentées. Aucun paquet Laravel ne fait ça clé en main. Et surtout : <b>en mono-streamer, ça n'apporte aucun bénéfice de sécurité</b> — il n'y a qu'un locataire.</p>
+        <p><b>La décision.</b> Deux motifs documentés, un seul actif. <b>Motif C</b> (v1) : colonne obligatoire, trait, portée globale, middleware, singleton qui échoue bruyamment. <b>Motif D</b> (v2+) : la sécurité au niveau ligne, en migration <em>additive et non cassante</em>, estimée à 3-4 jours.</p>
+        <p style="margin-bottom:0"><b>Le verrou, en toutes lettres :</b> <span class="warn">« RLS NOT ENABLED. ENABLE BEFORE MULTI-TENANT PROD. »</span> — <a class="ref" href="../adr/ADR-0002-rls-not-enabled-v1.md">docs/adr/ADR-0002-rls-not-enabled-v1.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a3">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-ok"></span>
+        <span class="ttl">ADR-0003 — Sauvegarde locale seule, distante gratuite prête<em>2026-05-08 · trois couches, une seule allumée</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>La décision, couche par couche.</b></p>
+        <ul>
+          <li><b>A — locale, <span class="ok">activée</span> :</b> <code>pg_dump</code> quotidien à 3 h, <code>gzip -9</code>, rotation 14 jours, base de métrologie exclue, intégrité vérifiée par <code>pg_restore --list</code> dans un test Bats.</li>
+          <li><b>B — distante gratuite, <span class="warn">éteinte par défaut</span> :</b> <code>rclone</code> vers Mega, Drive ou pCloud. Cinq minutes pour l'allumer. Conservation 30 jours.</li>
+          <li><b>C — payante, <span class="mut">reportée</span> :</b> environ 0,50 € par mois. Trois déclencheurs gravés — le premier qui sonne l'active.</li>
+        </ul>
+        <p><b>Le verrou.</b> <span class="warn">« UPGRADE TO PAID OFFSITE BEFORE HOSTING THIRD-PARTY DATA. »</span> Tant qu'Alex ne sauvegarde que sa propre donnée, le risque est le sien. Le jour où il héberge un ami streamer, il devient dépositaire de la donnée d'un tiers — et ce n'est plus un arbitrage personnel.</p>
+        <p style="margin-bottom:0"><b>Le risque connu et non couvert :</b> rien ne surveille automatiquement que la couche B est restée éteinte. C'est pourquoi la story 3.8 ajoute une sonde de santé qui <b>avertit</b> tant qu'elle l'est en production. — <a class="ref" href="../adr/ADR-0003-backup-local-only-v1.md">docs/adr/ADR-0003-backup-local-only-v1.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a4">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-ok"></span>
+        <span class="ttl">ADR-0004 — Pulse sur une base de données isolée<em>2026-05-08 · +1 conteneur, +50 Mo, et une sauvegarde propre</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>Le problème.</b> Pulse écrit en haute fréquence : instantanés minute par minute, requêtes lentes, exceptions, travaux longs. Tout mettre dans la base applicative, c'est le défaut de Laravel.</p>
+        <p><b>Quatre coûts mesurés qui penchent pour la séparation :</b> plus de contention d'entrées-sorties sur les tables métier lors d'un pic ; la sauvegarde applicative reste pure au lieu d'être polluée par la métrologie ; une restauration partielle restaure ce qu'on veut ; la purge devient un <code>truncate</code> trivial.</p>
+        <p><b>Le prix.</b> Un conteneur de plus, environ 50 Mo de mémoire. C'est tout.</p>
+        <p style="margin-bottom:0"><b>Conséquence en aval :</b> cette base est <b>exclue des sauvegardes</b> — elle est entièrement regénérable — et elle est soumise à une rotation de 7 jours maximum, parce qu'un disque de VPS saturé par de la métrologie est un mode de panne réel. — <a class="ref" href="../adr/ADR-0004-pulse-dedicated-database.md">docs/adr/ADR-0004-pulse-dedicated-database.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a5">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-ok"></span>
+        <span class="ttl">ADR-0005 — Apache reste en v1, Caddy reporté<em>2026-05-08 · une décision de budget, dite comme telle</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>Le problème.</b> Caddy est objectivement plus agréable : certificats automatiques, configuration en dix lignes, HTTP/3, proxy inverse trivial. Apache, lui, est déjà en place et fonctionne.</p>
+        <p><b>La ligne qui décide.</b> Coût de migration depuis l'existant : <b>0 jour</b> pour Apache, <b>~2 jours</b> pour Caddy. Sur un budget de scaffolding de 10-12 semaines tenu par une personne, deux jours ne sont pas négligeables — et le gain n'est perceptible par <em>aucun</em> visiteur.</p>
+        <p style="margin-bottom:0"><b>Ce qui rouvrirait le dossier :</b> l'ADR liste des déclencheurs. C'est ce qui distingue un report d'un refus — le report a des conditions de sortie écrites. — <a class="ref" href="../adr/ADR-0005-apache-stays-v1-caddy-deferred.md">docs/adr/ADR-0005-apache-stays-v1-caddy-deferred.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a6">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-ok"></span>
+        <span class="ttl">ADR-0006 — Secrets par <code>env:encrypt</code> natif<em>2026-05-08 · 30 minutes contre 4 à 8 heures</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>Trois familles pesées.</b> Un <code>.env</code> en clair et ignoré par Git — gratuit, immédiat, fragile au commit accidentel. <code>php artisan env:encrypt</code> — gratuit, environ 30 minutes, fichier chiffré <em>versionnable</em>, clé hors dépôt. Doppler ou Vault — de qualité professionnelle, avec rotation et audit, mais 4 à 8 heures d'intégration et, pour Doppler, un abonnement.</p>
+        <p><b>La décision.</b> Le natif Laravel. Pour une personne seule, à budget nul, avec deux environnements, un coffre-fort d'entreprise est du surdimensionnement — et un outil qu'on n'utilise pas correctement est moins sûr qu'un outil simple qu'on maîtrise.</p>
+        <p style="margin-bottom:0"><b>Le workflow.</b> En local, <code>.env</code> en clair, ignoré. En production, chiffrement local puis versionnement du fichier chiffré, la clé vivant en variable d'environnement serveur. — <a class="ref" href="../adr/ADR-0006-secrets-env-encrypt-native.md">docs/adr/ADR-0006-secrets-env-encrypt-native.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a7">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-ok"></span>
+        <span class="ttl">ADR-0007 — PostgreSQL remplace MariaDB<em>2026-05-08 · l'argument YAGNI perdu volontairement</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>Quatre signaux convergents.</b> La sécurité au niveau ligne, robuste et native, comme assurance pour un multi-streamer futur. Le type <code>JSONB</code> avec index GIN, pour les réglages et les charges utiles de webhooks. La recherche plein texte française native avec racinisation — pour un blog visant 100+ articles longs en 18 mois, c'est un avantage produit, pas un confort. Et le signal d'écosystème : Laravel, Filament et Pest documentent d'abord PostgreSQL.</p>
+        <p><b>L'objection, et la réponse.</b> « Tu n'es pas SaaS aujourd'hui, MariaDB suffit » — c'est vrai, et c'est du bon YAGNI. La réponse n'est pas de nier l'objection mais de comparer les coûts : <b>10 heures sur un <code>/src</code> vide, contre ~30 jours sur une application pleine</b>. Faire le changement maintenant, c'est acheter une assurance qui ne coûtera jamais aussi peu.</p>
+        <p style="margin-bottom:0"><b>Conséquence non négociable :</b> les tests tournent sur PostgreSQL, <b>pas sur SQLite en mémoire</b>. On perd de la vitesse, on gagne la fidélité — un test qui passe sur un autre moteur que la production ne prouve pas grand-chose. — <a class="ref" href="../adr/ADR-0007-postgresql-17-over-mariadb.md">docs/adr/ADR-0007-postgresql-17-over-mariadb.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a8">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-ok"></span>
+        <span class="ttl">ADR-0008 — Blade + Livewire + Alpine + Tailwind<em>2026-05-08 · une experte qui se rétracte, et pourquoi</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>Deux options chiffrées.</b> Blade + Livewire + Alpine : +14,5 h de scaffolding, ~0 h d'apprentissage. Inertia + Vue + TypeScript : +30,5 h de scaffolding, et <b>60 à 75 h d'apprentissage</b> si le niveau de départ est zéro.</p>
+        <p><b>Le retournement.</b> L'UX designer avait d'abord défendu une voie hybride pour les animations. Elle s'est rétractée devant trois faits : Filament tourne <em>déjà</em> sur Livewire + Alpine, donc choisir Vue pour le public, c'est deux modèles mentaux et deux chaînes d'outils dans un dépôt tenu par une personne ; l'audience visée du dépôt libre est PHP/Laravel pur, et ~40 % de ces développeurs ne touchent pas à Vue ; et le mouvement voulu — 200 ms, une courbe non rebondissante — <b>se fait en CSS pur</b>. Vue n'apportait rien à ce niveau d'animation.</p>
+        <p style="margin-bottom:0"><b>Ce qui vaut d'être retenu :</b> l'argument gagnant n'est pas technique, il est cognitif. — <a class="ref" href="../adr/ADR-0008-frontend-stack-blade-livewire.md">docs/adr/ADR-0008-frontend-stack-blade-livewire.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a9">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-ok"></span>
+        <span class="ttl">ADR-0009 — Modules <code>app/Modules/*</code> PSR-4, à la main<em>2026-05-08 · « la frontière de facturation est la frontière de code »</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>L'argument qui a fait basculer.</b> La développeuse défendait d'abord une position anti-modules : <em>« Laravel a déjà des modules, ça s'appelle des controllers et des services. »</em> Elle a inversé sur un argument du stratège : <b>en SaaS, la frontière de facturation est la frontière de code.</b> Si les modules ne sont pas dessinés tôt, on ne pourra jamais facturer « Clips » comme module premium sans une refonte majeure.</p>
+        <p><b>Mais sur les abstractions, consensus immédiat : YAGNI brutal.</b> Dix anti-motifs sont refusés nommément — bibliothèque de modularisation tierce, dépôts systématiques, façades sur mesure, bus d'événements dès J1, CQRS, hexagonal, DTO systématiques, <code>app/Domain/</code>, découverte automatique des écrans, migrations mélangées à la racine.</p>
+        <p style="margin-bottom:0"><b>La règle de couplage, et ce qui la tient :</b> un module n'importe que <code>App\Core\</code>. Ce n'est pas une convention humaine — c'est <a class="ref" href="../../src/tests/Unit/CrossModuleCouplingTest.php">un scan Pest des <code>use</code></a>, bloquant en intégration continue. — <a class="ref" href="../adr/ADR-0009-modular-app-modules-psr4.md">docs/adr/ADR-0009-modular-app-modules-psr4.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a10">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-now"></span>
+        <span class="ttl">ADR-0010 — Laravel 13 lève le verrou « Laravel 12 + Filament v3 »<em>2026-07-27 · un verrou qui protégeait quelque chose d'inexistant</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>Le verrou d'origine.</b> Le PRD gravait « PHP 8.4 + Laravel 12 + Filament v3 », et un risque le justifiait : « Filament v3 déprécié par v4 pendant la fenêtre de livraison — épingler la version, réévaluer en octobre 2026 ».</p>
+        <p><b>La prémisse, et sa réfutation en une commande.</b> Le verrou supposait que <b>Filament était installé et porteur</b>, donc qu'une montée de version majeure coûterait une migration risquée. Vérification du 2026-07-27 : <code>grep -c filament src/composer.json</code> → <b>0</b>. La story d'installation n'avait jamais démarré. <b>Il n'y a rien à migrer : le coût n'est pas élevé, il est nul.</b></p>
+        <p><b>Et le verrou avait cessé de protéger.</b> Filament stable était en v5. Le verrou défendait une version que personne n'installerait jamais — il ne réduisait plus aucun risque, il en créait un.</p>
+        <p style="margin-bottom:0"><b>La décision.</b> Passer en Laravel 13 <em>maintenant</em>, au moment le moins cher possible : <code>app/Modules/*</code> est encore vide, le rayon d'impact d'une régression est minimal. Pile effective : PHP 8.5, Laravel 13, Filament v5, Livewire 4 — PostgreSQL inchangé. — <a class="ref" href="../adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md">docs/adr/ADR-0010-laravel-13-supersedes-filament-v3-lock.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a11">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-now"></span>
+        <span class="ttl">ADR-0011 — Observation avant composition<em>2026-07-30, amendé le 08-08 · deux stories qui se citaient mutuellement</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>Le défaut déclencheur.</b> Un critère d'acceptation de la story 1.9 nommait <code>&lt;x-layouts.public&gt;</code> — un composant créé par la story <b>1.13</b>, qui vient après. Un critère sans référent est invérifiable, donc <b>vert par accident</b>. Et la 1.13 citait réciproquement les préchargements de polices de la 1.9 : <b>les deux stories se citaient l'une l'autre</b>.</p>
+        <p><b>Le fait plus large.</b> Aucun navigateur n'avait jamais affiché ce projet. Des tokens CSS avaient été écrits sans qu'aucun écran n'existe.</p>
+        <p><b>La décision.</b> Les stories gardent leur numéro, leur <em>ordre d'exécution</em> change : d'abord un spike du runner navigateur, puis l'observation d'un module éteint, puis trois écrans de référence, puis une relecture de tous les critères d'acceptation — <em>ensuite seulement</em> on compose.</p>
+        <p><b>Ce que la relecture a trouvé :</b> sur 14 critères, <b>5 prouvables, 5 sans référent, 4 ambigus</b> — plus un défaut transverse : <code>livewire/livewire</code> <b>n'était pas une dépendance déclarée</b>. Il n'arrivait que par transitivité, via Pulse et Telescope. Désinstaller Telescope aurait fait disparaître Livewire sans qu'aucun test ne bronche.</p>
+        <p><b>L'amendement du 2026-08-08.</b> Les layouts (1.13) passent avant les composants temporels (1.12) : Alpine n'entre dans le DOM qu'avec <code>@livewireScripts</code>, câblé par la 1.13. Le critère « rafraîchissement toutes les 60 s » de la 1.12 était donc, lui aussi, sans référent.</p>
+        <p style="margin-bottom:0"><b>Deux règles nées ici, appliquées depuis :</b> la <em>definition-of-ready</em> (chaque nom cité dans un critère doit résoudre) et le critère de sortie de toute story front (<em>un test qui ne peut pas rougir n'est pas un test — la mutation doit être exécutée et le rouge observé</em>). — <a class="ref" href="../adr/ADR-0011-observation-avant-composition.md">docs/adr/ADR-0011-observation-avant-composition.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a12">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-now"></span>
+        <span class="ttl">ADR-0012 — L'écran par défaut, le module Media, Twitch seul<em>2026-07-30 · une demande produit retournée par l'analyse</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>Le fait de départ.</b> Un streamer est hors ligne environ <b>88 % du temps</b>. L'écran « hors ligne » n'est pas un état dégradé : c'est statistiquement <em>le</em> site. Le PRD le reconnaissait déjà — mais aucun écran n'avait jamais été dessiné.</p>
+        <p><b>La demande du PO.</b> Agréger VOD Twitch, clips, best-of YouTube, Reels, TikTok « afin de générer du trafic sur nos réseaux ». Cette demande change le <em>travail</em> de l'écran, pas seulement son contenu.</p>
+        <p><b>Le visiteur réel, tel que l'ADR le décrit.</b> Il arrive d'un clip, d'un Discord, d'un retweet — donc d'un téléphone. Son geste n'est pas « donne-moi encore du contenu », c'est <b>« attends, c'est qui ce type »</b>. Lui répondre par un article est un décalage de format ; lui répondre par un mur de vignettes lui rend l'écran qu'il vient de quitter, en moins bien fourni et sans algorithme — un terrain où TikTok gagne sans jouer.</p>
+        <p><b>Le sens de circulation retenu.</b> Les réseaux sont un <b>entonnoir d'entrée</b>, pas une sortie. Le seul axe où les plateformes sont structurellement incapables de suivre est la <b>permanence et la propriété</b> : une VOD expire, un clip se perd, un compte peut être suspendu sans appel.</p>
+        <p><b>Le troisième travail, nommé après clarification.</b> Ni « gagner des abonnés » ni « faire revenir » : <b>prouver que ça vit</b>. Un visiteur qui tombe sur un site inerte conclut que le streamer a arrêté. Ce qui compte est donc la <b>fraîcheur visible</b>, pas l'exhaustivité — trois éléments récents valent mieux que douze dont le plus récent a six mois.</p>
+        <p><b>Ce qui change concrètement.</b> Le mot « hors ligne » est <b>supprimé</b> : libellé retenu « Dernier stream il y a X », qui reste vrai même après bascule du disjoncteur et fait de LIVE le seul état nommé du site. Le héros devient <b>un clip</b> en 16:9, pas la review. Le lien press kit est retiré — il visait un persona absent de cet écran. <b>Vignette et lien sortant, jamais d'intégration tierce</b> : aucun script externe, donc aucun consentement pour afficher ; le consentement est demandé au moment de l'intention.</p>
+        <p><b>Et l'objectif du PO ne coûte aucune API.</b> Faire grandir un réseau demande un lien vers le profil ; montrer une publication demande un lien collé à la main. Ce que l'analyse écarte n'est pas les réseaux — c'est <b>l'ingestion automatique par API</b>, un travail invisible qui n'ajoute rien et que <em>chaque forkeur</em> paierait.</p>
+        <p style="margin-bottom:0"><b>Deux effets collatéraux :</b> l'audit « temps comme texture » est remonté <em>avant</em> les composants (« un audit qui arrive après le durcissement de la référence est une autopsie »), et la métrique de conversion hors direct a cessé d'être un critère d'acceptation. — <a class="ref" href="../adr/ADR-0012-ecran-offline-et-module-media.md">docs/adr/ADR-0012-ecran-offline-et-module-media.md</a></p>
+      </div></div>
+    </div>
+
+    <div class="item" id="a13">
+      <button data-toggle aria-expanded="false">
+        <span class="dot d-ok"></span>
+        <span class="ttl">ADR-0013 — Runner navigateur : Pest browser sur Chromium natif Alpine<em>2026-08-06 · quatre critères écrits avant le spike, dont un seul compte</em></span>
+        <span class="chev">›</span>
+      </button>
+      <div class="body"><div class="in">
+        <p><b>La méthode, qui vaut autant que le résultat.</b> Les quatre critères d'acceptation ont été figés <b>avant toute installation</b>, précisément pour qu'ils ne se renégocient pas en séance devant un outil qu'on a envie d'aimer.</p>
+        <div class="tw" style="margin:12px 0">
+          <table>
+            <thead><tr><th class="mono">#</th><th>Critère</th><th>Résultat</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td>S'installe sur PHP 8.5.4 sans forcer</td><td class="ok">oui — le conflit redouté n'existait pas</td></tr>
+              <tr><td class="num">2</td><td>Ne contamine pas l'image de production</td><td class="ok">oui — via un étage Docker dédié</td></tr>
+              <tr><td class="num">3</td><td>Un test lit une valeur calculée par le navigateur</td><td class="ok">oui — vert en 2,26 s</td></tr>
+              <tr><td class="num">4</td><td><b>Le même test rougit quand on casse la source</b></td><td class="ok"><b>rouge observé</b>, code de sortie 1</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><b>Le critère 4 est le seul qui compte.</b> Les trois autres sont de la logistique. Le cycle complet a été joué : vert → mutation → rouge → restauration → vert.</p>
+        <p><b>Ce que le spike a levé.</b> Le doute qui justifiait tout le réordonnancement de l'epic 1 : l'invariant « les tokens sont importés sans couche CSS » tient bien dans un vrai navigateur.</p>
+        <p style="margin-bottom:0"><b>Le plan B est écarté</b>, malgré son critère d'abandon — Playwright TypeScript aurait signifié deux chaînes d'outils là où une suffisait. La règle écrite : <em>un seul runner navigateur, jamais deux.</em> — <a class="ref" href="../adr/ADR-0013-runner-navigateur-pest-browser.md">docs/adr/ADR-0013-runner-navigateur-pest-browser.md</a></p>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="sep">
+
+<section id="oq">
+  <div class="eyebrow">Sous les ADR</div>
+  <h2 class="sec">Dix questions ouvertes, tranchées au PRD</h2>
+  <p class="lede">Toutes les décisions n'ont pas le poids d'un ADR. Ces dix-là ont été arbitrées en séance produit ; elles sont tracées dans <a class="ref" href="../prd.md">docs/prd.md</a> §11 et deux ont été révisées depuis.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th class="mono">#</th><th>Sujet</th><th>Décision</th><th>État</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">OQ1</td><td>Authentification des commentaires</td><td>Anonymes seulement, modération manuelle, bannissement par IP, fenêtre RGPD avant envoi.</td><td><span class="chip warn">révisée</span></td></tr>
+        <tr><td class="mono">OQ2</td><td>Captcha</td><td>Aucun en v1. Ajout réactif si plus de 30 % des commentaires arrivent en file de spam.</td><td><span class="chip warn">révisée</span></td></tr>
+        <tr><td class="mono">OQ3</td><td>Format de slug</td><td>ASCII pur via <code>Str::slug()</code> natif.</td><td><span class="chip ok">tenue</span></td></tr>
+        <tr><td class="mono">OQ4</td><td>Bio anglaise</td><td>Rédigée par IA, relue par Alex — environ 15 minutes.</td><td><span class="chip ok">tenue</span></td></tr>
+        <tr><td class="mono">OQ5</td><td>Variantes d'image sociale</td><td><b>Trois</b> variantes selon la note, plus une neutre. Déviation choisie contre la recommandation d'un gabarit unique — maintenance ×3 assumée pour une expression différenciée.</td><td><span class="chip ok">tenue</span></td></tr>
+        <tr><td class="mono">OQ6</td><td>Nom de domaine</td><td>—</td><td><span class="chip err">non tranchée</span></td></tr>
+        <tr><td class="mono">OQ7</td><td>Hébergement</td><td>—</td><td><span class="chip err">non tranchée</span></td></tr>
+        <tr><td class="mono">OQ8</td><td>Envoi de courriel</td><td>Resend, offre gratuite 100 par jour, pilote Laravel natif. Pas de carte bancaire.</td><td><span class="chip ok">tenue</span></td></tr>
+        <tr><td class="mono">OQ9</td><td>Modèle de données</td><td>Un seul <code>Article</code> avec une énumération <code>type</code>. Un seul écran d'administration.</td><td><span class="chip ok">tenue</span></td></tr>
+        <tr><td class="mono">OQ10</td><td>Où vont les idées hors périmètre</td><td>Un seul fichier Markdown, cité en revue pour fermer toute idée hors périmètre.</td><td><span class="chip ok">tenue</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <b>La révision d'OQ1 et OQ2 : les commentaires passent d'« anonymes » à « éteints »</b>
+    <p>La décision d'origine organisait des commentaires anonymes modérés à la main. Une séance ultérieure a retourné la question : <b>faut-il des commentaires du tout, au premier jour ?</b> Réponse : non — mais on ne veut pas non plus se retrouver à tout construire dans l'urgence si le besoin apparaît.</p>
+    <p style="margin-bottom:0">D'où la forme retenue : <b>code dormant</b>. Les migrations existent, l'anti-spam est pré-câblé, un drapeau les tient fermés. L'activation à M+1 est conditionnée à <b>trois signaux mesurables</b> : au moins 3 demandes prouvées de lecteurs, l'anti-spam en place, un budget de modération sous 30 min par semaine. C'est l'epic 9 — et c'est la meilleure illustration de la doctrine du projet : <em>on ne reporte pas une décision, on écrit ses conditions de déclenchement.</em></p>
+  </div>
+
+  <div class="note err">
+    <p><b>🔴 Deux décisions bloquantes n'ont toujours pas été prises</b> — le <b>nom de domaine</b> et l'<b>hébergement</b>. Elles sont marquées « reportées à un conseil avant la phase 2 » depuis le 2026-05-22. La première bloque le déploiement de pré-production annoncé pour la fin du sprint S4 ; la seconde bloque tout ce qui suit.</p>
+    <p style="margin-bottom:0">Ce n'est pas urgent aujourd'hui — la phase 3 n'a pas commencé. Ça le deviendra <b>d'un coup</b>, et il vaut mieux le voir venir depuis cette page que le découvrir au moment de déployer.</p>
+  </div>
+</section>
+
+<footer class="rr">
+  <span>Reading Room — écrite à la main, sans autorité. La hiérarchie du projet reste <b>ADR &gt; epics.md + sprint-status.yaml &gt; ETAT.md</b>.</span>
+  <span class="mono" data-plan-stamp>—</span>
+</footer>
+</main>
+
+<script src="data/plan.js"></script>
+<script src="assets/rr.js"></script>
+</body>
+</html>
