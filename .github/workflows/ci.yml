@@ -30,6 +30,16 @@ on:
       # cible est hors du périmètre qui le fait tourner. Relevé à la seconde
       # passe de revue de la 1.9 (2026-08-09).
       - 'docker/apache/**'
+      # Les GABARITS de configuration php (story 2.5). `ConfigTemplateTest`
+      # asserte leur contenu — variables déclarées, aucun défaut à la mode
+      # shell — mais ils vivent hors de `src/**` et hors de
+      # `docker/php/scripts/**`. On pouvait donc FIGER une valeur en dur dans
+      # un gabarit sans qu'aucun run ne démarre.
+      - 'docker/php/conf/**'
+      # Et le `.env.example` RACINE, qui documente ces variables : un test
+      # vérifie que chaque variable autorisée y figure. Vider le bloc ne
+      # déclenchait aucune CI.
+      - '.env.example'
       # Les primitives shell partagées et les modules d'installation sont
       # éprouvés par src/tests/Unit/ShellRuntimeLibTest.php. Sans ces deux
       # entrées, casser `retry` ou le pilote `00-prerequisites.sh` ne
@@ -93,6 +103,16 @@ on:
       # cible est hors du périmètre qui le fait tourner. Relevé à la seconde
       # passe de revue de la 1.9 (2026-08-09).
       - 'docker/apache/**'
+      # Les GABARITS de configuration php (story 2.5). `ConfigTemplateTest`
+      # asserte leur contenu — variables déclarées, aucun défaut à la mode
+      # shell — mais ils vivent hors de `src/**` et hors de
+      # `docker/php/scripts/**`. On pouvait donc FIGER une valeur en dur dans
+      # un gabarit sans qu'aucun run ne démarre.
+      - 'docker/php/conf/**'
+      # Et le `.env.example` RACINE, qui documente ces variables : un test
+      # vérifie que chaque variable autorisée y figure. Vider le bloc ne
+      # déclenchait aucune CI.
+      - '.env.example'
       # Les primitives shell partagées et les modules d'installation sont
       # éprouvés par src/tests/Unit/ShellRuntimeLibTest.php. Sans ces deux
       # entrées, casser `retry` ou le pilote `00-prerequisites.sh` ne
@@ -282,6 +302,18 @@ jobs:
       # qu'une fois par nuit, après merge.
       - name: 🆔 UID des images réellement appliqué (Bats · Docker)
         run: make test-bats-uid
+
+      # ⛔ LA VALEUR DE CONFIGURATION EFFECTIVEMENT SERVIE (story 2.5).
+      # Même raison que le garde ci-dessus, et même classe de défaut : la
+      # story 2.5 existe parce que `php.ini` annonçait `256M` pendant que la
+      # valeur effective valait `4G`. Ce garde démarre un vrai `php-fpm` et
+      # l'interroge en FastCGI — c'est la SEULE mesure qui distingue FPM de la
+      # CLI, et `make test` ne peut pas la faire (un seul SAPI). Il exige
+      # Docker, que le runner fournit, et construit l'image apache (~1 min).
+      # Le laisser hors CI reviendrait à ne l'éprouver que quand quelqu'un y
+      # pense — c'est-à-dire à en faire un garde-fou silencieux de plus.
+      - name: ⚙️ Gabarits de configuration, valeur effective (Bats · Docker)
+        run: make test-bats-config
 
       # --- Informatifs (architecture §9.2) ---------------------------------
       # Rector est cassé par une incompatibilité de configuration connue :

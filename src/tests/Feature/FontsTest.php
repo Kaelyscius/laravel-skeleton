@@ -513,7 +513,14 @@ it('fait servir les woff2 par le vhost en cache long, l\'autre moitié de la con
      * les `paths` de `.github/workflows/ci.yml`. Une modification du vhost ne
      * déclenchait donc pas la CI qui l'assure.
      */
-    $vhost = RepoFile::read('docker/apache/conf/sites-enabled/laravel.conf');
+    /*
+     * ⚠️ LE SUJET EST DEVENU UN GABARIT (story 2.5). `laravel.conf` a été
+     * renommé en `laravel.conf.template` : le fichier est rendu au démarrage
+     * vers une cible inscriptible, parce que ce répertoire est monté `:ro`.
+     * Ce que ce test garde est INCHANGÉ — la directive `Expires` ne porte
+     * aucune variable, donc ce qui est écrit ici est ce qui est servi.
+     */
+    $vhost = RepoFile::read('docker/apache/conf/sites-enabled/laravel.conf.template');
 
     expect(str_contains($vhost, 'ExpiresByType font/woff2 "access plus 1 year"'))
         ->toBeTrue('Le vhost ne sert plus les woff2 en cache long : ils retombent dans ExpiresDefault (2 jours), et le suffixe de version dans le nom de fichier n\'a plus d\'objet.');

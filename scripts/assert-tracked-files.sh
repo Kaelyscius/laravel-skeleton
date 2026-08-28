@@ -58,12 +58,28 @@ GUARDED=(
     # échappaient donc à ce garde-fou — un `.gitignore` trop large les aurait
     # retirés d'un clone sans que rien ne le dise.
     "tests"
+    # Story 2.5 : les GABARITS de configuration (`docker/php/conf/*.template`,
+    # `docker/apache/conf/sites-enabled/*.template`). L'entrypoint SORT EN 1
+    # quand ils manquent — c'est délibéré, on ne démarre pas sur une
+    # configuration devinée. Mais un `.gitignore` trop large les retirerait d'un
+    # clone, et le conteneur deviendrait non démarrable sans qu'aucun garde ne le
+    # dise : le mode de défaillance exact que ce script existe pour attraper.
+    # Le répertoire entier est gardé — les Dockerfiles, entrypoints et
+    # configurations qu'il contient sont dans le même cas.
+    "docker"
 )
 
 # Exceptions légitimes — chemins réellement destinés à rester hors du dépôt.
 # Toute entrée ajoutée ici doit être justifiée : c'est le seul endroit où l'on
 # peut affaiblir ce garde-fou, et il doit rester lisible en revue.
-ALLOWED_REGEX='^(src/resources/css/app-compiled\.css|docs/.*\.local\.md)$'
+# Story 2.5 — deux familles sous `docker/`, exclues pour de bonnes raisons :
+#   • `docker/apache/conf/ssl/…`  : certificats et CLÉS PRIVÉES, produits par
+#     `make setup-ssl`. Les versionner serait la faute que ce dépôt scanne par
+#     ailleurs avec gitleaks ; leur absence d'un clone est VOULUE.
+#   • `docker/apache/logs/…`      : journaux d'exécution écrits par le conteneur.
+# Tout le reste de `docker/` est désormais gardé : les gabarits de configuration
+# y vivent, et l'entrypoint SORT EN 1 quand ils manquent.
+ALLOWED_REGEX='^(src/resources/css/app-compiled\.css|docs/.*\.local\.md|docker/apache/conf/ssl/.*|docker/apache/logs/.*)$'
 
 log INFO "Recherche de fichiers ignorés dans les répertoires protégés…"
 

@@ -1,12 +1,51 @@
+# =============================================================================
+# GABARIT DE VHOST — `.template`, ET LE SUFFIXE EST STRUCTUREL (story 2.5)
+# =============================================================================
+#
+# Ce répertoire est bind-monté EN LECTURE SEULE dans le conteneur apache
+# (`docker-compose.yml:15`, `:ro`) : mesuré le 2026-08-28, une écriture ici
+# échoue en `Read-only file system` MÊME EN ROOT. Le vhost ne peut donc pas
+# être rendu sur place — et sans le `:ro`, il le serait sur un fichier
+# VERSIONNÉ à chaque démarrage, exactement le défaut que cette story supprime
+# côté PHP.
+#
+# ⚖️ D'OÙ LE SUFFIXE. `.template` sort du glob `*.conf` : le fichier reste
+# versionné, lisible et monté, mais aucun `Include` ne peut l'attraper — donc
+# jamais deux `<VirtualHost>` concurrents. `docker/apache/scripts/docker-entrypoint.sh`
+# le rend vers `/usr/local/apache2/conf/sites-rendered/laravel.conf`, une cible
+# INSCRIPTIBLE de la couche image, et n'y promeut le résultat qu'après un
+# `httpd -t` passé SUR LE CANDIDAT.
+#
+# ⛔ TROIS VARIABLES, PAS PLUS, ET AUCUNE SUBSTITUTION PAR DÉFAUT À LA MODE
+# SHELL (la forme « deux-points tiret ») : `envsubst` ne connaît pas cette
+# syntaxe et la rendrait littéralement. Les défauts sont posés côté shell dans
+# l'entrypoint, et la substitution est sur LISTE D'AUTORISATION — sans elle,
+# `%{REQUEST_FILENAME}` resterait intact (ce n'est pas la syntaxe de envsubst)
+# mais tout `$VARIABLE` de l'environnement du conteneur passerait dans le vhost.
+#
+# ⚠️ Le `$` littéral de `<FilesMatch \.php$>` plus bas est INCHANGÉ par le
+# rendu : `envsubst` ne touche qu'aux noms de la liste d'autorisation. C'est
+# mesuré par `tests/bats/config-template.bats`, pas supposé.
+#
+# ⚠️ ET CE QUI RESTE EN DUR EST DIT PLUTÔT QUE SOUS-ENTENDU : les deux chemins
+# `SSLCertificate*` ne sont PAS variabilisés. Ils désignent des fichiers
+# produits par `make setup-ssl` sous un nom fixe et montés `:ro` — les rendre
+# réglables sans rendre le générateur réglable donnerait une promesse sans
+# récepteur, la famille de défaut que cette story consigne par ailleurs.
+# Changer `APACHE_SERVER_NAME` change donc le nom servi, pas le nom du
+# certificat : sur un domaine autre que `laravel.local`, il faut fournir son
+# propre certificat sous ce chemin.
+# =============================================================================
+
 # Configuration du VirtualHost SSL pour Laravel
 # Note: Retirez "Listen 443" car il est déjà défini dans httpd.conf
 
 <VirtualHost *:443>
-   ServerName laravel.local
-   ServerAlias www.laravel.local
+   ServerName ${APACHE_SERVER_NAME}
+   ServerAlias ${APACHE_SERVER_ALIAS}
 
    # Document Root
-   DocumentRoot /var/www/html/public
+   DocumentRoot ${APACHE_DOCUMENT_ROOT}
 
    # SSL Configuration - CHEMINS CORRIGES
    SSLEngine on
@@ -33,7 +72,7 @@
    </IfModule>
 
    # Configuration du Directory
-   <Directory /var/www/html/public>
+   <Directory ${APACHE_DOCUMENT_ROOT}>
        Options -Indexes +FollowSymLinks
        AllowOverride All
        Require all granted
@@ -102,9 +141,9 @@
 
 # Redirection HTTP vers HTTPS
 <VirtualHost *:80>
-   ServerName laravel.local
-   ServerAlias www.laravel.local
-   Redirect permanent / https://laravel.local/
+   ServerName ${APACHE_SERVER_NAME}
+   ServerAlias ${APACHE_SERVER_ALIAS}
+   Redirect permanent / https://${APACHE_SERVER_NAME}/
 </VirtualHost>
 
 # Configuration du healthcheck endpoint

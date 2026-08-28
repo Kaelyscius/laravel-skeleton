@@ -29,6 +29,12 @@ ARG GID=1000
 RUN apk upgrade --no-cache
 
 # Dépendances système + Node.js pour compatibilité frontend
+#
+# ⚠️ `gettext` FOURNIT `envsubst`, ET IL N'EST PAS DÉCORATIF (story 2.5).
+# L'entrypoint REFUSE de démarrer sans lui : `conf.d/zz-fork.ini` et
+# `php-fpm.d/zz-fork.conf` sont RENDUS au démarrage depuis des gabarits
+# versionnés. Retirer ce paquet fait rougir `ConfigTemplateTest` (invariant
+# statique) et `tests/bats/config-template.bats` (refus mesuré).
 RUN apk add --no-cache \
     bash \
     git \
@@ -36,6 +42,7 @@ RUN apk add --no-cache \
     zip \
     unzip \
     shadow \
+    gettext \
     supervisor \
     libpng-dev \
     libjpeg-turbo-dev \
@@ -175,9 +182,37 @@ RUN { \
         echo 'opcache.jit_buffer_size=128M'; \
     } > /usr/local/etc/php/conf.d/composer-optimizations.ini
 
+# ⚖️ LE DÉFAUT DE LA LIMITE CLI EST POSÉ PAR L'ÉTAGE, PAS PAR L'ENTRYPOINT.
+#
+# 🔴 SANS CETTE LIGNE, LA PRODUCTION HÉRITAIT DU DÉFAUT DE DÉVELOPPEMENT.
+# `docker-compose.prod.yml:49` plafonne ce conteneur à `memory: 1G` et
+# n'injecte pas `PHP_CLI_MEMORY_LIMIT`. La CLI de production valait `2G` — la
+# valeur écrite ci-dessus dans `composer-optimizations.ini`, que seul l'étage
+# `development` pousse à `4G`. Un défaut unique à `4G` la doublait donc sous un
+# cgroup de 1 Go : le kernel tue avant PHP, donc sans « Allowed memory size
+# exhausted » pour nommer le coupable.
+#
+# ⚠️ Cette limite vaut aussi pour les workers **Horizon**
+# (`docker/supervisor/conf.d/horizon.conf` lance `php artisan horizon`, SAPI cli,
+# N processus enfants dans ce même conteneur) — pas seulement pour composer.
+#
+# `ConfigTemplateTest` REFUSE que les deux étages posent la même valeur.
+ENV PHP_CLI_MEMORY_LIMIT_DEFAUT=2G
+
 # Configuration PHP
 COPY docker/php/conf/php.ini /usr/local/etc/php/php.ini
 COPY docker/php/conf/xdebug.ini /usr/local/etc/php/conf.d/xdebug.ini.disabled
+
+# Gabarits de configuration (story 2.5) — copiés HORS de `conf.d` et de
+# `php-fpm.d` : ce sont des sources, pas des configurations. L'entrypoint les
+# rend vers `conf.d/zz-fork.ini` et `php-fpm.d/zz-fork.conf` au démarrage.
+#
+# ⛔ ILS NE SONT PAS COPIÉS DANS LEUR RÉPERTOIRE CIBLE, et c'est le point de
+# toute la story : `php.ini` ci-dessus est bind-monté en ÉCRITURE
+# (`docker-compose.yml:44`), donc tout rendu qui l'aurait visé aurait réécrit un
+# fichier VERSIONNÉ à chaque démarrage.
+COPY docker/php/conf/php-fork.ini.template /usr/local/etc/php/templates/
+COPY docker/php/conf/php-fpm-fork.conf.template /usr/local/etc/php/templates/
 
 # Script d'aide pour Composer avec gestion mémoire
 RUN mkdir -p /usr/local/bin && \
@@ -237,7 +272,19 @@ RUN rm -f "$PHP_INI_DIR/conf.d/xdebug.ini" && \
     mv "$PHP_INI_DIR/conf.d/xdebug.ini.disabled" "$PHP_INI_DIR/conf.d/xdebug.ini"
 
 # Ajuster la limite mémoire pour le dev
+#
+# ⚠️ CE `sed` EST DEVENU LE CONCURRENT, PLUS LA DÉCISION. Depuis la story 2.5,
+# `conf.d/zz-fork.ini` est scanné APRÈS `composer-optimizations.ini` et gagne :
+# la valeur ci-dessous n'est plus celle que PHP applique. Elle reste écrite
+# parce qu'elle est ce contre quoi la précédence est MESURÉE
+# (`tests/bats/config-template.bats`) — la retirer rendrait le test de
+# précédence vide.
 RUN sed -i 's/memory_limit=2G/memory_limit=4G/' /usr/local/etc/php/conf.d/composer-optimizations.ini
+
+# Le défaut de la limite CLI, pour l'étage de DÉVELOPPEMENT seulement.
+# Il écrase celui de `production` ci-dessus, et c'est le seul endroit où `4G`
+# est décidé. Voir la prose de l'étage `production`.
+ENV PHP_CLI_MEMORY_LIMIT_DEFAUT=4G
 
 # Stage 6: Test navigateur — JAMAIS déployé
 #

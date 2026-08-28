@@ -16,6 +16,19 @@ services:
         - ./docker/apache/conf/ssl:/etc/apache2/ssl:ro
       networks:
         - app-network
+      # Gabarit de vhost (story 2.5) — le vhost est un `.template` versionné,
+      # rendu au démarrage vers `/usr/local/apache2/conf/sites-rendered/`.
+      #
+      # ⛔ SANS CE BLOC, COMPOSE N'INJECTE RIEN et les trois variables du `.env`
+      # racine resteraient lettre morte : le service apache n'avait AUCUN
+      # `environment:` avant cette story. La forme `${VAR:-}` (plutôt que le
+      # raccourci `- VAR`) est celle qui lit bien le `.env` RACINE ; la valeur
+      # vide qui en résulte quand la variable n'est pas déclarée est traitée
+      # comme « absente » par l'entrypoint, qui repose alors son défaut.
+      environment:
+        - APACHE_SERVER_NAME=${APACHE_SERVER_NAME:-}
+        - APACHE_SERVER_ALIAS=${APACHE_SERVER_ALIAS:-}
+        - APACHE_DOCUMENT_ROOT=${APACHE_DOCUMENT_ROOT:-}
       depends_on:
         php:
           condition: service_healthy
@@ -70,6 +83,19 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - MAIL_HOST=mailpit
       - MAIL_PORT=1025
+      # Gabarits de configuration PHP (story 2.5) — voir `.env.example` racine.
+      #
+      # ⛔ SANS CES TROIS LIGNES, COMPOSE N'INJECTE RIEN : un `PHP_MEMORY_LIMIT`
+      # posé dans le `.env` racine n'atteindrait jamais le conteneur, et la
+      # configurabilité annoncée serait fausse une seconde fois.
+      #
+      # ⚖️ `${VAR:-}` rend une chaîne VIDE quand la variable n'est pas déclarée.
+      # C'est voulu : l'entrypoint traite « vide » comme « absente » et repose
+      # son défaut (`256M` FPM / `4G` CLI / `300 s`), qui reproduit exactement
+      # les valeurs effectives d'avant cette story.
+      - PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT:-}
+      - PHP_CLI_MEMORY_LIMIT=${PHP_CLI_MEMORY_LIMIT:-}
+      - PHP_MAX_EXECUTION_TIME=${PHP_MAX_EXECUTION_TIME:-}
     labels:
       - "com.centurylinklabs.watchtower.enable=false"  # Image custom - pas de mise à jour auto
 
