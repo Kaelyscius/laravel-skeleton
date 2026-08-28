@@ -104,6 +104,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make test-unit` - Run unit tests only
 - `make test-feature` - Run feature tests only
 - `make test-coverage` - Run tests with coverage report
+- `make test-all` - **Agrégat local** : Pest + les trois fichiers Bats. C'est la cible à jouer avant de pousser — les trois ci-dessous mesurent des choses que `make test` ne peut pas atteindre.
+- `make test-bats` - Primitives shell du E2E d'installation (rapide, sans Docker)
+- `make test-bats-uid` - 🐳 L'UID demandé est-il RÉELLEMENT appliqué dans les images ? (exige Docker)
+- `make test-bats-config` - 🐳 **Valeur de configuration EFFECTIVE** (story 2.5) : démarre un vrai `php-fpm` et l'interroge en FastCGI pour vérifier que `memory_limit` vaut `256M` côté requête et reste haut côté CLI, et qu'un vhost ou un pool invalide est refusé AVANT de remplacer le précédent. ⚠️ `make test` ne peut pas le faire : Pest tourne sous un seul SAPI (`cli`).
+- `make test-bats-e2e` - ⏱️ Installation E2E réelle sur un clone neuf (20-40 min)
 - `make test-drift` - ⛔ **DESTRUCTIF, et mal nommé** : `pest --drift` est le *migrateur PHPUnit → Pest*, pas un outil d'analyse. Il **réécrit `tests/` sur place**. Ce dépôt est déjà entièrement en Pest, donc la commande n'a plus d'objet ; elle affiche désormais un avertissement et n'exécute rien (`make test-drift-force` pour forcer). Pour éprouver un garde-fou, la méthode du projet est la **campagne de mutation manuelle** (`docs/process/03-boucle-qualite.md` §Étape 5)
 
 ### Diagnostics & Troubleshooting

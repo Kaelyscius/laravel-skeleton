@@ -1,0 +1,24 @@
+; =============================================================================
+; GABARIT DE FRAGMENT DE POOL FPM — story 2.5
+; =============================================================================
+;
+; Rendu par `docker/php/scripts/docker-entrypoint.sh` vers
+;   /usr/local/etc/php-fpm.d/zz-fork.conf
+; c'est-à-dire une cible INSCRIPTIBLE de la couche image, jamais bind-montée.
+;
+; ⚖️ POURQUOI UN FRAGMENT DE POOL, ET PAS UNE LIGNE DE PLUS DANS `conf.d`.
+; `php_admin_value` est la SEULE directive qui l'emporte à la fois sur `php.ini`
+; et sur `conf.d`, et elle ne vaut QUE pour php-fpm. C'est ce qui permet de
+; borner la requête HTTP (256M par défaut) sans toucher à l'outillage en ligne
+; de commande (composer, artisan, PHPStan — 4G), au lieu de moyenner les deux.
+; Mesuré le 2026-08-28 : FPM `256M` et CLI `4G` simultanément, dans le même
+; conteneur.
+;
+; ⚠️ `[www]` RÉ-OUVRE le pool déjà déclaré par `www.conf` — ce n'est pas un
+; second pool. C'est le motif de l'image officielle elle-même : `zz-docker.conf`
+; fait exactement cela pour poser `listen = 9000`. Et `zz-fork` est lu APRÈS
+; `zz-docker` (`f` > `d`), donc il gagne.
+; =============================================================================
+
+[www]
+php_admin_value[memory_limit] = ${PHP_MEMORY_LIMIT}

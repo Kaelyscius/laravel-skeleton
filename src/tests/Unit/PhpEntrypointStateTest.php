@@ -97,14 +97,43 @@ function sondeEntrypoint(string $arbre, string $env): string
             'exit "\${PHP_CMD_STATUS:-0}"' \\
             > "\$bac/bin/php"
 
-        chmod +x "\$bac/bin/nc" "\$bac/bin/php"
+        # `envsubst` et `php-fpm` stubés : ÉPINGLAGE DE BINAIRE, pas confort.
+        # 🔴 Le rendu des gabarits est sur le chemin nominal de l'entrypoint
+        # (story 2.5), et le fragment de pool y est validé par `php-fpm -t`.
+        # Laisser ces deux appels chercher les binaires DE LA MACHINE ferait
+        # dépendre ces sondes de `gettext` et d'un php-fpm installé — vertes
+        # ici, rouges ailleurs, pour une raison étrangère à ce qu'elles
+        # mesurent. Le rendu RÉEL et la validation RÉELLE sont mesurés par
+        # `tests/bats/config-template.bats`, dans des images qui les portent.
+        printf '%s\\n' '#!/bin/sh' 'exec cat' > "\$bac/bin/envsubst"
+        printf '%s\\n' '#!/bin/sh' 'exit 0' > "\$bac/bin/php-fpm"
+
+        chmod +x "\$bac/bin/nc" "\$bac/bin/php" \
+                 "\$bac/bin/envsubst" "\$bac/bin/php-fpm"
         PATH="\$bac/bin:\$PATH"
         export PATH
+
+        # ⛔ LES CIBLES DU RENDU VIVENT DANS LE BAC. Sans ces chemins, la sonde
+        # écrirait dans le `conf.d` RÉEL de la machine qui exécute Pest.
+        #
+        # ⚖️ ET LES GABARITS DU BAC NE PORTENT AUCUNE VARIABLE, délibérément.
+        # Ce fichier-ci mesure les CINQ ÉTATS de l'application, pas la
+        # substitution. Avec un `envsubst` stubé en `cat`, un gabarit RÉEL
+        # laisserait ses marqueurs littéraux, et le garde « aucune variable non
+        # substituée » ferait rougir les 23 sondes pour une raison qui n'est
+        # celle d'aucune. La substitution est le sujet de `ConfigTemplateTest`
+        # et de `config-template.bats`, qui rendent les gabarits du dépôt.
+        mkdir -p "\$bac/conf.d" "\$bac/fpm.d" "\$bac/gabarits"
+        printf '%s\\n' 'memory_limit = 256M' \
+            > "\$bac/gabarits/php-fork.ini.template"
+        printf '%s\\n' '[www]' 'php_admin_value[memory_limit] = 256M' \
+            > "\$bac/gabarits/php-fpm-fork.conf.template"
 
         {$arbre}
 
         statut=0
         APP_ROOT="\$bac/app" SUPERVISOR_LOG_DIR="\$bac/supervisor" \\
+        PHP_TEMPLATE_DIR="\$bac/gabarits" PHP_CONF_D="\$bac/conf.d" PHP_FPM_D="\$bac/fpm.d" \\
         BOOTABLE_MARKER="\$bac/temoin" {$env} \\
             "\$SH" "\$ENTRYPOINT" true > "\$bac/sortie" 2>&1 || statut=\$?
 
@@ -521,12 +550,21 @@ it('n’ARRACHE PAS l’arbre à l’hôte : seuls `storage/` et `bootstrap/cach
             > "$bac/bin/find"
         printf '%s\n' '#!/bin/sh' 'exit 0' > "$bac/bin/nc"
         printf '%s\n' '#!/bin/sh' 'exit 0' > "$bac/bin/php"
-        chmod +x "$bac/bin/chown" "$bac/bin/find" "$bac/bin/nc" "$bac/bin/php"
+        # Binaires épinglés, même raison que dans `sondeEntrypoint` (story 2.5).
+        printf '%s\n' '#!/bin/sh' 'exec cat' > "$bac/bin/envsubst"
+        printf '%s\n' '#!/bin/sh' 'exit 0' > "$bac/bin/php-fpm"
+        chmod +x "$bac/bin/chown" "$bac/bin/find" "$bac/bin/nc" "$bac/bin/php" \
+                 "$bac/bin/envsubst" "$bac/bin/php-fpm"
 
+        mkdir -p "$bac/conf.d" "$bac/fpm.d" "$bac/gabarits"
+        printf '%s\n' 'memory_limit = 256M' > "$bac/gabarits/php-fork.ini.template"
+        printf '%s\n' '[www]' 'php_admin_value[memory_limit] = 256M' \
+            > "$bac/gabarits/php-fpm-fork.conf.template"
         PATH="$bac/bin:$PATH"; export PATH
 
         statut=0
         APP_ROOT="$bac/app" SUPERVISOR_LOG_DIR="$bac/supervisor" \
+        PHP_TEMPLATE_DIR="$bac/gabarits" PHP_CONF_D="$bac/conf.d" PHP_FPM_D="$bac/fpm.d" \
         BOOTABLE_MARKER="$bac/temoin" APP_ENV=local \
             "$SH" "$ENTRYPOINT" true > "$bac/sortie" 2>&1 || statut=$?
 

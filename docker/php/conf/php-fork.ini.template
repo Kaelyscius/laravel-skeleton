@@ -1,0 +1,40 @@
+; =============================================================================
+; GABARIT — jamais lu tel quel par PHP, jamais édité en place (story 2.5)
+; =============================================================================
+;
+; Rendu par `docker/php/scripts/docker-entrypoint.sh` (fonction `rendre_gabarit`)
+; vers  /usr/local/etc/php/conf.d/zz-fork.ini  — une cible INSCRIPTIBLE, dans la
+; couche de l'image, JAMAIS bind-montée. Le gabarit, lui, reste versionné et
+; intact : un fork-streamer règle ces deux valeurs par variable d'environnement
+; sans toucher à un fichier du dépôt.
+;
+; ⚠️ POURQUOI `zz-` ET PAS `99-`. PHP scanne `conf.d` par ordre ALPHABÉTIQUE et
+; c'est le DERNIER lu qui gagne. Le réflexe `99-` vient de `sysctl.d`, qui trie
+; numériquement ; ici, en ASCII, `9` précède les lettres — `99-fork.ini` serait
+; parsé AVANT `composer-optimizations.ini` et PERDRAIT contre lui. Mesuré dans
+; les deux sens le 2026-08-28 : `99-fork.ini` → 4G (il perd), `zz-fork.ini` →
+; 512M (il gagne). Un gabarit correct dans un fichier qui perd est exactement le
+; défaut que cette story existe pour supprimer.
+;
+; ⛔ AUCUNE SUBSTITUTION PAR DÉFAUT À LA MODE SHELL ICI (la forme « deux-points
+; tiret »). `envsubst` ne connaît pas cette syntaxe : il la rendrait
+; littéralement dans le fichier lu par PHP. Les défauts sont posés CÔTÉ SHELL,
+; avant l'appel — et un test refuse cette forme dans les gabarits.
+; =============================================================================
+
+; Limite mémoire de TOUT SAPI SAUF php-fpm.
+;
+; ⚖️ Le pool FPM la reprend en `php_admin_value` (voir
+; `php-fpm-fork.conf.template`), qui l'emporte sur `php.ini` ET sur `conf.d`.
+; La séparation est délibérée : `memory_limit` est une limite PAR PROCESSUS et
+; php-fpm en a N. Une valeur unique haute pour les deux troquerait un échec net
+; et localisé contre un OOM système où le kernel choisit la victime.
+;
+; Le défaut (`4G`) reproduit la valeur EFFECTIVE mesurée avant cette story —
+; produite jusqu'ici par un `sed` du stage `development`, que rien ne gardait.
+memory_limit = ${PHP_CLI_MEMORY_LIMIT}
+
+; Le défaut (`300`) reproduit lui aussi la valeur effective d'avant : `php.ini:6`
+; annonce 60, `composer-optimizations.ini` le porte à 300 et gagne par l'ordre
+; de scan. Ce gabarit ne change donc RIEN par défaut ; il change QUI décide.
+max_execution_time = ${PHP_MAX_EXECUTION_TIME}

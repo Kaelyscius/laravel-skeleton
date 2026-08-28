@@ -24,11 +24,16 @@ ARG GID=1000
 RUN apk upgrade --no-cache
 
 # Installation des dépendances
+# ⚠️ `gettext` FOURNIT `envsubst`, ET IL N'EST PAS DÉCORATIF (story 2.5).
+# L'entrypoint REFUSE de démarrer sans lui : le vhost est un gabarit versionné,
+# rendu au démarrage vers une cible inscriptible. Retirer ce paquet fait rougir
+# `src/tests/Unit/ConfigTemplateTest.php` et `tests/bats/config-template.bats`.
 RUN apk add --no-cache \
     openssl \
     curl \
     bash \
     shadow \
+    gettext \
     netcat-openbsd
 
 # Création de l'utilisateur (mais Apache reste root pour les ports)

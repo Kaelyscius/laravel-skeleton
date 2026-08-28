@@ -156,6 +156,249 @@ detect_laravel_state() {
   echo "bootable"
 }
 
+# -----------------------------------------------------------------------------
+# GABARITS DE CONFIGURATION — LE GABARIT EST VERSIONNÉ, LA CIBLE NE L'EST PAS.
+#
+# 🔴 CE QUI ÉTAIT FAUX AVANT (mesuré le 2026-08-28, conteneur `laravel-app_php`).
+# `docker/php/conf/php.ini:5` annonce `memory_limit = 256M` ; la valeur
+# EFFECTIVE valait **4G**, parce que `composer-optimizations.ini` est lu après
+# `php.ini` et qu'un `sed` du stage `development` la pousse à 4G. La
+# configurabilité annoncée était donc déjà fausse dans le fichier qu'un
+# fork-streamer irait éditer — et pour la corriger il devait modifier un fichier
+# du DÉPÔT, bind-monté en écriture. Cette story déplace la décision dans
+# l'environnement, sans qu'aucun fichier versionné ne soit réécrit.
+#
+# ⚖️ LES CIBLES SONT CHOISIES SUR MESURE, PAS PAR HABITUDE :
+#   • `conf.d/zz-fork.ini`      — `zz-` gagne le tri alphabétique de `conf.d` ;
+#                                 `99-` PERDRAIT (ASCII : `9` < les lettres) ;
+#   • `php-fpm.d/zz-fork.conf`  — `php_admin_value` l'emporte sur `php.ini` ET
+#                                 sur `conf.d`, et seulement pour FPM ;
+#   • aucune des deux n'est bind-montée — gardé par `ConfigTemplateTest`.
+#
+# ⛔ `envsubst` NE CONNAÎT PAS `${VAR:-defaut}` : il rendrait la chaîne telle
+# quelle. Les défauts sont donc posés ICI, avant l'appel. Une variable VIDE
+# (`PHP_MEMORY_LIMIT=` — ce que Compose injecte quand le `.env` racine ne la
+# déclare pas) est traitée comme absente, sinon la cible recevrait `= ` nu.
+#
+# ⛔ ET LA SUBSTITUTION EST SUR LISTE D'AUTORISATION. Sans le premier argument,
+# `envsubst` remplace TOUTE variable de l'environnement présente dans le
+# gabarit — un `$HOME`, un `$PATH`, un secret exporté par Compose passeraient
+# dans un fichier de configuration.
+# -----------------------------------------------------------------------------
+PHP_TEMPLATE_DIR="${PHP_TEMPLATE_DIR:-/usr/local/etc/php/templates}"
+PHP_CONF_D="${PHP_CONF_D:-/usr/local/etc/php/conf.d}"
+PHP_FPM_D="${PHP_FPM_D:-/usr/local/etc/php-fpm.d}"
+PHP_FPM_CONF="${PHP_FPM_CONF:-/usr/local/etc/php-fpm.conf}"
+
+# ⛔ LES BINAIRES SONT NOMMÉS, PAS SUPPOSÉS — même motif que `PHP_BIN` ci-dessus.
+# Sans ces variables, ni le refus « envsubst manquant » ni la validation du pool
+# ne seraient éprouvables sans démonter le `PATH` de la sonde — donc, en
+# pratique, jamais.
+ENVSUBST_BIN="${ENVSUBST_BIN:-envsubst}"
+PHP_FPM_BIN="${PHP_FPM_BIN:-php-fpm}"
+
+PHP_MEMORY_LIMIT="${PHP_MEMORY_LIMIT:-256M}"
+
+# ⚖️ LE DÉFAUT CLI EST DÉRIVÉ DE L'ÉTAGE DE BUILD, ET C'EST UNE DÉCISION DE SÛRETÉ.
+#
+# 🔴 UN DÉFAUT UNIQUE À `4G` ÉTAIT FAUX EN PRODUCTION, ET DANGEREUSEMENT.
+# `docker-compose.prod.yml:49` plafonne le conteneur php à `memory: 1G`
+# (`deploy.resources.limits`) et n'injecte PAS `PHP_CLI_MEMORY_LIMIT`. Avant
+# cette story, la CLI de production valait `2G` — la valeur écrite par
+# `Dockerfile:183` dans `composer-optimizations.ini`, que seul l'étage
+# `development` pousse à `4G` (`:258`). Un défaut unique à `4G` DOUBLAIT donc la
+# limite en production, sous un cgroup de 1 Go : le kernel tue le processus
+# avant que PHP n'atteigne sa limite, donc SANS erreur PHP lisible — un OOM
+# anonyme au lieu d'un « Allowed memory size exhausted » qui nomme le coupable.
+#
+# ⚠️ ET LA CLI N'EST PAS QUE `composer` : les workers **Horizon** tournent sous
+# ce même SAPI dans ce même conteneur (`docker/supervisor/conf.d/horizon.conf`
+# lance `php artisan horizon`, qui engendre N processus enfants). Une limite par
+# processus multipliée par N enfants sous un cgroup de 1 Go est exactement la
+# façon dont on transforme un échec net en OOM système.
+#
+# `PHP_CLI_MEMORY_LIMIT_DEFAUT` est posée PAR ÉTAGE dans le Dockerfile
+# (`production` → 2G, `development` → 4G) et gardée par `ConfigTemplateTest`,
+# qui refuse que les deux étages la confondent. Le repli `2G` ci-dessous est le
+# choix SÛR : si l'étage n'a rien posé, on ne suppose pas la machine de
+# développement.
+PHP_CLI_MEMORY_LIMIT="${PHP_CLI_MEMORY_LIMIT:-${PHP_CLI_MEMORY_LIMIT_DEFAUT:-2G}}"
+PHP_MAX_EXECUTION_TIME="${PHP_MAX_EXECUTION_TIME:-300}"
+export PHP_MEMORY_LIMIT PHP_CLI_MEMORY_LIMIT PHP_MAX_EXECUTION_TIME
+
+# Liste d'autorisation, au format « shell-format » attendu par `envsubst`.
+PHP_TEMPLATE_VARS='${PHP_MEMORY_LIMIT} ${PHP_CLI_MEMORY_LIMIT} ${PHP_MAX_EXECUTION_TIME}'
+
+# -----------------------------------------------------------------------------
+# LE FORMAT EST VALIDÉ, PAS SEULEMENT LA NON-VACUITÉ.
+#
+# 🔴 `memory_limit = abc` ET `memory_limit = 512` (sans unité) SONT ACCEPTÉS PAR
+# PHP, qui les lit comme **0** octet. Ce ne sont donc pas des erreurs de
+# démarrage : ce sont des conteneurs sains qui échouent sur chaque requête. Le
+# garde « aucune directive vide » ne les voit pas — la directive a une valeur,
+# elle est juste absurde.
+#
+# ⛔ ET LE SAUT DE LIGNE EST UNE INJECTION. Une variable d'environnement peut en
+# contenir un ; `envsubst` le recopierait tel quel, et tout ce qui suit
+# deviendrait une DIRECTIVE de plus dans le fichier rendu. La liste
+# d'autorisation contrôle QUELLES variables entrent, pas ce qu'elles portent.
+# -----------------------------------------------------------------------------
+valider_valeur() {
+  local nom="$1"
+  local valeur="$2"
+  local motif="$3"
+  local attendu="$4"
+
+  case "$valeur" in
+    *"
+"*)
+      echo -e "${RED}❌ $nom porte un SAUT DE LIGNE.${NC}"
+      echo -e "${RED}   Tout ce qui suit deviendrait une directive de plus dans le fichier rendu : arrêt.${NC}"
+      exit 1
+      ;;
+  esac
+
+  if ! printf '%s' "$valeur" | grep -Eq "$motif"; then
+    echo -e "${RED}❌ $nom = « $valeur » n'est pas $attendu.${NC}"
+    echo -e "${RED}   PHP lirait cette valeur comme 0 : le conteneur s'arrête plutôt que de servir cela.${NC}"
+    exit 1
+  fi
+}
+
+# ⚠️ L'UNITÉ EST OBLIGATOIRE, ET C'EST PLUS STRICT QUE PHP — DÉLIBÉRÉMENT.
+# `memory_limit = 512` est accepté par PHP, qui le lit comme **512 OCTETS**.
+# C'est la faute la plus facile à écrire de bonne foi dans un `.env`, et son
+# symptôme (chaque requête échoue) ne ressemble en rien à sa cause. On refuse
+# donc le nombre nu : « -1 » pour illimité, sinon une unité explicite.
+valider_valeur PHP_MEMORY_LIMIT "$PHP_MEMORY_LIMIT" \
+  '^(-1|[0-9]+[KMGkmg])$' 'une limite mémoire PHP (« -1 », ou un nombre SUIVI DE K, M ou G — « 512 » seul vaut 512 octets)'
+valider_valeur PHP_CLI_MEMORY_LIMIT "$PHP_CLI_MEMORY_LIMIT" \
+  '^(-1|[0-9]+[KMGkmg])$' 'une limite mémoire PHP (« -1 », ou un nombre SUIVI DE K, M ou G — « 512 » seul vaut 512 octets)'
+valider_valeur PHP_MAX_EXECUTION_TIME "$PHP_MAX_EXECUTION_TIME" \
+  '^[0-9]+$' 'un nombre entier de secondes'
+
+# -----------------------------------------------------------------------------
+# LE FRAGMENT DE POOL EST ÉPROUVÉ AVANT D'ÊTRE PROMU — comme le vhost.
+#
+# 🔴 L'ASYMÉTRIE ÉTAIT UN DÉFAUT, ET SON COÛT EST LE MÊME DES DEUX CÔTÉS. Le
+# vhost passait par `httpd -t` ; le pool était promu à l'aveugle. Un fragment
+# invalide écrasait alors le précédent VALIDE, php-fpm refusait de démarrer, et
+# `restart: unless-stopped` bouclait — sans plus aucune configuration saine à
+# laquelle revenir.
+#
+# ⚖️ LE TEST PORTE SUR LE CANDIDAT, dans une copie de l'arborescence de pools :
+# `php-fpm -t` valide un ENSEMBLE de fichiers, pas un fichier isolé.
+# ⛔ Aucun `sed` sur un chemin interpolé ici : l'`include=` est retiré par
+# `grep -v` littéral puis réécrit. Un moteur de motif appliqué à un chemin qu'on
+# ne contrôle pas a déjà mordu ce dépôt (story 2.2).
+# -----------------------------------------------------------------------------
+valider_pool_fpm() {
+  local candidat="$1"
+  local bac
+  local statut=0
+
+  if ! command -v "$PHP_FPM_BIN" > /dev/null 2>&1; then
+    echo -e "${RED}❌ « $PHP_FPM_BIN » est introuvable : le fragment de pool ne peut pas être éprouvé.${NC}"
+    return 1
+  fi
+
+  bac="$(mktemp -d)"
+
+  # ⚠️ LES POOLS VONT DANS UN SOUS-RÉPERTOIRE, ET CE N'EST PAS COSMÉTIQUE.
+  # Poser la configuration principale À CÔTÉ des fragments la fait ramasser par
+  # son propre `include=…/*.conf` : FPM refuse alors « Unable to include … from
+  # … » et rend **78** — pour TOUT candidat, valide comme invalide. Mesuré le
+  # 2026-08-28 : le garde aurait été rouge en permanence, donc jamais activé.
+  mkdir -p "$bac/pools"
+
+  # Les pools DÉJÀ en place, puis le candidat à la place du sien.
+  cp "$PHP_FPM_D"/*.conf "$bac/pools/" 2> /dev/null || true
+  cp "$candidat" "$bac/pools/zz-fork.conf"
+
+  if [ -f "$PHP_FPM_CONF" ]; then
+    grep -v '^include=' "$PHP_FPM_CONF" > "$bac/php-fpm.conf" || true
+  fi
+  echo "include=$bac/pools/*.conf" >> "$bac/php-fpm.conf"
+
+  "$PHP_FPM_BIN" -t -y "$bac/php-fpm.conf" || statut=$?
+
+  rm -rf "$bac"
+
+  return "$statut"
+}
+
+rendre_gabarit() {
+  local gabarit="$1"
+  local cible="$2"
+  # Validateur OPTIONNEL, appliqué au CANDIDAT. Le pool FPM en a un
+  # (`php-fpm -t`) ; le fichier `conf.d` n'en a pas — PHP n'expose aucun
+  # vérificateur d'ini, et inventer une validation approximative vaudrait moins
+  # que de dire qu'il n'y en a pas.
+  local validateur="${3:-}"
+  local temporaire
+
+  if [ "$gabarit" = "$cible" ]; then
+    echo -e "${RED}❌ Gabarit et cible confondus (« $cible ») : le rendu écraserait sa propre source.${NC}"
+    exit 1
+  fi
+
+  if [ ! -f "$gabarit" ]; then
+    echo -e "${RED}❌ Gabarit de configuration absent : « $gabarit ».${NC}"
+    echo -e "${RED}   L'image ne porte pas ce fichier — php-fpm ne démarre pas sur une configuration devinée.${NC}"
+    exit 1
+  fi
+
+  if ! command -v "$ENVSUBST_BIN" > /dev/null 2>&1; then
+    echo -e "${RED}❌ « $ENVSUBST_BIN » est introuvable (paquet « gettext »).${NC}"
+    echo -e "${RED}   « $gabarit » ne peut pas être rendu vers « $cible » : arrêt.${NC}"
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "$cible")"
+
+  # ⚖️ ON REND À CÔTÉ, PUIS ON PROMEUT. Écrire directement dans la cible
+  # laisserait, sur un rendu fautif, une configuration à moitié écrite que
+  # php-fpm lirait au démarrage suivant.
+  temporaire="${cible}.rendu"
+  "$ENVSUBST_BIN" "$PHP_TEMPLATE_VARS" < "$gabarit" > "$temporaire"
+
+  # ⛔ JAMAIS DE DIRECTIVE VIDE. `memory_limit =` (sans valeur) n'est pas une
+  # erreur pour PHP : il l'interprète comme une chaîne vide, donc `0` — soit un
+  # refus d'allouer quoi que ce soit. Un défaut mal posé produirait donc un
+  # conteneur qui démarre et qui échoue sur chaque requête.
+  if grep -Eq '^[[:space:]]*[A-Za-z_][^=]*=[[:space:]]*$' "$temporaire"; then
+    rm -f "$temporaire"
+    echo -e "${RED}❌ Directive sans valeur dans le rendu de « $gabarit ».${NC}"
+    echo -e "${RED}   « $cible » est laissée INTACTE et le conteneur s'arrête.${NC}"
+    exit 1
+  fi
+
+  # ⛔ AUCUN `${…}` NE SURVIT AU RENDU. C'est le pendant RUNTIME du garde
+  # statique de liste d'autorisation, qui ne dit rien à l'exécution : une
+  # variable ajoutée au gabarit et OUBLIÉE dans la liste serait recopiée
+  # littéralement, et PHP lirait « ${PHP_MEMORY_LIMIT} » comme 0.
+  if grep -Eq '\$\{[A-Za-z_][A-Za-z0-9_]*\}' "$temporaire"; then
+    rm -f "$temporaire"
+    echo -e "${RED}❌ Une variable n'a PAS été substituée dans le rendu de « $gabarit ».${NC}"
+    echo -e "${RED}   Elle manque probablement à la liste d'autorisation d'envsubst.${NC}"
+    echo -e "${RED}   « $cible » est laissée INTACTE et le conteneur s'arrête.${NC}"
+    exit 1
+  fi
+
+  # Validation par l'outil du sujet, quand il en existe un.
+  if [ -n "$validateur" ]; then
+    if ! "$validateur" "$temporaire"; then
+      rm -f "$temporaire"
+      echo -e "${RED}❌ Le rendu de « $gabarit » est REFUSÉ par « $validateur ».${NC}"
+      echo -e "${RED}   « $cible » est laissée INTACTE et le conteneur s'arrête.${NC}"
+      exit 1
+    fi
+  fi
+
+  mv "$temporaire" "$cible"
+  echo -e "${GREEN}✓ $(basename "$gabarit") → $cible${NC}"
+}
+
 # ⛔ PORTE DE SONDE, JAMAIS DE PRODUCTION. La variable n'est posée que par
 # `src/tests/Unit/PhpEntrypointStateTest.php`, qui `source` ce fichier pour
 # éprouver `detect_laravel_state` sur un arbre de bac à sable. En exécution
@@ -168,6 +411,14 @@ echo -e "${YELLOW}🚀 Démarrage du container PHP...${NC}"
 
 wait_for_service postgres 5432
 wait_for_service redis 6379
+
+# ⚖️ RENDU AVANT LA SONDE DE BOOTABILITÉ, ET C'EST DÉLIBÉRÉ : `detect_laravel_state`
+# lance `php artisan --version` un peu plus bas, donc sous la configuration
+# effectivement rendue. Une sonde qui mesurerait l'ancienne configuration
+# n'éprouverait pas ce que php-fpm servira.
+echo -e "${YELLOW}Rendu des gabarits de configuration...${NC}"
+rendre_gabarit "$PHP_TEMPLATE_DIR/php-fork.ini.template" "$PHP_CONF_D/zz-fork.ini"
+rendre_gabarit "$PHP_TEMPLATE_DIR/php-fpm-fork.conf.template" "$PHP_FPM_D/zz-fork.conf" valider_pool_fpm
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PERMISSIONS : ON N'AJUSTE QUE CE QUE LE CONTENEUR DOIT ÉCRIRE.

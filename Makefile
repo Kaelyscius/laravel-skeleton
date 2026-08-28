@@ -1239,6 +1239,18 @@ define run_bats
 	"$$BATS_EXE" $(1)
 endef
 
+# ⚖️ L'AGRÉGAT LOCAL, ET IL A UNE RAISON D'EXISTER.
+# `make test` ne voit pas une ligne de shell, et il ne peut pas mesurer une
+# valeur de configuration EFFECTIVE : Pest tourne sous un seul SAPI (`cli`),
+# alors que toute la story 2.5 tient dans la différence entre `cli` et
+# `fpm-fcgi`. Trois fichiers Bats couvrent ce que Pest ne peut pas atteindre —
+# et, sans cible qui les rassemble, ils ne tournaient en local que quand
+# quelqu'un y pensait.
+# ⛔ `test-bats-e2e` n'y est PAS : 20 à 40 minutes, et il exige les ports 80/443.
+.PHONY: test-all
+test-all: test test-bats test-bats-uid test-bats-config ## Tout ce qui se joue en local : Pest + les trois fichiers Bats
+	@echo "$(GREEN)✅ Pest + Bats (primitives, uid, configuration effective) : verts$(NC)"
+
 .PHONY: test-bats
 test-bats: ## Tests shell Bats rapides (primitives du E2E, sans Docker)
 	$(call run_bats,tests/bats/unit)
@@ -1247,6 +1259,12 @@ test-bats: ## Tests shell Bats rapides (primitives du E2E, sans Docker)
 test-bats-uid: ## 🐳 Vérifie que l'UID demandé est RÉELLEMENT appliqué dans les images (exige Docker, ~10 s)
 	@echo "$(CYAN)   Exige un démon Docker — rejoue le bloc d'ajustement d'utilisateur dans l'image de base.$(NC)"
 	$(call run_bats,tests/bats/uid.bats)
+
+.PHONY: test-bats-config
+test-bats-config: ## 🐳 Vérifie la valeur EFFECTIVE rendue par les gabarits php/vhost (exige Docker, ~1 min)
+	@echo "$(CYAN)   Exige un démon Docker — démarre un vrai php-fpm et l'interroge en FastCGI.$(NC)"
+	@echo "$(CYAN)   Construit l'image apache du projet (cache chaud : quelques secondes).$(NC)"
+	$(call run_bats,tests/bats/config-template.bats)
 
 .PHONY: test-bats-e2e
 test-bats-e2e: ## ⏱️ Installation E2E réelle sur un clone neuf (20-40 min, exige les ports 80/443 libres)
