@@ -177,7 +177,16 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
+            # 🔴 `{{branch}}` EST VIDE SUR UN ÉVÉNEMENT `pull_request`, et le préfixe
+            # se réduisait alors au seul tiret : `:-b7d9f36`. Or un tag Docker ne
+            # peut pas COMMENCER par un tiret — « invalid reference format », le
+            # même échec que le namespace vide, à l'autre bout de la référence.
+            # MESURÉ le 2026-08-24 sur la PR #27 : ce défaut était MASQUÉ par le
+            # précédent, et n'est apparu qu'une fois celui-ci corrigé.
+            type=sha,prefix={{branch}}-,enable=${{ github.event_name != 'pull_request' }}
+            # Sur une PR, `type=sha` applique son préfixe par défaut `sha-`, qui
+            # n'est jamais vide. `type=ref,event=pr` porte déjà le numéro de PR.
+            type=sha,enable=${{ github.event_name == 'pull_request' }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       # ==========================================

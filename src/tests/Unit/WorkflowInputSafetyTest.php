@@ -2168,3 +2168,145 @@ it('n’a pas rendu le propriétaire constant pour autant', function (): void {
             ->not->toContain('/' . $repli . '/');
     }
 });
+
+/**
+ * Les règles de tag de l'étape `metadata` de `docker.yml`, lues sur disque.
+ *
+ * @return array<int, string>
+ */
+function reglesTagDocker(): array
+{
+    $lignes = explode("\n", RepoFile::read('.github/workflows/docker.yml'));
+    $regles = [];
+    $dans = false;
+
+    foreach ($lignes as $ligne) {
+        if (preg_match('/^\s*tags:\s*\|\s*$/', $ligne) === 1) {
+            $dans = true;
+
+            continue;
+        }
+
+        if (! $dans) {
+            continue;
+        }
+
+        $nue = trim($ligne);
+
+        // Fin du bloc scalaire : une ligne vide ou non indentée.
+        if ($nue === '' || preg_match('/^\s{10,}/', $ligne) !== 1) {
+            break;
+        }
+
+        if (str_starts_with($nue, '#')) {
+            continue;
+        }
+
+        $regles[] = $nue;
+    }
+
+    return $regles;
+}
+
+/**
+ * Les tags que `metadata-action` produirait pour un évènement donné.
+ *
+ * `{{branch}}` est rendu VIDE sur une pull request — c'est le cœur du défaut.
+ *
+ * @return array<int, string>
+ */
+function tagsRendusDocker(string $evenement, string $branche): array
+{
+    $sha = 'b7d9f36';
+    $tags = [];
+
+    foreach (reglesTagDocker() as $regle) {
+        // `enable=${{ … }}` est une expression GitHub : on l'ÉVALUE.
+        if (preg_match('/enable=\$\{\{(.+?)\}\}/', $regle, $m) === 1) {
+            // ⛔ LA VALEUR DE CONTEXTE EST NUE, JAMAIS QUOTÉE. `valeurDe()` rend
+            // la valeur du contexte telle quelle et DÉTOURE le littéral d'en
+            // face : `"'pull_request'"` ne serait jamais égal à `pull_request`,
+            // donc tout `!=` serait vrai et aucune règle gatée ne serait
+            // sautée. Convention du fichier (lignes 699 et 1259) : valeur nue.
+            if (! conditionEstVraie(trim($m[1]), [
+                'github.event_name' => $evenement,
+            ])) {
+                continue;
+            }
+        } elseif (str_contains($regle, 'enable={{is_default_branch}}')) {
+            // DSL de metadata-action, hors de portée de l'évaluateur : seule la
+            // branche par défaut d'un `push` l'active.
+            if ($evenement !== 'push' || $branche !== 'main') {
+                continue;
+            }
+
+            $tags[] = 'latest';
+
+            continue;
+        }
+
+        if (str_starts_with($regle, 'type=sha')) {
+            $prefixe = preg_match('/prefix=([^,]*)/', $regle, $p) === 1
+                ? str_replace('{{branch}}', $branche, $p[1])
+                : 'sha-'; // défaut de metadata-action
+            $tags[] = $prefixe . $sha;
+
+            continue;
+        }
+
+        if (str_contains($regle, 'type=ref,event=pr')) {
+            if ($evenement === 'pull_request') {
+                $tags[] = 'pr-27';
+            }
+
+            continue;
+        }
+
+        if (str_contains($regle, 'type=ref,event=branch')) {
+            if ($evenement === 'push' && $branche !== '') {
+                $tags[] = $branche;
+            }
+        }
+    }
+
+    return $tags;
+}
+
+it('aucune règle de tag ne produit un tag INVALIDE sur une pull request', function (): void {
+    /*
+     * 🔴 LE SECOND DÉFAUT, ET IL ÉTAIT MASQUÉ PAR LE PREMIER. Une fois le
+     * namespace vide corrigé, la PR #27 a rendu `:-b7d9f36` — un tag qui
+     * COMMENCE par un tiret, que Docker refuse. Cause : `type=sha,prefix={{branch}}-`
+     * et `{{branch}}` est VIDE sur un évènement `pull_request`.
+     *
+     * ⚖️ Et ce garde-ci existe parce que le précédent ne suffisait pas : il rendait
+     * la ligne `images:` et JAMAIS le bloc `tags:`, alors qu'« invalid reference
+     * format » frappe les deux moitiés de la référence. Un garde qui ne couvre
+     * qu'une moitié de son sujet laisse l'autre moitié muette.
+     */
+    $tags = tagsRendusDocker('pull_request', '');
+
+    expect(count($tags))
+        ->toBeGreaterThanOrEqual(2, 'Aucun tag rendu : ce garde ne garde rien.');
+
+    foreach ($tags as $tag) {
+        // Un tag Docker commence par un alphanumérique ou un souligné.
+        expect((bool) preg_match('/^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/', $tag))
+            ->toBeTrue("Tag Docker invalide sur une pull request : « {$tag} ».");
+    }
+});
+
+it('n’a pas désarmé le tag de branche pour autant', function (): void {
+    /*
+     * ⛔ ANTI-VACUITÉ. Gater la règle sur `pull_request` ne doit pas la faire
+     * disparaître d'un `push` : c'est elle qui porte le nom de branche dans le
+     * tag. Sans cette moitié, supprimer purement la règle satisferait le test
+     * précédent — un tag invalide de moins, et une information de moins.
+     */
+    $tags = tagsRendusDocker('push', 'main');
+
+    expect($tags)
+        ->toContain('main-b7d9f36');
+    expect($tags)
+        ->toContain('latest');
+});
