@@ -5,7 +5,7 @@
 # Il a annoncé « 8.5.8 » pendant que le digest servait 8.5.4 : un commentaire
 # n'est contredit par rien. Contrôle :
 #   docker run --rm php:8.5-fpm-alpine@<digest> php -r 'echo PHP_VERSION;'
-FROM php:8.5-fpm-alpine@sha256:9dc81f4086ea5402227a6bcc489b04b4baba12394624d9621faa92ed812fb8ee AS base
+FROM php:8.5-fpm-alpine@sha256:22a4c414bb8e91ac7aefe9b1d80e832caa67252aca58b6af7eeb3bc92188fc5b AS base
 
 ARG UID=1000
 ARG GID=1000
