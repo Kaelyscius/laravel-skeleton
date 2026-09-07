@@ -112,7 +112,7 @@ RUN sed -i 's|127.0.0.1:9000|9000|g' /usr/local/etc/php-fpm.d/www.conf \
 # entre deux builds, sans qu'aucun fichier du dépôt ne bouge. C'était le `FROM`
 # le moins maîtrisé du projet, et l'audit du 2026-08-08 l'a manqué en
 # affirmant que node était le seul non épinglé (§4.1).
-FROM composer:2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040 AS composer-stage
+FROM composer:2@sha256:d8f6343d3fae98107426bc49163ccad46ef85aabd4a27d80a74401fab4aba332 AS composer-stage
 
 # Stage 3: Dependencies builder (optionnel - pour pre-build des dépendances)
 FROM base AS dependencies
