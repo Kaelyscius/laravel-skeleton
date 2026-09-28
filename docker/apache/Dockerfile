@@ -1,5 +1,5 @@
 # httpd 2.4.68 / alpine 3.24.1 — épinglé par digest (le tag reste mutable).
-FROM httpd:2.4-alpine@sha256:1b766f17b84026429b7cb243317b142921b24432336e798bc881c43f45ed9567
+FROM httpd:2.4-alpine@sha256:4e585da9d0125dec36d4500a9f5c5df7b2c0a01f67cb47865a91a4b05bdbec1b
 
 # Arguments pour l'utilisateur
 ARG UID=1000
