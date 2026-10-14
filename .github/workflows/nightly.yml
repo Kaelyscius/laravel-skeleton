@@ -233,7 +233,7 @@ jobs:
 
       - name: 📤 Journaux d'installation (artefact)
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-install-logs
           path: ${{ runner.temp }}/e2e/report
@@ -261,7 +261,7 @@ jobs:
       # mensonge lisible par API. Mieux vaut rougir l'étape.
       - name: 🏗️ Étiquette « cause amont » (artefact NOMMÉ, sans contenu utile)
         if: always() && steps.cause.outputs.cause == 'infrastructure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-cause-infrastructure
           path: ${{ runner.temp }}/e2e/report/INFRASTRUCTURE_FAILURE
