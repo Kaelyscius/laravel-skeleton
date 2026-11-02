@@ -22,7 +22,7 @@
 # Un tag de version exacte est *presque* immuable — et « presque » est
 # exactement ce que l'épinglage par digest existe pour supprimer. php et apache
 # appliquent la même règle (ADR-0007, § « Épinglage par digest »).
-FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995
+FROM node:26.13.0-alpine3.23@sha256:e6c03d42b46af3b1e98207e59f06a43cfe5efd3ec4b4d3d9802bddf04f833374
 
 # Arguments utilisateur
 ARG UID=1000
